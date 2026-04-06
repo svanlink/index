@@ -22,6 +22,7 @@ corepack pnpm test
 corepack pnpm build:web
 corepack pnpm build:desktop
 corepack pnpm release:check:macos
+corepack pnpm release:check:rc v1.0.0-rc1
 ```
 
 ## Environment
@@ -47,12 +48,14 @@ If these variables are missing or invalid, the app remains fully usable in local
 - The packaged macOS app is produced from `apps/desktop/src-tauri`.
 - A fuller release/operator guide lives in [RELEASE_DESKTOP.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/RELEASE_DESKTOP.md).
 - macOS signing/notarization preparation now lives in [MACOS_RELEASE_OPERATIONS.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/MACOS_RELEASE_OPERATIONS.md).
+- Release note structure now lives in [RELEASE_NOTES_TEMPLATE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/RELEASE_NOTES_TEMPLATE.md).
 - Before shipping a build, verify:
   - `corepack pnpm test`
   - `corepack pnpm typecheck`
   - `corepack pnpm build:web`
   - `corepack pnpm build:desktop`
   - `corepack pnpm release:check:macos`
+  - `corepack pnpm release:check:rc v1.0.0-rc1`
 - Recommended release sanity checks:
   - first run with no config
   - offline launch
@@ -62,6 +65,13 @@ If these variables are missing or invalid, the app remains fully usable in local
   - invalid config messaging
   - sync failure and retry behavior
   - packaged app launch from `.app`
+
+## Release candidate discipline
+
+- Keep the root workspace version, desktop package version, and `tauri.conf.json` version aligned before tagging a release candidate.
+- Use tags like `v1.0.0-rc1` for release candidates and `v1.0.0` for the final release.
+- Run `corepack pnpm release:check:rc <tag>` before creating the tag to verify version consistency and required operator files.
+- Cut release notes from [RELEASE_NOTES_TEMPLATE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/RELEASE_NOTES_TEMPLATE.md) and archive them with the exact signed artifacts.
 
 ## Release boundaries
 
