@@ -7,6 +7,7 @@ import {
   type DriveDetailView
 } from "./catalogSelectors";
 import type { LocalPersistenceAdapter } from "./localPersistence";
+import { applyRemoteSyncChanges } from "./remoteSyncMerge";
 import type {
   CatalogRepository,
   CreateDriveInput,
@@ -305,14 +306,27 @@ export class LocalCatalogRepository implements CatalogRepository {
   }
 
   async syncNow(): Promise<SyncCycleResult> {
+    const currentState = await this.sync.getState();
+    if (currentState.syncInProgress) {
+      return {
+        pushed: 0,
+        pulled: 0,
+        pending: currentState.pendingCount,
+        state: currentState
+      };
+    }
+
     const pushResult = await this.sync.flush();
     const pullResult = await this.sync.pull();
-    void pullResult;
+    const mergeResult = await applyRemoteSyncChanges({
+      persistence: this.persistence,
+      changes: pullResult.changes
+    });
     const state = await this.sync.getState();
 
     return {
       pushed: pushResult.pushed,
-      pulled: 0,
+      pulled: mergeResult.appliedCount,
       pending: state.pendingCount,
       state
     };
