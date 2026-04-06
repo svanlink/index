@@ -1,6 +1,6 @@
 [package]
 name = "drive-project-catalog"
-version = "0.1.0"
+version = "1.0.0-rc1"
 description = "Drive Project Catalog desktop shell"
 authors = ["Drive Project Catalog Contributors"]
 edition = "2021"

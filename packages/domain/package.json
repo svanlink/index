@@ -1,6 +1,6 @@
 {
   "name": "@drive-project-catalog/domain",
-  "version": "0.1.0",
+  "version": "1.0.0-rc1",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -10,4 +10,3 @@
     "test": "vitest run --passWithNoTests"
   }
 }
-
