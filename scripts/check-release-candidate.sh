@@ -22,6 +22,9 @@ desktop_version="$(node -p "require('${repo_root}/apps/desktop/package.json').ve
 tauri_version="$(
   node -p "JSON.parse(require('node:fs').readFileSync('${repo_root}/apps/desktop/src-tauri/tauri.conf.json', 'utf8')).version"
 )"
+cargo_version="$(
+  node -p "require('node:fs').readFileSync('${repo_root}/apps/desktop/src-tauri/Cargo.toml', 'utf8').match(/^version = \"([^\"]+)\"$/m)?.[1] || ''"
+)"
 
 expected_version="${release_tag#v}"
 
@@ -36,8 +39,9 @@ printf '%s\n' '-------------------'
 printf '[info] root package version: %s\n' "$root_version"
 printf '[info] desktop package version: %s\n' "$desktop_version"
 printf '[info] tauri config version: %s\n' "$tauri_version"
+printf '[info] cargo crate version: %s\n' "$cargo_version"
 
-if [[ "$root_version" != "$desktop_version" || "$root_version" != "$tauri_version" ]]; then
+if [[ "$root_version" != "$desktop_version" || "$root_version" != "$tauri_version" || "$root_version" != "$cargo_version" ]]; then
   printf '\n[error] Version mismatch detected across repo metadata.\n'
   exit 1
 fi
