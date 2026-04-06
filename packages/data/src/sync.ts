@@ -67,6 +67,11 @@ export interface SyncState {
   conflictPolicy: SyncConflictPolicy;
 }
 
+export interface SyncRecoveryResult {
+  recoveredCount: number;
+  state: SyncState;
+}
+
 export interface SyncPushRequest {
   operations: SyncOperation[];
   conflictPolicy: SyncConflictPolicy;
@@ -106,6 +111,25 @@ export interface SyncCycleResult {
   state: SyncState;
 }
 
+export type StartupSyncStatus = "skipped" | "completed" | "failed";
+export type StartupSyncReason =
+  | "disabled"
+  | "offline"
+  | "not-needed"
+  | "recovered-and-ran"
+  | "initial-pull"
+  | "pending-queue"
+  | "existing-run"
+  | "failed";
+
+export interface StartupSyncResult {
+  status: StartupSyncStatus;
+  reason: StartupSyncReason;
+  message: string;
+  recoveredCount: number;
+  cycle: SyncCycleResult | null;
+}
+
 export interface RemoteSyncAdapter {
   readonly mode: SyncMode;
   pushChanges(request: SyncPushRequest): Promise<SyncPushResult>;
@@ -119,6 +143,7 @@ export interface SyncAdapter {
   flush(): Promise<SyncResult>;
   pull(): Promise<SyncPullResult>;
   getState(): Promise<SyncState>;
+  recoverInterruptedState(): Promise<SyncRecoveryResult>;
 }
 
 export function getDefaultSyncState(): SyncState {

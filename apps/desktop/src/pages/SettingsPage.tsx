@@ -4,6 +4,7 @@ import { FeedbackNotice, SectionCard } from "./pagePrimitives";
 import { useCatalogStore } from "../app/providers";
 import {
   formatSyncTimestamp,
+  getStartupSyncMessage,
   getSyncStatusLabel,
   getSyncStatusTone,
   getSyncSummaryMessages,
@@ -11,7 +12,7 @@ import {
 } from "../app/syncHelpers";
 
 export function SettingsPage() {
-  const { syncState, syncNow, isSyncing } = useCatalogStore();
+  const { syncState, syncNow, isSyncing, startupSyncResult } = useCatalogStore();
   const [feedback, setFeedback] = useState<{
     tone: "success" | "warning" | "error" | "info";
     title: string;
@@ -20,6 +21,7 @@ export function SettingsPage() {
 
   const enabled = isSyncEnabled(syncState);
   const summaryMessages = useMemo(() => getSyncSummaryMessages(syncState), [syncState]);
+  const startupMessage = useMemo(() => getStartupSyncMessage(startupSyncResult), [startupSyncResult]);
 
   async function handleSync() {
     setFeedback(null);
@@ -83,6 +85,14 @@ export function SettingsPage() {
             title={enabled ? "Transport summary" : "Transport disabled"}
             messages={summaryMessages}
           />
+
+          {startupMessage ? (
+            <FeedbackNotice
+              tone={startupSyncResult?.status === "failed" ? "error" : startupSyncResult?.status === "skipped" ? "info" : "success"}
+              title="Startup sync"
+              messages={[startupMessage]}
+            />
+          ) : null}
 
           {feedback ? <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} /> : null}
         </div>
