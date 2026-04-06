@@ -2,7 +2,7 @@
 name = "drive-project-catalog"
 version = "0.1.0"
 description = "Drive Project Catalog desktop shell"
-authors = ["Codex"]
+authors = ["Drive Project Catalog Contributors"]
 edition = "2021"
 
 [lib]

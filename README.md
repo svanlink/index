@@ -20,7 +20,7 @@ corepack pnpm dev
 corepack pnpm typecheck
 corepack pnpm test
 corepack pnpm build:web
-corepack pnpm --filter @drive-project-catalog/desktop build
+corepack pnpm build:desktop
 ```
 
 ## Environment
@@ -44,11 +44,12 @@ If these variables are missing or invalid, the app remains fully usable in local
 
 - The desktop app uses Tauri and local SQLite for durable local persistence.
 - The packaged macOS app is produced from `apps/desktop/src-tauri`.
+- A fuller release/operator guide lives in [RELEASE_DESKTOP.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/RELEASE_DESKTOP.md).
 - Before shipping a build, verify:
   - `corepack pnpm test`
   - `corepack pnpm typecheck`
   - `corepack pnpm build:web`
-  - `corepack pnpm --filter @drive-project-catalog/desktop build`
+  - `corepack pnpm build:desktop`
 - Recommended release sanity checks:
   - first run with no config
   - offline launch
@@ -57,3 +58,22 @@ If these variables are missing or invalid, the app remains fully usable in local
   - manual sync disabled state
   - invalid config messaging
   - sync failure and retry behavior
+  - packaged app launch from `.app`
+
+## Release boundaries
+
+Inside the repo, this project now defines:
+
+- desktop bundle metadata
+- product naming consistency
+- icon wiring
+- local-first runtime behavior
+- optional sync environment expectations
+- release verification and operator notes
+
+Outside the repo, signed macOS distribution still requires:
+
+- Developer ID signing setup
+- notarization credentials
+- release operator machine or CI secrets
+- final signing and notarization execution
