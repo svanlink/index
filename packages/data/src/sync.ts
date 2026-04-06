@@ -26,6 +26,7 @@ export type SyncChangeKind = "upsert";
 export type SyncMutationSource = "manual" | "batch" | "scan" | "system";
 export type SyncMode = "local-only" | "remote-ready" | "syncing";
 export type SyncConflictPolicy = "updated-at-last-write-wins-local-tie-break";
+export type SyncQueueStatus = "pending" | "in-flight" | "failed";
 
 export interface SyncRecordMetadata {
   recordId: string;
@@ -45,13 +46,18 @@ export interface SyncOperation<TPayload = unknown> {
   recordUpdatedAt: string;
   payload: TPayload;
   source: SyncMutationSource;
+  status: SyncQueueStatus;
   attempts: number;
+  lastAttemptAt: string | null;
   lastError: string | null;
 }
 
 export interface SyncState {
   mode: SyncMode;
   pendingCount: number;
+  queuedCount: number;
+  failedCount: number;
+  inFlightCount: number;
   lastPushAt: string | null;
   lastPullAt: string | null;
   lastError: string | null;
@@ -100,6 +106,7 @@ export interface RemoteSyncAdapter {
 export interface SyncAdapter {
   enqueue(operation: SyncOperation): Promise<void>;
   listPending(): Promise<SyncOperation[]>;
+  listQueue(): Promise<SyncOperation[]>;
   flush(): Promise<SyncResult>;
   getState(): Promise<SyncState>;
 }
@@ -108,6 +115,9 @@ export function getDefaultSyncState(): SyncState {
   return {
     mode: "local-only",
     pendingCount: 0,
+    queuedCount: 0,
+    failedCount: 0,
+    inFlightCount: 0,
     lastPushAt: null,
     lastPullAt: null,
     lastError: null,

@@ -312,7 +312,9 @@ export class LocalCatalogRepository implements CatalogRepository {
       recordUpdatedAt: descriptor.recordUpdatedAt,
       payload,
       source,
+      status: "pending",
       attempts: 0,
+      lastAttemptAt: null,
       lastError: null
     });
   }

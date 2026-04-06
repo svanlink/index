@@ -19,3 +19,4 @@ export * from "./storageSyncAdapter";
 export * from "./supabaseSyncAdapter";
 export * from "./supabaseSyncMapping";
 export * from "./sync";
+export * from "./syncQueue";

@@ -1,4 +1,5 @@
 import { getDefaultSyncState, type SyncAdapter, type SyncOperation, type SyncResult, type SyncState } from "./sync";
+import { compactSyncQueue, getSyncStateForQueue, listDispatchableSyncOperations, normalizeSyncOperation } from "./syncQueue";
 
 const clone = <T>(value: T): T => structuredClone(value);
 
@@ -7,23 +8,31 @@ export class InMemorySyncAdapter implements SyncAdapter {
   #state: SyncState = getDefaultSyncState();
 
   async enqueue(operation: SyncOperation): Promise<void> {
-    this.#pending.push(clone(operation));
-    this.#state = {
-      ...this.#state,
-      pendingCount: this.#pending.length
-    };
+    this.#pending = compactSyncQueue(this.#pending, operation);
+    this.#state = getSyncStateForQueue({
+      queue: this.#pending,
+      remoteEnabled: false,
+      previous: this.#state
+    });
   }
 
   async listPending(): Promise<SyncOperation[]> {
-    return clone(this.#pending);
+    return clone(listDispatchableSyncOperations(this.#pending));
+  }
+
+  async listQueue(): Promise<SyncOperation[]> {
+    return clone(this.#pending.map(normalizeSyncOperation));
   }
 
   async flush(): Promise<SyncResult> {
-    const pushed = this.#pending.length;
+    const pushed = listDispatchableSyncOperations(this.#pending).length;
     this.#pending = [];
     this.#state = {
-      ...this.#state,
-      pendingCount: 0,
+      ...getSyncStateForQueue({
+        queue: this.#pending,
+        remoteEnabled: false,
+        previous: this.#state
+      }),
       lastPushAt: pushed > 0 ? new Date().toISOString() : this.#state.lastPushAt
     };
 
@@ -34,9 +43,12 @@ export class InMemorySyncAdapter implements SyncAdapter {
   }
 
   async getState(): Promise<SyncState> {
-    return clone({
-      ...this.#state,
-      pendingCount: this.#pending.length
-    });
+    return clone(
+      getSyncStateForQueue({
+        queue: this.#pending,
+        remoteEnabled: false,
+        previous: this.#state
+      })
+    );
   }
 }

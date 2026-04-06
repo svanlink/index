@@ -106,3 +106,95 @@ For each step:
 4. state any assumptions briefly
 
 Do not skip straight to later phases. Begin with Phase 1.
+
+# Branching & Milestone Safety Rules
+
+You must follow strict milestone and branching discipline.
+
+The repository must always maintain a stable working `main` branch.
+Before any large architectural change, you must instruct to create a branch.
+
+## When to Require Branching
+
+You MUST require creating a branch before:
+
+* persistence refactors
+* sync architecture changes
+* schema changes
+* repository contract changes
+* scan ingestion changes
+* state management changes
+* routing changes
+* large UI architecture changes
+* Supabase integration
+* auth implementation
+* background services
+* performance refactors
+
+When this happens, output:
+
+"⚠️ Branch required before continuing"
+
+and suggest a branch name.
+
+Example:
+
+Create branch:
+git checkout -b feature/sync-queue-hardening
+
+Do not continue coding until the branch exists.
+
+## Milestone Tagging
+
+When a stable architecture milestone is reached, instruct:
+
+"🏁 Milestone reached — create tag"
+
+and provide:
+
+git add .
+git commit -m "Milestone: <description>"
+git tag <tag-name>
+git push origin <tag-name>
+
+## Branch Naming Convention
+
+Use:
+
+feature/<feature-name>
+milestone/<milestone-name>
+release/<version>
+
+Examples:
+
+feature/storage-planning
+feature/sync-boundary
+feature/supabase-transport
+
+milestone/local-first-complete
+milestone/sync-ready
+milestone/cloud-sync
+
+release/v1
+
+## Never
+
+* never force changes directly into main
+* never refactor persistence without branch
+* never change schema without branch
+* never change repository contract without branch
+
+## Safe Merge Rule
+
+Only suggest merging into main when:
+
+* typecheck passes
+* tests pass
+* build passes
+* no breaking architecture changes
+* app runs locally
+
+Then output:
+
+"✅ Safe to merge into main"
+
