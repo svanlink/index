@@ -1,6 +1,14 @@
 # Desktop Release Guide
 
-This document is the conservative release checklist for the Tauri desktop build of Drive Project Catalog.
+This document now covers the desktop app as a local or personal-use build. Public distribution should currently use the web deployment path instead of a signed macOS release.
+
+For the recommended public release path, see [WEB_RELEASE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/WEB_RELEASE.md).
+
+## Current desktop position
+
+- Desktop packaging is ready for local/internal use.
+- Signed and notarized public macOS distribution is postponed.
+- The desktop app remains the place where scan commands and local SQLite behavior are available.
 
 ## In-repo readiness
 
@@ -48,11 +56,11 @@ Run the packaged `.app` and verify:
 6. Sync surfaces explain disabled state when config is absent.
 7. Sync failure leaves queue items retryable.
 
-## macOS signing and notarization inputs
+## Future macOS signing and notarization inputs
 
 For the fuller operator process, see [MACOS_RELEASE_OPERATIONS.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/MACOS_RELEASE_OPERATIONS.md).
 
-These steps remain manual and must be completed outside the repo:
+These steps are future/optional and remain manual outside the repo:
 
 - Apple Developer account with Developer ID Application certificate
 - Apple notarization credentials
@@ -110,3 +118,11 @@ No special macOS entitlement file is committed yet because the current desktop b
 - Release candidates should use tags like `v1.0.0-rc1`.
 - Final releases should use tags like `v1.0.0`.
 - Release notes should explicitly record whether the `.app` and `.dmg` were signed, notarized, and stapled.
+
+## Free release recommendation
+
+If you want a shareable public release today, deploy the web build instead of the packaged macOS app:
+
+- run `corepack pnpm build:web`
+- deploy `apps/desktop/dist`
+- use [WEB_RELEASE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/WEB_RELEASE.md) for hosting guidance

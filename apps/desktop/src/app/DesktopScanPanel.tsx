@@ -37,7 +37,7 @@ export function DesktopScanPanel() {
   return (
     <>
       <button type="button" className="button-secondary min-w-[116px]" onClick={openPanel}>
-        {activeSession ? "Scan running" : "Scan drive"}
+        {activeSession ? "Scan running" : isDesktopScanAvailable ? "Scan drive" : "Desktop scan only"}
       </button>
 
       {isPanelOpen ? (
@@ -52,7 +52,7 @@ export function DesktopScanPanel() {
                   Manual scan workflow
                 </h3>
                 <p className="mt-2 text-sm leading-6" style={{ color: "var(--color-text-muted)" }}>
-                  Start a manual scan against a drive path, track progress live, and ingest results into the local catalog.
+                  Start a manual scan against a drive path, track progress live, and ingest results into the local catalog. In the web release, this panel stays read-only and points back to the desktop app for native scanning.
                 </p>
               </div>
               <button type="button" className="button-secondary" onClick={closePanel}>
@@ -98,7 +98,7 @@ export function DesktopScanPanel() {
 
               {!isDesktopScanAvailable ? (
                 <p className="rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "#ddcfb8", background: "var(--color-warning-soft)", color: "var(--color-warning)" }}>
-                  Desktop scan commands are only available in the Tauri app. Browser mode can still show persisted scan state.
+                  Desktop scan commands are only available in the Tauri app. The public web build can still show persisted scan state, but starting a scan requires the desktop app.
                 </p>
               ) : null}
               {lastError ? (
