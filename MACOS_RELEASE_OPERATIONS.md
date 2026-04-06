@@ -1,6 +1,8 @@
 # macOS Signing and Release Operations
 
-This document prepares the repository for a real signed macOS release of Drive Project Catalog without hardcoding secrets or pretending signing can be fully tested in-repo.
+This document is now a future/optional path for a real signed macOS release of Drive Project Catalog. It remains useful for later notarized distribution, but it is not the recommended free public release path.
+
+For the recommended public release path right now, see [WEB_RELEASE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/WEB_RELEASE.md).
 
 ## What is ready inside the repo
 
@@ -11,6 +13,12 @@ This document prepares the repository for a real signed macOS release of Drive P
 - optional sync env guidance
 - release artifact expectations
 - operator checklists and preflight validation script
+
+## Current strategy note
+
+- local unsigned desktop builds are fine for personal/internal use
+- public release should currently happen through the web build
+- Apple paid signing/notarization work is postponed
 
 ## What still remains outside the repo
 

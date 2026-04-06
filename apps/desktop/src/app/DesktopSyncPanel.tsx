@@ -75,7 +75,7 @@ export function DesktopSyncPanel() {
                   Manual sync status
                 </h3>
                 <p className="mt-2 text-sm leading-6" style={{ color: "var(--color-text-muted)" }}>
-                  Review queue health, recent cloud activity, and retry failed sync work without leaving the desktop shell.
+                  Review queue health, recent cloud activity, and retry failed sync work without leaving the app. This panel also explains when the build is running in the public web mode instead of the desktop shell.
                 </p>
               </div>
               <button type="button" className="button-secondary" onClick={() => setIsPanelOpen(false)}>
