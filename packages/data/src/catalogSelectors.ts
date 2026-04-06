@@ -134,11 +134,29 @@ export function buildStatusAlerts(projects: Project[], drives: Drive[]): StatusA
 export function buildDashboardSnapshot(snapshot: CatalogSnapshot): DashboardSnapshot {
   const drives = decorateDrivesWithCapacity(snapshot.drives, snapshot.projects);
   const projects = sortProjects(snapshot.projects);
-  const recentScans = drives
-    .filter((drive) => drive.lastScannedAt !== null)
-    .sort((left, right) => (right.lastScannedAt ?? "").localeCompare(left.lastScannedAt ?? ""))
+  const recentScans = [...snapshot.scanSessions]
+    .filter((session) => session.status !== "running")
+    .sort((left, right) => (right.finishedAt ?? right.startedAt).localeCompare(left.finishedAt ?? left.startedAt))
     .slice(0, 2)
-    .map((drive) => toScanSummary(drive, snapshot.projects));
+    .map((session) => {
+      const drive =
+        (session.requestedDriveId ? drives.find((entry) => entry.id === session.requestedDriveId) : null) ??
+        drives.find((entry) => entry.volumeName === session.driveName || entry.displayName === session.driveName) ??
+        null;
+
+      return drive
+        ? toScanSummary(drive, snapshot.projects)
+        : {
+            id: session.scanId,
+            driveId: null,
+            driveName: session.requestedDriveName ?? session.driveName,
+            lastScannedAt: session.finishedAt ?? session.startedAt,
+            projectCount: session.matchesFound,
+            totalCapacityBytes: null,
+            freeBytes: null,
+            reservedIncomingBytes: 0
+          };
+    });
 
   return {
     recentScans,

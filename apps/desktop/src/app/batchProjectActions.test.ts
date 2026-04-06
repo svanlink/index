@@ -18,4 +18,18 @@ describe("batchProjectActions", () => {
     expect(queue).toHaveLength(2);
     expect(new Set(queue.map((operation) => operation.recordId))).toEqual(new Set(projectIds));
   });
+
+  it("clears stale missing state when projects are directly assigned to a drive", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new InMemorySyncAdapter()
+    );
+
+    await assignProjectsToDrive(repository, ["project-240228-clientx-concept"], "drive-c");
+    const project = await repository.getProjectById("project-240228-clientx-concept");
+
+    expect(project?.currentDriveId).toBe("drive-c");
+    expect(project?.moveStatus).toBe("none");
+    expect(project?.missingStatus).toBe("normal");
+  });
 });

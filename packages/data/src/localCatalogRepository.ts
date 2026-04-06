@@ -227,6 +227,9 @@ export class LocalCatalogRepository implements CatalogRepository {
     if (!targetDrive) {
       throw new Error(`Drive ${targetDriveId} was not found`);
     }
+    if (project.currentDriveId === targetDriveId) {
+      throw new Error("The target drive matches the current drive.");
+    }
 
     return this.saveProject({
       ...project,
@@ -244,6 +247,11 @@ export class LocalCatalogRepository implements CatalogRepository {
     }
     if (!project.targetDriveId) {
       throw new Error(`Project ${projectId} does not have a target drive`);
+    }
+
+    const targetDrive = await this.getDriveById(project.targetDriveId);
+    if (!targetDrive) {
+      throw new Error(`Drive ${project.targetDriveId} was not found`);
     }
 
     return this.saveProject({
@@ -418,14 +426,19 @@ export class LocalCatalogRepository implements CatalogRepository {
     }
 
     this.#activeSyncPromise = (async () => {
-      const currentState = await this.sync.getState();
+      let currentState = await this.sync.getState();
       if (currentState.syncInProgress) {
-        return {
-          pushed: 0,
-          pulled: 0,
-          pending: currentState.pendingCount,
-          state: currentState
-        };
+        const recovery = await this.sync.recoverInterruptedState();
+        currentState = recovery.state;
+
+        if (currentState.syncInProgress) {
+          return {
+            pushed: 0,
+            pulled: 0,
+            pending: currentState.pendingCount,
+            state: currentState
+          };
+        }
       }
 
       const pushResult = await this.sync.flush();

@@ -16,6 +16,7 @@ export async function assignProjectsToDrive(
         currentDriveId: driveId,
         targetDriveId: null,
         moveStatus: "none",
+        missingStatus: "normal",
         updatedAt: now
       })
     )

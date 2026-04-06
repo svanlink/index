@@ -65,6 +65,17 @@ describe("LocalCatalogRepository", () => {
     expect(project?.moveStatus).toBe("none");
   });
 
+  it("rejects same-drive move planning at the repository boundary", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new InMemorySyncAdapter()
+    );
+
+    await expect(repository.planProjectMove("project-240401-apple-shoot", "drive-a")).rejects.toThrow(
+      "The target drive matches the current drive."
+    );
+  });
+
   it("compacts repeated edits for the same project in the sync queue", async () => {
     const repository = new LocalCatalogRepository(
       new InMemoryLocalPersistence(mockCatalogSnapshot),
@@ -408,6 +419,19 @@ describe("LocalCatalogRepository", () => {
     expect(result.status).toBe("completed");
     expect(result.reason).toBe("recovered-and-ran");
   });
+
+  it("recovers stale sync-in-progress state before a manual sync cycle", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new RecoveringSyncAdapter()
+    );
+
+    const result = await repository.syncNow();
+
+    expect(result.pushed).toBe(1);
+    expect(result.pulled).toBe(0);
+    expect(result.state.syncInProgress).toBe(false);
+  });
 });
 
 class StubSyncAdapter implements SyncAdapter {
@@ -470,6 +494,66 @@ class StubSyncAdapter implements SyncAdapter {
 
     return {
       recoveredCount: 0,
+      state: this.#state
+    };
+  }
+}
+
+class RecoveringSyncAdapter implements SyncAdapter {
+  #state: SyncState = {
+    ...getDefaultSyncState(),
+    mode: "remote-ready",
+    syncInProgress: true,
+    pendingCount: 1,
+    queuedCount: 1,
+    inFlightCount: 1
+  };
+
+  async enqueue(_operation: SyncOperation): Promise<void> {}
+
+  async listPending(): Promise<SyncOperation[]> {
+    return [];
+  }
+
+  async listQueue(): Promise<SyncOperation[]> {
+    return [];
+  }
+
+  async flush(): Promise<SyncResult> {
+    this.#state = {
+      ...this.#state,
+      syncInProgress: false,
+      inFlightCount: 0,
+      pendingCount: 0,
+      queuedCount: 0,
+      lastPushAt: "2026-04-06T15:00:00.000Z"
+    };
+    return { pushed: 1, pending: 0 };
+  }
+
+  async pull(): Promise<SyncPullResult> {
+    this.#state = {
+      ...this.#state,
+      lastPullAt: "2026-04-06T15:01:00.000Z"
+    };
+    return { changes: [], remoteCursor: "cursor-1" };
+  }
+
+  async getState(): Promise<SyncState> {
+    return this.#state;
+  }
+
+  async recoverInterruptedState(): Promise<SyncRecoveryResult> {
+    this.#state = {
+      ...this.#state,
+      syncInProgress: false,
+      inFlightCount: 0,
+      failedCount: 1,
+      queuedCount: 1
+    };
+
+    return {
+      recoveredCount: 1,
       state: this.#state
     };
   }
