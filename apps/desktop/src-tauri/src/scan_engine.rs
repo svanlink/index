@@ -83,7 +83,8 @@ pub struct AppScanState {
 }
 
 struct ScanSession {
-    cancelled: AtomicBool,
+    cancel_requested: AtomicBool,
+    scan_work_finished: AtomicBool,
     snapshot: Mutex<ScanSnapshot>,
 }
 
@@ -114,7 +115,8 @@ impl AppScanState {
 impl ScanSession {
     fn new(scan_id: String, root_path: String, drive_name: String) -> Self {
         Self {
-            cancelled: AtomicBool::new(false),
+            cancel_requested: AtomicBool::new(false),
+            scan_work_finished: AtomicBool::new(false),
             snapshot: Mutex::new(ScanSnapshot {
                 scan_id,
                 root_path,
@@ -136,7 +138,11 @@ impl ScanSession {
     }
 
     fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Relaxed);
+        if self.scan_work_finished.load(Ordering::Relaxed) {
+            return;
+        }
+
+        self.cancel_requested.store(true, Ordering::Relaxed);
         let mut snapshot = self.snapshot.lock().expect("scan snapshot poisoned");
         if snapshot.status == "running" {
             snapshot.status = "cancelled".to_string();
@@ -145,7 +151,11 @@ impl ScanSession {
     }
 
     fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Relaxed)
+        self.cancel_requested.load(Ordering::Relaxed)
+    }
+
+    fn mark_scan_work_finished(&self) {
+        self.scan_work_finished.store(true, Ordering::Relaxed);
     }
 
     fn increment_folders_scanned(&self) {
@@ -258,6 +268,7 @@ pub fn start_scan(
     thread::spawn(move || {
         match execute_scan(root_path, drive_name, Arc::clone(&session)) {
             Ok(()) => {
+                session.mark_scan_work_finished();
                 if session.is_cancelled() {
                     session.mark_cancelled();
                 } else {
@@ -265,9 +276,11 @@ pub fn start_scan(
                 }
             }
             Err(error) if error == CANCELLED_ERROR => {
+                session.mark_scan_work_finished();
                 session.mark_cancelled();
             }
             Err(error) => {
+                session.mark_scan_work_finished();
                 session.mark_failed(error);
             }
         }
@@ -541,9 +554,31 @@ mod tests {
             root.to_string_lossy().to_string(),
             "Drive A".to_string(),
         ));
-        session.cancelled.store(true, Ordering::Relaxed);
+        session.cancel_requested.store(true, Ordering::Relaxed);
 
         let result = calculate_directory_size(&root.join("240401_Apple_ProductShoot"), &session);
         assert_eq!(result.unwrap_err(), CANCELLED_ERROR.to_string());
+    }
+
+    #[test]
+    fn cancel_after_scan_work_finishes_does_not_override_completion() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path();
+        fs::create_dir(root.join("Archive")).expect("archive");
+
+        let session = Arc::new(ScanSession::new(
+            "scan-complete".to_string(),
+            root.to_string_lossy().to_string(),
+            "Drive A".to_string(),
+        ));
+
+        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session)).expect("scan should succeed");
+        session.mark_scan_work_finished();
+        session.cancel();
+        session.mark_completed();
+
+        let snapshot = session.snapshot();
+        assert_eq!(snapshot.status, "completed");
+        assert!(!session.is_cancelled());
     }
 }
