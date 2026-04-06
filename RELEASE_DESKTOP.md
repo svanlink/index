@@ -12,6 +12,7 @@ corepack pnpm test
 corepack pnpm typecheck
 corepack pnpm build:web
 corepack pnpm build:desktop
+corepack pnpm release:check:macos
 ```
 
 Expected macOS artifacts:
@@ -48,6 +49,8 @@ Run the packaged `.app` and verify:
 
 ## macOS signing and notarization inputs
 
+For the fuller operator process, see [MACOS_RELEASE_OPERATIONS.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/MACOS_RELEASE_OPERATIONS.md).
+
 These steps remain manual and must be completed outside the repo:
 
 - Apple Developer account with Developer ID Application certificate
@@ -66,6 +69,8 @@ Typical values you will need:
 
 Exact CI or local secret handling is intentionally not hardcoded in this repo yet.
 
+You can use [.env.release.example](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/.env.release.example) as a safe template for local or CI secret setup.
+
 ## Notes on entitlements and capabilities
 
 Current app behavior uses:
@@ -81,6 +86,7 @@ No special macOS entitlement file is committed yet because the current desktop b
 1. Verify the branch/tag you are packaging.
 2. Confirm `tauri.conf.json` product name, identifier, and icons are correct.
 3. Build the desktop bundle from a clean working tree.
-4. Smoke test the packaged app on macOS.
-5. Sign and notarize outside the repo workflow.
-6. Archive the exact build artifact and release notes together.
+4. Run `corepack pnpm release:check:macos`.
+5. Smoke test the packaged app on macOS.
+6. Sign and notarize outside the repo workflow.
+7. Archive the exact build artifact and release notes together.
