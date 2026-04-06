@@ -13,6 +13,7 @@ corepack pnpm typecheck
 corepack pnpm build:web
 corepack pnpm build:desktop
 corepack pnpm release:check:macos
+corepack pnpm release:check:rc v1.0.0-rc1
 ```
 
 Expected macOS artifacts:
@@ -83,10 +84,28 @@ No special macOS entitlement file is committed yet because the current desktop b
 
 ## Release operator checklist
 
-1. Verify the branch/tag you are packaging.
-2. Confirm `tauri.conf.json` product name, identifier, and icons are correct.
-3. Build the desktop bundle from a clean working tree.
-4. Run `corepack pnpm release:check:macos`.
-5. Smoke test the packaged app on macOS.
-6. Sign and notarize outside the repo workflow.
-7. Archive the exact build artifact and release notes together.
+1. Verify the branch, milestone branch, and intended tag you are packaging.
+2. Bump and align the version in:
+   - `package.json`
+   - `apps/desktop/package.json`
+   - `apps/desktop/src-tauri/tauri.conf.json`
+3. Run `corepack pnpm release:check:rc <tag>` and confirm the version matches the intended release candidate or final tag.
+4. Confirm `tauri.conf.json` product name, identifier, and icons are correct.
+5. Prepare release environment variables from [.env.release.example](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/.env.release.example).
+6. Run `corepack pnpm release:check:macos`.
+7. Build the desktop bundle from a clean working tree.
+8. Smoke test the packaged app on the release machine.
+9. Sign the `.app`.
+10. Submit for notarization.
+11. Staple the notarization ticket to the final app and distributable archive if applicable.
+12. Validate the signed and stapled build on a clean macOS machine.
+13. Cut release notes from [RELEASE_NOTES_TEMPLATE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/RELEASE_NOTES_TEMPLATE.md).
+14. Archive the exact build artifact, notes, and final tag together.
+
+## Artifact naming and release expectations
+
+- macOS artifacts should be archived alongside the exact tag they were built from.
+- The `.dmg` name should reflect the Tauri version at build time, for example `Drive Project Catalog_1.0.0-rc1_aarch64.dmg`.
+- Release candidates should use tags like `v1.0.0-rc1`.
+- Final releases should use tags like `v1.0.0`.
+- Release notes should explicitly record whether the `.app` and `.dmg` were signed, notarized, and stapled.

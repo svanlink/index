@@ -43,6 +43,27 @@ printf '\nExpected release artifacts after build\n'
 printf '%s\n' '-------------------------------------'
 printf '%s\n' "apps/desktop/src-tauri/target/release/bundle/macos/Drive Project Catalog.app"
 printf '%s\n' "apps/desktop/src-tauri/target/release/bundle/dmg/Drive Project Catalog_<version>_aarch64.dmg"
+printf '%s\n' "Tag expectation for the next release candidate or release (for example: v1.0.0-rc1)"
+
+if [[ -n "${RELEASE_TAG:-}" && ! "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+  printf '\n[warning] RELEASE_TAG is set but does not match the expected format (for example: v1.0.0-rc1).\n'
+fi
+
+if [[ -n "${VITE_SUPABASE_URL:-}" && -z "${VITE_SUPABASE_ANON_KEY:-}" ]]; then
+  printf '\n[warning] VITE_SUPABASE_URL is set but VITE_SUPABASE_ANON_KEY is missing.\n'
+fi
+
+if [[ -z "${VITE_SUPABASE_URL:-}" && -n "${VITE_SUPABASE_ANON_KEY:-}" ]]; then
+  printf '\n[warning] VITE_SUPABASE_ANON_KEY is set but VITE_SUPABASE_URL is missing.\n'
+fi
+
+if [[ -n "${APPLE_CERTIFICATE:-}" && -z "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
+  printf '\n[warning] APPLE_CERTIFICATE is set but APPLE_CERTIFICATE_PASSWORD is missing.\n'
+fi
+
+if [[ -z "${APPLE_CERTIFICATE:-}" && -n "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
+  printf '\n[warning] APPLE_CERTIFICATE_PASSWORD is set but APPLE_CERTIFICATE is missing.\n'
+fi
 
 if (( ${#missing_required[@]} > 0 )); then
   printf '\n[error] Missing required signing/notarization variables:\n'
@@ -54,4 +75,5 @@ if (( ${#missing_required[@]} > 0 )); then
 fi
 
 printf '\n[ok] Required signing/notarization variables are present.\n'
-printf 'Next steps: run build, smoke test the packaged app, sign, notarize, and staple on the release machine.\n'
+printf 'Next steps: run build, smoke test the packaged app, sign, notarize, staple, and validate on a clean macOS machine.\n'
+printf 'If you have not already done so, run corepack pnpm release:check:rc <tag> before creating the release tag.\n'
