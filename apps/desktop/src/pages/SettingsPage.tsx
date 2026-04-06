@@ -5,11 +5,13 @@ import { useCatalogStore } from "../app/providers";
 import {
   formatSyncTimestamp,
   getStartupSyncMessage,
+  getStartupSyncTone,
   getSyncStatusLabel,
   getSyncStatusTone,
   getSyncSummaryMessages,
   isSyncEnabled
 } from "../app/syncHelpers";
+import { getRuntimeEnvironmentDiagnostics, getSupabaseSyncDiagnostics } from "../app/syncConfig";
 
 export function SettingsPage() {
   const { syncState, syncNow, isSyncing, startupSyncResult } = useCatalogStore();
@@ -22,6 +24,9 @@ export function SettingsPage() {
   const enabled = isSyncEnabled(syncState);
   const summaryMessages = useMemo(() => getSyncSummaryMessages(syncState), [syncState]);
   const startupMessage = useMemo(() => getStartupSyncMessage(startupSyncResult), [startupSyncResult]);
+  const startupTone = useMemo(() => getStartupSyncTone(startupSyncResult), [startupSyncResult]);
+  const configDiagnostics = useMemo(() => getSupabaseSyncDiagnostics(), []);
+  const runtimeDiagnostics = useMemo(() => getRuntimeEnvironmentDiagnostics(), []);
 
   async function handleSync() {
     setFeedback(null);
@@ -88,13 +93,38 @@ export function SettingsPage() {
 
           {startupMessage ? (
             <FeedbackNotice
-              tone={startupSyncResult?.status === "failed" ? "error" : startupSyncResult?.status === "skipped" ? "info" : "success"}
+              tone={startupTone}
               title="Startup sync"
               messages={[startupMessage]}
             />
           ) : null}
 
           {feedback ? <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} /> : null}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Release diagnostics"
+        description="Lightweight environment and packaging checks for first-run confidence, local support triage, and desktop shipping sanity."
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <InfoRow label="Runtime" value={runtimeDiagnostics.message} />
+          <InfoRow label="Sync config" value={configDiagnostics.message} />
+        </div>
+        <div className="mt-4 space-y-4">
+          <FeedbackNotice
+            tone={configDiagnostics.enabled ? "success" : configDiagnostics.code === "missing" ? "info" : "warning"}
+            title="Configuration details"
+            messages={configDiagnostics.details}
+          />
+          <FeedbackNotice
+            tone="info"
+            title="Packaging notes"
+            messages={[
+              "The Tauri bundle is configured for desktop packaging with a product name, identifier, and icon asset.",
+              "Use the README release checklist before shipping a build to confirm environment variables, app packaging, and desktop runtime behavior."
+            ]}
+          />
         </div>
       </SectionCard>
 

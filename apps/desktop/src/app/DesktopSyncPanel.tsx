@@ -4,11 +4,13 @@ import { useCatalogStore } from "./providers";
 import {
   formatSyncTimestamp,
   getStartupSyncMessage,
+  getStartupSyncTone,
   getSyncStatusLabel,
   getSyncStatusTone,
   getSyncSummaryMessages,
   isSyncEnabled
 } from "./syncHelpers";
+import { getRuntimeEnvironmentDiagnostics, getSupabaseSyncDiagnostics } from "./syncConfig";
 
 export function DesktopSyncPanel() {
   const { syncState, syncNow, isSyncing, startupSyncResult } = useCatalogStore();
@@ -24,6 +26,9 @@ export function DesktopSyncPanel() {
   const actionLabel = isSyncing ? "Syncing..." : hasFailures ? "Retry sync" : "Sync now";
   const summaryMessages = useMemo(() => getSyncSummaryMessages(syncState), [syncState]);
   const startupMessage = useMemo(() => getStartupSyncMessage(startupSyncResult), [startupSyncResult]);
+  const startupTone = useMemo(() => getStartupSyncTone(startupSyncResult), [startupSyncResult]);
+  const configDiagnostics = useMemo(() => getSupabaseSyncDiagnostics(), []);
+  const runtimeDiagnostics = useMemo(() => getRuntimeEnvironmentDiagnostics(), []);
 
   async function handleSync() {
     setFeedback(null);
@@ -95,10 +100,16 @@ export function DesktopSyncPanel() {
               />
             </div>
 
+            {!enabled ? (
+              <div className="mt-4">
+                <FeedbackNotice tone="info" title="Sync configuration" messages={[configDiagnostics.message, ...configDiagnostics.details]} />
+              </div>
+            ) : null}
+
             {startupMessage ? (
               <div className="mt-4">
                 <FeedbackNotice
-                  tone={startupSyncResult?.status === "failed" ? "error" : startupSyncResult?.status === "skipped" ? "info" : "success"}
+                  tone={startupTone}
                   title="Startup sync"
                   messages={[startupMessage]}
                 />
@@ -125,6 +136,12 @@ export function DesktopSyncPanel() {
                   Last issue saved for retry visibility.
                 </p>
               ) : null}
+            </div>
+
+            <div className="mt-4">
+              <p className="text-sm leading-6" style={{ color: "var(--color-text-muted)" }}>
+                {runtimeDiagnostics.message}
+              </p>
             </div>
           </aside>
         </div>

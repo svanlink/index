@@ -232,23 +232,27 @@ export function DashboardPage() {
       </section>
 
       <SectionCard title="Quick search targets" description="Direct entry points into the newest projects in the local catalog.">
-        <div className="grid gap-3 md:grid-cols-3">
-          {dashboard.recentProjects.slice(0, 3).map((project) => (
-            <Link
-              key={project.id}
-              to={`/projects/${project.id}`}
-              className="rounded-[20px] border px-4 py-5 transition"
-              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
-            >
-              <p className="font-medium" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {getProjectStatusBadges(project).map((badge) => (
-                  <StatusBadge key={badge} label={badge} />
-                ))}
-              </div>
-            </Link>
-          ))}
-        </div>
+        {dashboard.recentProjects.length === 0 ? (
+          <EmptyState title="No quick targets yet" description="Quick project links appear here after the first catalog entries are created or scanned." />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-3">
+            {dashboard.recentProjects.slice(0, 3).map((project) => (
+              <Link
+                key={project.id}
+                to={`/projects/${project.id}`}
+                className="rounded-[20px] border px-4 py-5 transition"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              >
+                <p className="font-medium" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {getProjectStatusBadges(project).map((badge) => (
+                    <StatusBadge key={badge} label={badge} />
+                  ))}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </SectionCard>
     </div>
   );

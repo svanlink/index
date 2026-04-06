@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSyncStatusLabel, getSyncSummaryMessages, isSyncEnabled } from "./syncHelpers";
+import { getStartupSyncTone, getSyncStatusLabel, getSyncSummaryMessages, isSyncEnabled } from "./syncHelpers";
 
 describe("syncHelpers", () => {
   it("reports disabled sync when no remote transport is configured", () => {
@@ -41,5 +41,12 @@ describe("syncHelpers", () => {
 
     expect(getSyncStatusLabel(state)).toBe("Retry needed");
     expect(getSyncSummaryMessages(state).join(" ")).toContain("failed");
+  });
+
+  it("maps startup sync outcomes to restrained tones", () => {
+    expect(getStartupSyncTone(null)).toBe("info");
+    expect(getStartupSyncTone({ status: "failed", reason: "failed", message: "Nope", recoveredCount: 0, cycle: null })).toBe("error");
+    expect(getStartupSyncTone({ status: "skipped", reason: "disabled", message: "Skipped", recoveredCount: 0, cycle: null })).toBe("info");
+    expect(getStartupSyncTone({ status: "completed", reason: "initial-pull", message: "Done", recoveredCount: 0, cycle: null })).toBe("success");
   });
 });
