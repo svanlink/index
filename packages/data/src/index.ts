@@ -7,6 +7,7 @@ export * from "./mockCatalogRepository";
 export * from "./mockData";
 export * from "./projectLinkingSelectors";
 export * from "./projectListSelectors";
+export * from "./remoteSyncMerge";
 export * from "./repository";
 export * from "./scanIngestionService";
 export * from "./scanHistorySelectors";

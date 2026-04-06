@@ -246,7 +246,7 @@ export class SqliteSyncAdapter implements SyncAdapter {
 
   async #readState(database: SqlDatabase): Promise<SyncState> {
     const rows = await database.select<SyncStateRow>(
-      "SELECT mode, pending_count, queued_count, failed_count, in_flight_count, last_push_at, last_pull_at, last_error, remote_cursor, conflict_policy FROM sync_state WHERE singleton = 1 LIMIT 1"
+      "SELECT mode, pending_count, queued_count, failed_count, in_flight_count, sync_in_progress, last_push_at, last_pull_at, last_error, last_sync_error, remote_cursor, conflict_policy FROM sync_state WHERE singleton = 1 LIMIT 1"
     );
     const state = rows[0];
     if (!state) {

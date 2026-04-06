@@ -19,6 +19,87 @@ export const localOnlySyncFields = {
   scanSessionProject: ["folderPath", "relativePath"]
 } as const;
 
+export interface SupabaseDriveRow {
+  id: string;
+  volume_name: string;
+  display_name: string;
+  total_capacity_bytes: number | null;
+  used_bytes: number | null;
+  free_bytes: number | null;
+  last_scanned_at: string | null;
+  created_manually: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupabaseProjectRow {
+  id: string;
+  parsed_date: string;
+  parsed_client: string;
+  parsed_project: string;
+  corrected_client: string | null;
+  corrected_project: string | null;
+  category: Project["category"];
+  size_bytes: number | null;
+  size_status: Project["sizeStatus"];
+  current_drive_id: string | null;
+  target_drive_id: string | null;
+  move_status: Project["moveStatus"];
+  missing_status: Project["missingStatus"];
+  duplicate_status: Project["duplicateStatus"];
+  is_unassigned: boolean;
+  is_manual: boolean;
+  last_seen_at: string | null;
+  last_scanned_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupabaseScanRow {
+  id: string;
+  drive_id: string | null;
+  started_at: string;
+  finished_at: string | null;
+  status: ScanRecord["status"];
+  folders_scanned: number;
+  matches_found: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupabaseScanSessionRow {
+  scan_id: string;
+  drive_name: string;
+  status: ScanSessionSnapshot["status"];
+  started_at: string;
+  finished_at: string | null;
+  folders_scanned: number;
+  matches_found: number;
+  error: string | null;
+  size_jobs_pending: number;
+  requested_drive_id: string | null;
+  requested_drive_name: string | null;
+  summary_new_projects_count: number | null;
+  summary_updated_projects_count: number | null;
+  summary_missing_projects_count: number | null;
+  summary_duplicates_flagged_count: number | null;
+  summary_duration_ms: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupabaseProjectScanEventRow {
+  id: string;
+  project_id: string;
+  scan_id: string;
+  observed_folder_name: string;
+  observed_drive_name: string;
+  observed_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export function toSupabaseDriveRow(drive: Drive) {
   return {
     id: drive.id,
@@ -31,6 +112,22 @@ export function toSupabaseDriveRow(drive: Drive) {
     created_manually: drive.createdManually,
     created_at: drive.createdAt,
     updated_at: drive.updatedAt
+  };
+}
+
+export function fromSupabaseDriveRow(row: SupabaseDriveRow): Drive {
+  return {
+    id: row.id,
+    volumeName: row.volume_name,
+    displayName: row.display_name,
+    totalCapacityBytes: row.total_capacity_bytes,
+    usedBytes: row.used_bytes,
+    freeBytes: row.free_bytes,
+    reservedIncomingBytes: 0,
+    lastScannedAt: row.last_scanned_at,
+    createdManually: Boolean(row.created_manually),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 
@@ -59,6 +156,31 @@ export function toSupabaseProjectRow(project: Project) {
   };
 }
 
+export function fromSupabaseProjectRow(row: SupabaseProjectRow): Project {
+  return {
+    id: row.id,
+    parsedDate: row.parsed_date,
+    parsedClient: row.parsed_client,
+    parsedProject: row.parsed_project,
+    correctedClient: row.corrected_client,
+    correctedProject: row.corrected_project,
+    category: row.category,
+    sizeBytes: row.size_bytes,
+    sizeStatus: row.size_status,
+    currentDriveId: row.current_drive_id,
+    targetDriveId: row.target_drive_id,
+    moveStatus: row.move_status,
+    missingStatus: row.missing_status,
+    duplicateStatus: row.duplicate_status,
+    isUnassigned: Boolean(row.is_unassigned),
+    isManual: Boolean(row.is_manual),
+    lastSeenAt: row.last_seen_at,
+    lastScannedAt: row.last_scanned_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 export function toSupabaseScanRow(scan: ScanRecord) {
   return {
     id: scan.id,
@@ -71,6 +193,21 @@ export function toSupabaseScanRow(scan: ScanRecord) {
     notes: scan.notes,
     created_at: scan.createdAt,
     updated_at: scan.updatedAt
+  };
+}
+
+export function fromSupabaseScanRow(row: SupabaseScanRow): ScanRecord {
+  return {
+    id: row.id,
+    driveId: row.drive_id,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    status: row.status,
+    foldersScanned: row.folders_scanned,
+    matchesFound: row.matches_found,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }
 
@@ -97,6 +234,40 @@ export function toSupabaseScanSessionRow(session: ScanSessionSnapshot) {
   };
 }
 
+export function fromSupabaseScanSessionRow(row: SupabaseScanSessionRow): ScanSessionSnapshot {
+  return {
+    scanId: row.scan_id,
+    rootPath: "",
+    driveName: row.drive_name,
+    status: row.status,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+    foldersScanned: row.folders_scanned,
+    matchesFound: row.matches_found,
+    error: row.error,
+    sizeJobsPending: row.size_jobs_pending,
+    projects: [],
+    requestedDriveId: row.requested_drive_id,
+    requestedDriveName: row.requested_drive_name,
+    summary:
+      row.summary_new_projects_count === null &&
+      row.summary_updated_projects_count === null &&
+      row.summary_missing_projects_count === null &&
+      row.summary_duplicates_flagged_count === null &&
+      row.summary_duration_ms === null
+        ? null
+        : {
+            newProjectsCount: row.summary_new_projects_count ?? 0,
+            updatedProjectsCount: row.summary_updated_projects_count ?? 0,
+            missingProjectsCount: row.summary_missing_projects_count ?? 0,
+            duplicatesFlaggedCount: row.summary_duplicates_flagged_count ?? 0,
+            durationMs: row.summary_duration_ms
+          },
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
 export function toSupabaseProjectScanEventRow(event: ProjectScanEvent) {
   return {
     id: event.id,
@@ -107,5 +278,18 @@ export function toSupabaseProjectScanEventRow(event: ProjectScanEvent) {
     observed_at: event.observedAt,
     created_at: event.createdAt,
     updated_at: event.updatedAt
+  };
+}
+
+export function fromSupabaseProjectScanEventRow(row: SupabaseProjectScanEventRow): ProjectScanEvent {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    scanId: row.scan_id,
+    observedFolderName: row.observed_folder_name,
+    observedDriveName: row.observed_drive_name,
+    observedAt: row.observed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
   };
 }

@@ -8,6 +8,7 @@ import { InMemorySyncAdapter } from "./inMemorySyncAdapter";
 import { LocalCatalogRepository } from "./localCatalogRepository";
 import { mockCatalogSnapshot } from "./mockData";
 import { SqliteLocalPersistence, type SqlDatabase } from "./sqliteLocalPersistence";
+import { getDefaultSyncState, type SyncAdapter, type SyncOperation, type SyncPullResult, type SyncResult, type SyncState } from "./sync";
 
 describe("LocalCatalogRepository", () => {
   it("supports filtered project reads from local persistence", async () => {
@@ -276,7 +277,143 @@ describe("LocalCatalogRepository", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  it("applies newer pulled remote project changes during syncNow", async () => {
+    const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
+    const repository = new LocalCatalogRepository(
+      persistence,
+      new StubSyncAdapter({
+        changes: [
+          {
+            entity: "project",
+            change: "upsert",
+            remoteUpdatedAt: "2026-04-06T14:00:00.000Z",
+            payload: {
+              ...mockCatalogSnapshot.projects[0]!,
+              correctedProject: "Apple Global Campaign",
+              updatedAt: "2026-04-06T14:00:00.000Z"
+            }
+          }
+        ]
+      })
+    );
+
+    const result = await repository.syncNow();
+    const project = await repository.getProjectById("project-240401-apple-shoot");
+
+    expect(result.pulled).toBe(1);
+    expect(project?.correctedProject).toBe("Apple Global Campaign");
+  });
+
+  it("keeps newer local data when pulled records tie or trail updatedAt", async () => {
+    const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
+    const localProject = {
+      ...mockCatalogSnapshot.projects[0]!,
+      correctedProject: "Local Winner",
+      updatedAt: "2026-04-06T14:00:00.000Z"
+    };
+    await persistence.upsertProject(localProject);
+
+    const repository = new LocalCatalogRepository(
+      persistence,
+      new StubSyncAdapter({
+        changes: [
+          {
+            entity: "project",
+            change: "upsert",
+            remoteUpdatedAt: "2026-04-06T14:00:00.000Z",
+            payload: {
+              ...localProject,
+              correctedProject: "Remote Loser"
+            }
+          }
+        ]
+      })
+    );
+
+    const result = await repository.syncNow();
+    const project = await repository.getProjectById(localProject.id);
+
+    expect(result.pulled).toBe(0);
+    expect(project?.correctedProject).toBe("Local Winner");
+  });
+
+  it("remains stable across repeated sync cycles for the same remote change", async () => {
+    const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
+    const remoteProject = {
+      ...mockCatalogSnapshot.projects[0]!,
+      correctedProject: "Remote Stable",
+      updatedAt: "2026-04-06T14:00:00.000Z"
+    };
+    const sync = new StubSyncAdapter({
+      changes: [
+        {
+          entity: "project",
+          change: "upsert",
+          remoteUpdatedAt: remoteProject.updatedAt,
+          payload: remoteProject
+        }
+      ]
+    });
+    const repository = new LocalCatalogRepository(persistence, sync);
+
+    const first = await repository.syncNow();
+    const second = await repository.syncNow();
+
+    expect(first.pulled).toBe(1);
+    expect(second.pulled).toBe(0);
+  });
 });
+
+class StubSyncAdapter implements SyncAdapter {
+  #state: SyncState = {
+    ...getDefaultSyncState(),
+    mode: "remote-ready"
+  };
+  #pullResult: SyncPullResult;
+
+  constructor(params: { changes?: SyncPullResult["changes"] }) {
+    this.#pullResult = {
+      changes: params.changes ?? [],
+      remoteCursor: "cursor-1"
+    };
+  }
+
+  async enqueue(_operation: SyncOperation): Promise<void> {}
+
+  async listPending(): Promise<SyncOperation[]> {
+    return [];
+  }
+
+  async listQueue(): Promise<SyncOperation[]> {
+    return [];
+  }
+
+  async flush(): Promise<SyncResult> {
+    this.#state = {
+      ...this.#state,
+      lastPushAt: "2026-04-06T15:00:00.000Z",
+      syncInProgress: false
+    };
+    return {
+      pushed: 0,
+      pending: 0
+    };
+  }
+
+  async pull(): Promise<SyncPullResult> {
+    this.#state = {
+      ...this.#state,
+      lastPullAt: "2026-04-06T15:01:00.000Z",
+      remoteCursor: this.#pullResult.remoteCursor
+    };
+    return this.#pullResult;
+  }
+
+  async getState(): Promise<SyncState> {
+    return this.#state;
+  }
+}
 
 function openNodeSqlDatabase(databasePath: string): SqlDatabase {
   const database = new DatabaseSync(databasePath);
