@@ -77,6 +77,19 @@ export function getStartupSyncMessage(startupSyncResult: StartupSyncResult | nul
   return startupSyncResult.message;
 }
 
+export function getStartupSyncTone(startupSyncResult: StartupSyncResult | null): "success" | "warning" | "error" | "info" {
+  if (!startupSyncResult) {
+    return "info";
+  }
+  if (startupSyncResult.status === "failed") {
+    return "error";
+  }
+  if (startupSyncResult.status === "skipped") {
+    return "info";
+  }
+  return "success";
+}
+
 export function formatSyncTimestamp(value: string | null) {
   if (!value) {
     return "Not yet";

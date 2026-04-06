@@ -447,7 +447,14 @@ export function ProjectsPage() {
         {isLoading ? (
           <LoadingState label="Loading projects" />
         ) : filteredProjects.length === 0 ? (
-          <EmptyState title="No projects match these filters" description="Try a broader search or remove one of the active filters." />
+          <EmptyState
+            title={projects.length === 0 ? "No projects yet" : "No projects match these filters"}
+            description={
+              projects.length === 0
+                ? "Create a manual project or finish a scan ingestion cycle to start building the catalog."
+                : "Try a broader search or remove one of the active filters."
+            }
+          />
         ) : (
           <div className="overflow-hidden rounded-[20px] border" style={{ borderColor: "var(--color-border)" }}>
             <table className="min-w-full text-left text-sm">

@@ -96,7 +96,14 @@ export function ScansPage() {
         {isLoading ? (
           <LoadingState label="Loading scan history" />
         ) : sessions.length === 0 ? (
-          <EmptyState title="No scan sessions match this filter" description="Start a scan or loosen the filters to review persisted sessions." />
+          <EmptyState
+            title={scanSessions.length === 0 ? "No scan sessions yet" : "No scan sessions match this filter"}
+            description={
+              scanSessions.length === 0
+                ? "Run the first desktop scan to populate history, reconciliation summaries, and session outcomes."
+                : "Start a scan or loosen the filters to review persisted sessions."
+            }
+          />
         ) : (
           <div className="space-y-4">
             {sessions.map((session) => (
