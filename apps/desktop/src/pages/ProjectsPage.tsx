@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { filterProjectCatalog } from "@drive-project-catalog/data";
+import { buildProjectSearchSuggestions, filterProjectCatalog } from "@drive-project-catalog/data";
 import {
   categoryValues,
   getDisplayClient,
@@ -70,7 +70,7 @@ export function ProjectsPage() {
     setProjectsCategory,
     planProjectsMove
   } = useCatalogStore();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(initialProjectForm);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -108,6 +108,19 @@ export function ProjectsPage() {
     () => validateManualProjectForm(projectForm),
     [projectForm]
   );
+  const searchSuggestions = useMemo(
+    () =>
+      buildProjectSearchSuggestions(projects, drives, search, {
+        category: categoryFilter || "",
+        currentDriveId: driveFilter || undefined,
+        targetDriveId: targetDriveFilter || undefined,
+        showUnassigned,
+        showMissing,
+        showDuplicate,
+        showMovePending
+      }),
+    [categoryFilter, driveFilter, drives, projects, search, showDuplicate, showMissing, showMovePending, showUnassigned, targetDriveFilter]
+  );
 
   const allVisibleSelected = filteredProjects.length > 0 && filteredProjects.every((project) => selectedProjectIds.includes(project.id));
 
@@ -123,6 +136,11 @@ export function ProjectsPage() {
   useEffect(() => {
     setBatchPreview(null);
   }, [batchState, selectedProjectIds]);
+
+  useEffect(() => {
+    const nextSearch = searchParams.get("q") ?? "";
+    setSearch((current) => (current === nextSearch ? current : nextSearch));
+  }, [searchParams]);
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -230,6 +248,22 @@ export function ProjectsPage() {
     setSearchParams(next);
   }
 
+  function updateSearchValue(value: string) {
+    setSearch(value);
+
+    const next = new URLSearchParams(searchParams);
+    if (value.trim()) {
+      next.set("q", value);
+    } else {
+      next.delete("q");
+    }
+    setSearchParams(next, { replace: true });
+  }
+
+  function clearSearch() {
+    updateSearchValue("");
+  }
+
   function toggleProjectSelection(projectId: string) {
     setSelectedProjectIds((current) =>
       current.includes(projectId)
@@ -326,10 +360,59 @@ export function ProjectsPage() {
 
       <SectionCard title="Project controls" description="Combine status, category, drive, and search filters to narrow the catalog without changing the underlying sort order.">
         <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr_1fr]">
-          <label className="field-shell flex items-center gap-3 text-sm" style={{ color: "var(--color-text-soft)" }}>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Search</span>
-            <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Client, project, date, drive, category" className="w-full bg-transparent outline-none placeholder:text-[color:var(--color-text-soft)]" style={{ color: "var(--color-text)" }} />
-          </label>
+          <div className="relative">
+            <label className="field-shell flex items-center gap-3 text-sm" style={{ color: "var(--color-text-soft)" }}>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Search</span>
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => updateSearchValue(event.target.value)}
+                placeholder="Client, project, date, drive, category"
+                className="w-full bg-transparent outline-none placeholder:text-[color:var(--color-text-soft)]"
+                style={{ color: "var(--color-text)" }}
+              />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+                  style={{ borderColor: "var(--color-border-strong)", color: "var(--color-text-muted)" }}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </label>
+            {search.trim() && searchSuggestions.length > 0 ? (
+              <div
+                className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-10 overflow-hidden rounded-[18px] border bg-white shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
+                style={{ borderColor: "var(--color-border)" }}
+              >
+                {searchSuggestions.map((group) => (
+                  <div key={group.key} className="border-b last:border-b-0" style={{ borderColor: "var(--color-border)" }}>
+                    <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
+                      {group.label}
+                    </p>
+                    <ul className="px-2 pb-2 pt-1">
+                      {group.suggestions.map((suggestion) => (
+                        <li key={suggestion.key}>
+                          <button
+                            type="button"
+                            onClick={() => updateSearchValue(suggestion.value)}
+                            className="flex w-full items-center justify-between rounded-[12px] px-3 py-2 text-left transition hover:bg-[color:var(--color-surface-subtle)]"
+                          >
+                            <span style={{ color: "var(--color-text)" }}>{suggestion.label}</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-soft)" }}>
+                              {suggestion.matchType === "prefix" ? "Starts with" : "Contains"}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <FormField label="Category filter">
             <select value={categoryFilter} onChange={(event) => updateQueryParam("category", event.target.value)} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
               <option value="">All categories</option>
