@@ -1,0 +1,40 @@
+mod scan_engine;
+
+use scan_engine::{
+    cancel_scan, get_scan_snapshot, list_scan_snapshots, start_scan, AppScanState,
+};
+use serde::Serialize;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppInfo {
+    name: &'static str,
+    surface: &'static str,
+    phase: &'static str,
+}
+
+#[tauri::command]
+fn app_info() -> AppInfo {
+    AppInfo {
+        name: "Drive Project Catalog",
+        surface: "desktop",
+        phase: "phase-4-scan-engine",
+    }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_sql::Builder::default().build())
+        .manage(AppScanState::default())
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            start_scan,
+            cancel_scan,
+            get_scan_snapshot,
+            list_scan_snapshots
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

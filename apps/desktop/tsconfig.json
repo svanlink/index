@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@drive-project-catalog/domain": ["../../packages/domain/src/index.ts"],
+      "@drive-project-catalog/data": ["../../packages/data/src/index.ts"],
+      "@drive-project-catalog/ui": ["../../packages/ui/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts", "tailwind.config.ts"]
+}
+
