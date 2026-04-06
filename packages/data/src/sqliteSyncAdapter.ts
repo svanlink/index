@@ -4,6 +4,7 @@ import {
   type RemoteSyncAdapter,
   type SyncAdapter,
   type SyncOperation,
+  type SyncRecoveryResult,
   type SyncResult,
   type SyncState
 } from "./sync";
@@ -20,6 +21,7 @@ interface SqliteSyncAdapterOptions {
   loadDatabase(): Promise<SqlDatabase>;
   remote?: RemoteSyncAdapter | null;
 }
+const interruptedSyncMessage = "A previous sync attempt was interrupted before completion. Retry sync to continue.";
 
 type SyncQueueRow = {
   id: string;
@@ -180,6 +182,46 @@ export class SqliteSyncAdapter implements SyncAdapter {
   async getState(): Promise<SyncState> {
     const database = await this.#ensureReady();
     return this.#readState(database);
+  }
+
+  async recoverInterruptedState(): Promise<SyncRecoveryResult> {
+    const database = await this.#ensureReady();
+    const queue = await this.#listQueue(database);
+    const recoveredCount = queue.filter((operation) => operation.status === "in-flight").length;
+    const nextQueue =
+      recoveredCount === 0
+        ? queue
+        : queue.map((operation) =>
+            operation.status === "in-flight"
+              ? {
+                  ...operation,
+                  status: "failed" as const,
+                  lastError: operation.lastError ?? interruptedSyncMessage
+                }
+              : operation
+          );
+
+    if (recoveredCount > 0) {
+      await this.#writeQueue(database, nextQueue);
+    }
+
+    await this.#writeState(database, async (current) => ({
+      ...getSyncStateForQueue({
+        queue: nextQueue,
+        remoteEnabled: Boolean(this.#remote),
+        previous: {
+          ...current,
+          mode: this.#remote ? "remote-ready" : "local-only",
+          lastError: recoveredCount > 0 ? interruptedSyncMessage : current.lastError,
+          lastSyncError: recoveredCount > 0 ? interruptedSyncMessage : current.lastSyncError
+        }
+      })
+    }));
+
+    return {
+      recoveredCount,
+      state: await this.#readState(database)
+    };
   }
 
   async pull() {

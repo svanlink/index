@@ -3,6 +3,7 @@ import { FeedbackNotice } from "../pages/pagePrimitives";
 import { useCatalogStore } from "./providers";
 import {
   formatSyncTimestamp,
+  getStartupSyncMessage,
   getSyncStatusLabel,
   getSyncStatusTone,
   getSyncSummaryMessages,
@@ -10,7 +11,7 @@ import {
 } from "./syncHelpers";
 
 export function DesktopSyncPanel() {
-  const { syncState, syncNow, isSyncing } = useCatalogStore();
+  const { syncState, syncNow, isSyncing, startupSyncResult } = useCatalogStore();
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [feedback, setFeedback] = useState<{
     tone: "success" | "warning" | "error" | "info";
@@ -22,6 +23,7 @@ export function DesktopSyncPanel() {
   const hasFailures = syncState.failedCount > 0;
   const actionLabel = isSyncing ? "Syncing..." : hasFailures ? "Retry sync" : "Sync now";
   const summaryMessages = useMemo(() => getSyncSummaryMessages(syncState), [syncState]);
+  const startupMessage = useMemo(() => getStartupSyncMessage(startupSyncResult), [startupSyncResult]);
 
   async function handleSync() {
     setFeedback(null);
@@ -92,6 +94,16 @@ export function DesktopSyncPanel() {
                 messages={summaryMessages}
               />
             </div>
+
+            {startupMessage ? (
+              <div className="mt-4">
+                <FeedbackNotice
+                  tone={startupSyncResult?.status === "failed" ? "error" : startupSyncResult?.status === "skipped" ? "info" : "success"}
+                  title="Startup sync"
+                  messages={[startupMessage]}
+                />
+              </div>
+            ) : null}
 
             {feedback ? (
               <div className="mt-4">

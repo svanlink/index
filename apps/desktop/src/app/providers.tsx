@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode
 } from "react";
@@ -13,6 +14,7 @@ import {
   type CreateDriveInput,
   type CreateProjectInput,
   type DashboardSnapshot,
+  type StartupSyncResult,
   type SyncCycleResult,
   type SyncState,
   type UpdateProjectMetadataInput
@@ -44,6 +46,7 @@ interface CatalogStoreContextValue {
   selectedDriveId: string | null;
   selectedDrive: Drive | null;
   syncState: SyncState;
+  startupSyncResult: StartupSyncResult | null;
   isLoading: boolean;
   isMutating: boolean;
   isSyncing: boolean;
@@ -99,11 +102,13 @@ export function AppProviders({ children }: AppProvidersProps) {
   const [scanSessions, setScanSessions] = useState<ScanSessionSnapshot[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot>(emptyDashboard);
   const [syncState, setSyncState] = useState<SyncState>(emptySyncState);
+  const [startupSyncResult, setStartupSyncResult] = useState<StartupSyncResult | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedDriveId, setSelectedDriveId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const startupSyncHasRunRef = useRef(false);
 
   const refresh = useCallback(async () => {
     const [nextProjects, nextDrives, nextScans, nextScanSessions, nextDashboard, nextSyncState] = await Promise.all([
@@ -148,6 +153,25 @@ export function AppProviders({ children }: AppProvidersProps) {
         setScanSessions(nextScanSessions);
         setDashboard(nextDashboard);
         setSyncState(nextSyncState);
+
+        if (!startupSyncHasRunRef.current) {
+          startupSyncHasRunRef.current = true;
+          setIsSyncing(true);
+          try {
+            const startupResult = await repository.startupSync({
+              isOnline: typeof navigator === "undefined" ? true : navigator.onLine
+            });
+            if (!isMounted) {
+              return;
+            }
+            setStartupSyncResult(startupResult);
+            await refresh();
+          } finally {
+            if (isMounted) {
+              setIsSyncing(false);
+            }
+          }
+        }
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -218,6 +242,7 @@ export function AppProviders({ children }: AppProvidersProps) {
     selectedDriveId,
     selectedDrive,
     syncState,
+    startupSyncResult,
     isLoading,
     isMutating,
     isSyncing,
@@ -254,7 +279,8 @@ export function AppProviders({ children }: AppProvidersProps) {
     selectedProject,
     selectedProjectId,
     syncNow,
-    syncState
+    syncState,
+    startupSyncResult
   ]);
 
   return <CatalogStoreContext.Provider value={value}>{children}</CatalogStoreContext.Provider>;

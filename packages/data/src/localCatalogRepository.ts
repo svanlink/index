@@ -19,11 +19,13 @@ import type {
   UpdateProjectMetadataInput
 } from "./repository";
 import { ingestScanSessionSnapshot } from "./scanIngestionService";
-import type { SyncAdapter, SyncCycleResult, SyncMutationSource, SyncOperationType, SyncState } from "./sync";
+import type { StartupSyncResult, SyncAdapter, SyncCycleResult, SyncMutationSource, SyncOperationType, SyncState } from "./sync";
 
 const clone = <T>(value: T): T => structuredClone(value);
 
 export class LocalCatalogRepository implements CatalogRepository {
+  #activeSyncPromise: Promise<SyncCycleResult> | null = null;
+
   constructor(
     private readonly persistence: LocalPersistenceAdapter,
     private readonly sync: SyncAdapter
@@ -306,30 +308,89 @@ export class LocalCatalogRepository implements CatalogRepository {
   }
 
   async syncNow(): Promise<SyncCycleResult> {
-    const currentState = await this.sync.getState();
-    if (currentState.syncInProgress) {
+    return this.runSyncCycle();
+  }
+
+  async startupSync(options?: { isOnline?: boolean }): Promise<StartupSyncResult> {
+    const recovery = await this.sync.recoverInterruptedState();
+    const state = recovery.state;
+
+    if (state.mode === "local-only") {
       return {
-        pushed: 0,
-        pulled: 0,
-        pending: currentState.pendingCount,
-        state: currentState
+        status: "skipped",
+        reason: "disabled",
+        message: "Startup sync was skipped because no remote sync configuration is available.",
+        recoveredCount: recovery.recoveredCount,
+        cycle: null
       };
     }
 
-    const pushResult = await this.sync.flush();
-    const pullResult = await this.sync.pull();
-    const mergeResult = await applyRemoteSyncChanges({
-      persistence: this.persistence,
-      changes: pullResult.changes
-    });
-    const state = await this.sync.getState();
+    if (options?.isOnline === false) {
+      return {
+        status: "skipped",
+        reason: "offline",
+        message: "Startup sync was skipped because the app appears to be offline.",
+        recoveredCount: recovery.recoveredCount,
+        cycle: null
+      };
+    }
 
-    return {
-      pushed: pushResult.pushed,
-      pulled: mergeResult.appliedCount,
-      pending: state.pendingCount,
-      state
-    };
+    if (this.#activeSyncPromise) {
+      const cycle = await this.#activeSyncPromise;
+      return {
+        status: "completed",
+        reason: "existing-run",
+        message: "Startup sync joined an already running sync cycle.",
+        recoveredCount: recovery.recoveredCount,
+        cycle
+      };
+    }
+
+    const shouldRunSync =
+      recovery.recoveredCount > 0 ||
+      state.pendingCount > 0 ||
+      state.failedCount > 0 ||
+      state.lastPullAt === null;
+
+    if (!shouldRunSync) {
+      return {
+        status: "skipped",
+        reason: "not-needed",
+        message: "Startup sync was skipped because the local queue is clear and a prior pull already completed.",
+        recoveredCount: recovery.recoveredCount,
+        cycle: null
+      };
+    }
+
+    try {
+      const cycle = await this.runSyncCycle();
+      return {
+        status: "completed",
+        reason:
+          recovery.recoveredCount > 0
+            ? "recovered-and-ran"
+            : state.pendingCount > 0 || state.failedCount > 0
+            ? "pending-queue"
+            : "initial-pull",
+        message: buildStartupMessage({
+          recoveredCount: recovery.recoveredCount,
+          pendingCount: state.pendingCount,
+          failedCount: state.failedCount,
+          pulled: cycle.pulled,
+          pushed: cycle.pushed
+        }),
+        recoveredCount: recovery.recoveredCount,
+        cycle
+      };
+    } catch (error) {
+      return {
+        status: "failed",
+        reason: "failed",
+        message: error instanceof Error ? error.message : "Startup sync did not complete.",
+        recoveredCount: recovery.recoveredCount,
+        cycle: null
+      };
+    }
   }
 
   private async enqueue(type: SyncOperationType, payload: object, source: SyncMutationSource = "manual") {
@@ -350,6 +411,65 @@ export class LocalCatalogRepository implements CatalogRepository {
       lastError: null
     });
   }
+
+  private async runSyncCycle(): Promise<SyncCycleResult> {
+    if (this.#activeSyncPromise) {
+      return this.#activeSyncPromise;
+    }
+
+    this.#activeSyncPromise = (async () => {
+      const currentState = await this.sync.getState();
+      if (currentState.syncInProgress) {
+        return {
+          pushed: 0,
+          pulled: 0,
+          pending: currentState.pendingCount,
+          state: currentState
+        };
+      }
+
+      const pushResult = await this.sync.flush();
+      const pullResult = await this.sync.pull();
+      const mergeResult = await applyRemoteSyncChanges({
+        persistence: this.persistence,
+        changes: pullResult.changes
+      });
+      const state = await this.sync.getState();
+
+      return {
+        pushed: pushResult.pushed,
+        pulled: mergeResult.appliedCount,
+        pending: state.pendingCount,
+        state
+      };
+    })();
+
+    try {
+      return await this.#activeSyncPromise;
+    } finally {
+      this.#activeSyncPromise = null;
+    }
+  }
+}
+
+function buildStartupMessage(params: {
+  recoveredCount: number;
+  pendingCount: number;
+  failedCount: number;
+  pushed: number;
+  pulled: number;
+}) {
+  if (params.recoveredCount > 0) {
+    return `Recovered ${params.recoveredCount} interrupted sync item${params.recoveredCount === 1 ? "" : "s"} and ran a safe startup sync.`;
+  }
+  if (params.failedCount > 0) {
+    return `Retried failed sync work on startup. ${params.pushed} pushed, ${params.pulled} pulled.`;
+  }
+  if (params.pendingCount > 0) {
+    return `Pushed pending local changes on startup and refreshed remote updates.`;
+  }
+
+  return "Ran a conservative startup pull to refresh remote changes.";
 }
 
 function sortProjects(projects: Project[]) {

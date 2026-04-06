@@ -1,4 +1,4 @@
-import { getDefaultSyncState, type SyncAdapter, type SyncOperation, type SyncResult, type SyncState } from "./sync";
+import { getDefaultSyncState, type SyncAdapter, type SyncOperation, type SyncRecoveryResult, type SyncResult, type SyncState } from "./sync";
 import { compactSyncQueue, getSyncStateForQueue, listDispatchableSyncOperations, normalizeSyncOperation } from "./syncQueue";
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -62,5 +62,18 @@ export class InMemorySyncAdapter implements SyncAdapter {
         previous: this.#state
       })
     );
+  }
+
+  async recoverInterruptedState(): Promise<SyncRecoveryResult> {
+    this.#state = getSyncStateForQueue({
+      queue: this.#pending,
+      remoteEnabled: false,
+      previous: this.#state
+    });
+
+    return {
+      recoveredCount: 0,
+      state: clone(this.#state)
+    };
   }
 }

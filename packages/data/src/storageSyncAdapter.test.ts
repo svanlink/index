@@ -137,4 +137,96 @@ describe("StorageSyncAdapter", () => {
     expect(state.failedCount).toBe(1);
     expect(state.inFlightCount).toBe(0);
   });
+
+  it("recovers stale in-flight items after restart", async () => {
+    const storage = new MemoryStorage();
+    const first = new StorageSyncAdapter({
+      storage,
+      storageKey: "sync",
+      remote: {
+        mode: "remote-ready",
+        async pushChanges() {
+          return { acceptedOperationIds: [], rejected: [], remoteCursor: null };
+        },
+        async pullChanges() {
+          return { changes: [], remoteCursor: null };
+        }
+      }
+    });
+
+    await first.enqueue({
+      id: "op-1",
+      type: "project.upsert",
+      entity: "project",
+      recordId: "project-1",
+      change: "upsert",
+      occurredAt: "2026-04-06T12:00:00.000Z",
+      recordUpdatedAt: "2026-04-06T12:00:00.000Z",
+      payload: { id: "project-1" },
+      source: "manual",
+      status: "pending",
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null
+    });
+
+    storage.setItem(
+      "sync",
+      JSON.stringify({
+        version: 1,
+        queue: [
+          {
+            id: "op-1",
+            type: "project.upsert",
+            entity: "project",
+            recordId: "project-1",
+            change: "upsert",
+            occurredAt: "2026-04-06T12:00:00.000Z",
+            recordUpdatedAt: "2026-04-06T12:00:00.000Z",
+            payload: { id: "project-1" },
+            source: "manual",
+            status: "in-flight",
+            attempts: 1,
+            lastAttemptAt: "2026-04-06T12:01:00.000Z",
+            lastError: null
+          }
+        ],
+        state: {
+          mode: "syncing",
+          pendingCount: 0,
+          queuedCount: 1,
+          failedCount: 0,
+          inFlightCount: 1,
+          syncInProgress: true,
+          lastPushAt: null,
+          lastPullAt: null,
+          lastError: null,
+          lastSyncError: null,
+          remoteCursor: null,
+          conflictPolicy: "updated-at-last-write-wins-local-tie-break"
+        }
+      })
+    );
+
+    const second = new StorageSyncAdapter({
+      storage,
+      storageKey: "sync",
+      remote: {
+        mode: "remote-ready",
+        async pushChanges() {
+          return { acceptedOperationIds: [], rejected: [], remoteCursor: null };
+        },
+        async pullChanges() {
+          return { changes: [], remoteCursor: null };
+        }
+      }
+    });
+
+    const recovery = await second.recoverInterruptedState();
+    const queue = await second.listQueue();
+
+    expect(recovery.recoveredCount).toBe(1);
+    expect(queue[0]?.status).toBe("failed");
+    expect(queue[0]?.lastError).toContain("interrupted");
+  });
 });

@@ -1,4 +1,4 @@
-import type { SyncState } from "@drive-project-catalog/data";
+import type { StartupSyncResult, SyncState } from "@drive-project-catalog/data";
 
 export function isSyncEnabled(syncState: SyncState) {
   return syncState.mode !== "local-only";
@@ -67,6 +67,14 @@ export function getSyncSummaryMessages(syncState: SyncState) {
   }
 
   return messages;
+}
+
+export function getStartupSyncMessage(startupSyncResult: StartupSyncResult | null) {
+  if (!startupSyncResult) {
+    return null;
+  }
+
+  return startupSyncResult.message;
 }
 
 export function formatSyncTimestamp(value: string | null) {

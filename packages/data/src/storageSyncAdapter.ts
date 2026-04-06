@@ -4,6 +4,7 @@ import {
   type RemoteSyncAdapter,
   type SyncAdapter,
   type SyncOperation,
+  type SyncRecoveryResult,
   type SyncResult,
   type SyncState
 } from "./sync";
@@ -31,6 +32,7 @@ interface StorageSyncAdapterOptions {
 }
 
 const STORAGE_VERSION = 1;
+const interruptedSyncMessage = "A previous sync attempt was interrupted before completion. Retry sync to continue.";
 
 export class StorageSyncAdapter implements SyncAdapter {
   readonly #storage: StorageLike;
@@ -159,6 +161,40 @@ export class StorageSyncAdapter implements SyncAdapter {
     });
     this.#writeEnvelope(envelope);
     return clone(envelope.state);
+  }
+
+  async recoverInterruptedState(): Promise<SyncRecoveryResult> {
+    const envelope = this.#readEnvelope();
+    const recoveredCount = envelope.queue.filter((operation) => operation.status === "in-flight").length;
+
+    if (recoveredCount > 0) {
+      envelope.queue = envelope.queue.map((operation) =>
+        operation.status === "in-flight"
+          ? {
+              ...operation,
+              status: "failed",
+              lastError: operation.lastError ?? interruptedSyncMessage
+            }
+          : operation
+      );
+    }
+
+    envelope.state = getSyncStateForQueue({
+      queue: envelope.queue,
+      remoteEnabled: Boolean(this.#remote),
+      previous: {
+        ...envelope.state,
+        mode: this.#remote ? "remote-ready" : "local-only",
+        lastError: recoveredCount > 0 ? interruptedSyncMessage : envelope.state.lastError,
+        lastSyncError: recoveredCount > 0 ? interruptedSyncMessage : envelope.state.lastSyncError
+      }
+    });
+    this.#writeEnvelope(envelope);
+
+    return {
+      recoveredCount,
+      state: clone(envelope.state)
+    };
   }
 
   async pull() {

@@ -8,7 +8,7 @@ import { InMemorySyncAdapter } from "./inMemorySyncAdapter";
 import { LocalCatalogRepository } from "./localCatalogRepository";
 import { mockCatalogSnapshot } from "./mockData";
 import { SqliteLocalPersistence, type SqlDatabase } from "./sqliteLocalPersistence";
-import { getDefaultSyncState, type SyncAdapter, type SyncOperation, type SyncPullResult, type SyncResult, type SyncState } from "./sync";
+import { getDefaultSyncState, type SyncAdapter, type SyncOperation, type SyncPullResult, type SyncRecoveryResult, type SyncResult, type SyncState } from "./sync";
 
 describe("LocalCatalogRepository", () => {
   it("supports filtered project reads from local persistence", async () => {
@@ -363,6 +363,51 @@ describe("LocalCatalogRepository", () => {
     expect(first.pulled).toBe(1);
     expect(second.pulled).toBe(0);
   });
+
+  it("skips startup sync when sync is disabled", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new StubSyncAdapter({
+        state: {
+          ...getDefaultSyncState(),
+          mode: "local-only"
+        }
+      })
+    );
+
+    const result = await repository.startupSync({ isOnline: true });
+
+    expect(result.status).toBe("skipped");
+    expect(result.reason).toBe("disabled");
+  });
+
+  it("runs startup sync when recovery or queue state needs it", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new StubSyncAdapter({
+        state: {
+          ...getDefaultSyncState(),
+          mode: "remote-ready",
+          pendingCount: 1,
+          queuedCount: 1
+        },
+        recovery: {
+          recoveredCount: 1,
+          state: {
+            ...getDefaultSyncState(),
+            mode: "remote-ready",
+            failedCount: 1,
+            queuedCount: 1
+          }
+        }
+      })
+    );
+
+    const result = await repository.startupSync({ isOnline: true });
+
+    expect(result.status).toBe("completed");
+    expect(result.reason).toBe("recovered-and-ran");
+  });
 });
 
 class StubSyncAdapter implements SyncAdapter {
@@ -371,12 +416,15 @@ class StubSyncAdapter implements SyncAdapter {
     mode: "remote-ready"
   };
   #pullResult: SyncPullResult;
+  #recovery: SyncRecoveryResult | null;
 
-  constructor(params: { changes?: SyncPullResult["changes"] }) {
+  constructor(params: { changes?: SyncPullResult["changes"]; state?: SyncState; recovery?: SyncRecoveryResult }) {
     this.#pullResult = {
       changes: params.changes ?? [],
       remoteCursor: "cursor-1"
     };
+    this.#state = params.state ?? this.#state;
+    this.#recovery = params.recovery ?? null;
   }
 
   async enqueue(_operation: SyncOperation): Promise<void> {}
@@ -412,6 +460,18 @@ class StubSyncAdapter implements SyncAdapter {
 
   async getState(): Promise<SyncState> {
     return this.#state;
+  }
+
+  async recoverInterruptedState(): Promise<SyncRecoveryResult> {
+    if (this.#recovery) {
+      this.#state = this.#recovery.state;
+      return this.#recovery;
+    }
+
+    return {
+      recoveredCount: 0,
+      state: this.#state
+    };
   }
 }
 

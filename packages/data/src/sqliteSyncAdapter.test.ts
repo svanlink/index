@@ -140,6 +140,62 @@ describe("SqliteSyncAdapter", () => {
     expect(state.failedCount).toBe(1);
     expect(state.remoteCursor).toBe("cursor-1");
   });
+
+  it("recovers stale in-flight rows after restart", async () => {
+    const databasePath = createTempDatabasePath();
+    const adapter = new SqliteSyncAdapter({
+      loadDatabase: async () => openNodeSqlDatabase(databasePath),
+      remote: {
+        mode: "remote-ready",
+        async pushChanges() {
+          return { acceptedOperationIds: [], rejected: [], remoteCursor: null };
+        },
+        async pullChanges() {
+          return { changes: [], remoteCursor: null };
+        }
+      }
+    });
+
+    await adapter.enqueue({
+      id: "op-1",
+      type: "project.upsert",
+      entity: "project",
+      recordId: "project-1",
+      change: "upsert",
+      occurredAt: "2026-04-06T12:00:00.000Z",
+      recordUpdatedAt: "2026-04-06T12:00:00.000Z",
+      payload: { id: "project-1" },
+      source: "manual",
+      status: "pending",
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null
+    });
+
+    const database = openNodeSqlDatabase(databasePath);
+    await database.execute("UPDATE sync_queue SET status = 'in-flight', attempts = 1");
+    await database.execute("UPDATE sync_state SET mode = 'syncing', in_flight_count = 1, sync_in_progress = 1");
+
+    const restarted = new SqliteSyncAdapter({
+      loadDatabase: async () => openNodeSqlDatabase(databasePath),
+      remote: {
+        mode: "remote-ready",
+        async pushChanges() {
+          return { acceptedOperationIds: [], rejected: [], remoteCursor: null };
+        },
+        async pullChanges() {
+          return { changes: [], remoteCursor: null };
+        }
+      }
+    });
+
+    const recovery = await restarted.recoverInterruptedState();
+    const queue = await restarted.listQueue();
+
+    expect(recovery.recoveredCount).toBe(1);
+    expect(queue[0]?.status).toBe("failed");
+    expect(queue[0]?.lastError).toContain("interrupted");
+  });
 });
 
 function createTempDatabasePath() {
