@@ -24,8 +24,8 @@ describe("ProjectsPage", () => {
     fireEvent.change(searchInput, { target: { value: "apple" } });
 
     await waitFor(() => {
-      expect(screen.getByText("Apple Product Shoot")).toBeInTheDocument();
-      expect(screen.queryByText("Adidas Social")).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Apple Product Shoot" })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Adidas Social" })).not.toBeInTheDocument();
     });
   });
 });
