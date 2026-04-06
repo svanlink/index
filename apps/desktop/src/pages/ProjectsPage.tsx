@@ -124,6 +124,11 @@ export function ProjectsPage() {
     setBatchPreview(null);
   }, [batchState, selectedProjectIds]);
 
+  useEffect(() => {
+    const nextSearch = searchParams.get("q") ?? "";
+    setSearch((current) => (current === nextSearch ? current : nextSearch));
+  }, [searchParams]);
+
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const validation = validateManualProjectForm(projectForm);
@@ -230,6 +235,20 @@ export function ProjectsPage() {
     setSearchParams(next);
   }
 
+  function updateSearchQuery(value: string) {
+    setSearch(value);
+    const next = new URLSearchParams(searchParams);
+    const trimmed = value.trim();
+
+    if (trimmed) {
+      next.set("q", trimmed);
+    } else {
+      next.delete("q");
+    }
+
+    setSearchParams(next);
+  }
+
   function toggleProjectSelection(projectId: string) {
     setSelectedProjectIds((current) =>
       current.includes(projectId)
@@ -328,7 +347,7 @@ export function ProjectsPage() {
         <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr_1fr]">
           <label className="field-shell flex items-center gap-3 text-sm" style={{ color: "var(--color-text-soft)" }}>
             <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Search</span>
-            <input type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Client, project, date, drive, category" className="w-full bg-transparent outline-none placeholder:text-[color:var(--color-text-soft)]" style={{ color: "var(--color-text)" }} />
+            <input type="text" value={search} onChange={(event) => updateSearchQuery(event.target.value)} placeholder="Client, project, date, drive, category" className="w-full bg-transparent outline-none placeholder:text-[color:var(--color-text-soft)]" style={{ color: "var(--color-text)" }} />
           </label>
           <FormField label="Category filter">
             <select value={categoryFilter} onChange={(event) => updateQueryParam("category", event.target.value)} className="field-shell w-full bg-transparent px-4 py-3 outline-none">

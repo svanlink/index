@@ -7,15 +7,35 @@ interface AppShellProps {
   navItems: NavItem[];
   title: string;
   toolbarAction?: ReactNode;
+  searchValue?: string;
+  searchPlaceholder?: string;
+  onSearchChange?(value: string): void;
+  onSearchSubmit?(): void;
   children: ReactNode;
 }
 
-export function AppShell({ navItems, title, toolbarAction, children }: AppShellProps) {
+export function AppShell({
+  navItems,
+  title,
+  toolbarAction,
+  searchValue,
+  searchPlaceholder,
+  onSearchChange,
+  onSearchSubmit,
+  children
+}: AppShellProps) {
   return (
     <div className="flex min-h-screen bg-transparent text-[color:var(--color-text)]">
       <SidebarNav items={navItems} />
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <TopUtilityBar title={title} action={toolbarAction} />
+        <TopUtilityBar
+          title={title}
+          action={toolbarAction}
+          searchValue={searchValue}
+          searchPlaceholder={searchPlaceholder}
+          onSearchChange={onSearchChange}
+          onSearchSubmit={onSearchSubmit}
+        />
         <main className="flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-7 xl:px-10 xl:py-9">
           <div className="mx-auto w-full max-w-[1500px]">{children}</div>
         </main>

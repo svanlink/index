@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { RouterProvider } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { AppProviders } from "./providers";
@@ -33,5 +33,28 @@ describe("desktop routes", () => {
     }
 
     expect(await screen.findByText(value)).toBeInTheDocument();
+  });
+
+  it("routes shell search into the projects page and keeps the query visible", async () => {
+    const router = createTestRouter(["/"]);
+
+    render(
+      <AppProviders>
+        <ScanWorkflowProvider>
+          <RouterProvider router={router} />
+        </ScanWorkflowProvider>
+      </AppProviders>
+    );
+
+    const [searchInput] = await screen.findAllByPlaceholderText("Search the catalog from anywhere");
+    fireEvent.change(searchInput, { target: { value: "adidas" } });
+    fireEvent.submit(searchInput.closest("form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/projects");
+      expect(router.state.location.search).toBe("?q=adidas");
+      expect(screen.getAllByDisplayValue("adidas").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Adidas Social").length).toBeGreaterThan(0);
+    });
   });
 });
