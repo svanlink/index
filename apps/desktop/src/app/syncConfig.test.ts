@@ -9,6 +9,17 @@ describe("syncConfig", () => {
     expect(result.diagnostics.code).toBe("missing");
   });
 
+  it("treats placeholder config as disabled instead of broken", () => {
+    const result = resolveSupabaseSyncConfig({
+      VITE_SUPABASE_URL: "https://your-project.supabase.co",
+      VITE_SUPABASE_ANON_KEY: "your-supabase-anon-key"
+    });
+
+    expect(result.config).toBeNull();
+    expect(result.diagnostics.code).toBe("missing");
+    expect(result.diagnostics.message).toContain("placeholder");
+  });
+
   it("rejects invalid urls", () => {
     const result = resolveSupabaseSyncConfig({
       VITE_SUPABASE_URL: "not-a-url",

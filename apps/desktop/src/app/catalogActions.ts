@@ -15,13 +15,18 @@ export interface StartCatalogScanInput extends ScanStartRequest {
 }
 
 export async function startCatalogScan(repository: CatalogRepository, input: StartCatalogScanInput) {
-  const response = await startDesktopScan({ rootPath: input.rootPath });
+  const rootPath = input.rootPath.trim();
+  if (!rootPath) {
+    throw new Error("A scan target path is required.");
+  }
+
+  const response = await startDesktopScan({ rootPath });
   const startedAt = new Date().toISOString();
-  const driveName = getDriveNameFromPath(input.rootPath);
+  const driveName = getDriveNameFromPath(rootPath);
 
   await repository.saveScanSession({
     scanId: response.scanId,
-    rootPath: input.rootPath,
+    rootPath,
     driveName,
     status: "running",
     startedAt,

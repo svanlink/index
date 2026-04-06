@@ -212,8 +212,10 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
           setActiveScanId(runningSession.scanId);
           await pollScan(runningSession.scanId, runningSession.requestedDriveId ?? null);
         }
-      } catch {
-        // Ignore desktop scan bootstrap errors in web mode or when no live sessions exist.
+      } catch (error) {
+        if (!cancelled) {
+          setLastError(error instanceof Error ? error.message : "Desktop scan recovery could not be completed after launch.");
+        }
       }
     })();
 
@@ -231,6 +233,12 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [draftRootPath, drives, selectedDriveId]);
+
+  useEffect(() => {
+    if (!activeScanId) {
+      requestedDriveIdRef.current = null;
+    }
+  }, [activeScanId]);
 
   const value = useMemo<ScanWorkflowContextValue>(() => ({
     isDesktopScanAvailable: desktopAvailable,
