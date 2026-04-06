@@ -88,6 +88,7 @@ No special macOS entitlement file is committed yet because the current desktop b
 2. Bump and align the version in:
    - `package.json`
    - `apps/desktop/package.json`
+   - `apps/desktop/src-tauri/Cargo.toml`
    - `apps/desktop/src-tauri/tauri.conf.json`
 3. Run `corepack pnpm release:check:rc <tag>` and confirm the version matches the intended release candidate or final tag.
 4. Confirm `tauri.conf.json` product name, identifier, and icons are correct.

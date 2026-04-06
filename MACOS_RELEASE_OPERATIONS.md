@@ -49,6 +49,7 @@ See [.env.release.example](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/.e
 2. Align the app version in:
    - `package.json`
    - `apps/desktop/package.json`
+   - `apps/desktop/src-tauri/Cargo.toml`
    - `apps/desktop/src-tauri/tauri.conf.json`
 3. Validate release candidate metadata:
 

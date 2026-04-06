@@ -68,7 +68,7 @@ If these variables are missing or invalid, the app remains fully usable in local
 
 ## Release candidate discipline
 
-- Keep the root workspace version, desktop package version, and `tauri.conf.json` version aligned before tagging a release candidate.
+- Keep the root workspace version, desktop package version, Rust crate version in `apps/desktop/src-tauri/Cargo.toml`, and `tauri.conf.json` version aligned before tagging a release candidate.
 - Use tags like `v1.0.0-rc1` for release candidates and `v1.0.0` for the final release.
 - Run `corepack pnpm release:check:rc <tag>` before creating the tag to verify version consistency and required operator files.
 - Cut release notes from [RELEASE_NOTES_TEMPLATE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/RELEASE_NOTES_TEMPLATE.md) and archive them with the exact signed artifacts.
