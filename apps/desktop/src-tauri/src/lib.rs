@@ -18,7 +18,7 @@ fn app_info() -> AppInfo {
     AppInfo {
         name: "Drive Project Catalog",
         surface: "desktop",
-        phase: "phase-4-scan-engine",
+        phase: "release-readiness",
     }
 }
 
