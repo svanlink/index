@@ -88,7 +88,8 @@ export class StorageSyncAdapter implements SyncAdapter {
       mode: "syncing",
       previous: {
         ...envelope.state,
-        lastError: null
+        lastError: null,
+        lastSyncError: null
       }
     });
     this.#writeEnvelope(envelope);
@@ -114,6 +115,7 @@ export class StorageSyncAdapter implements SyncAdapter {
           mode: "remote-ready",
           lastPushAt: attemptedAt,
           lastError: pushResult.rejected[0]?.reason ?? null,
+          lastSyncError: pushResult.rejected[0]?.reason ?? null,
           remoteCursor: pushResult.remoteCursor ?? envelope.state.remoteCursor
         }
       });
@@ -136,7 +138,8 @@ export class StorageSyncAdapter implements SyncAdapter {
         previous: {
           ...envelope.state,
           mode: "remote-ready",
-          lastError: error instanceof Error ? error.message : "Remote sync failed."
+          lastError: error instanceof Error ? error.message : "Remote sync failed.",
+          lastSyncError: error instanceof Error ? error.message : "Remote sync failed."
         }
       });
       this.#writeEnvelope(envelope);
@@ -156,6 +159,68 @@ export class StorageSyncAdapter implements SyncAdapter {
     });
     this.#writeEnvelope(envelope);
     return clone(envelope.state);
+  }
+
+  async pull() {
+    const envelope = this.#readEnvelope();
+    if (!this.#remote) {
+      envelope.state = getSyncStateForQueue({
+        queue: envelope.queue,
+        remoteEnabled: false,
+        previous: envelope.state
+      });
+      this.#writeEnvelope(envelope);
+      return {
+        changes: [],
+        remoteCursor: envelope.state.remoteCursor
+      };
+    }
+
+    envelope.state = getSyncStateForQueue({
+      queue: envelope.queue,
+      remoteEnabled: true,
+      mode: "syncing",
+      previous: {
+        ...envelope.state,
+        lastError: null,
+        lastSyncError: null
+      }
+    });
+    this.#writeEnvelope(envelope);
+
+    try {
+      const result = await this.#remote.pullChanges({
+        sinceCursor: envelope.state.remoteCursor
+      });
+      envelope.state = getSyncStateForQueue({
+        queue: envelope.queue,
+        remoteEnabled: true,
+        mode: "remote-ready",
+        previous: {
+          ...envelope.state,
+          lastPullAt: new Date().toISOString(),
+          lastError: null,
+          lastSyncError: null,
+          remoteCursor: result.remoteCursor ?? envelope.state.remoteCursor
+        }
+      });
+      this.#writeEnvelope(envelope);
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Remote sync pull failed.";
+      envelope.state = getSyncStateForQueue({
+        queue: envelope.queue,
+        remoteEnabled: true,
+        mode: "remote-ready",
+        previous: {
+          ...envelope.state,
+          lastError: message,
+          lastSyncError: message
+        }
+      });
+      this.#writeEnvelope(envelope);
+      throw error;
+    }
   }
 
   #readEnvelope(): PersistedSyncEnvelope {

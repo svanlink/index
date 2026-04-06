@@ -54,14 +54,16 @@ export function getSyncStateForQueue(params: {
   const pendingCount = queue.filter((operation) => operation.status === "pending").length;
   const failedCount = queue.filter((operation) => operation.status === "failed").length;
   const inFlightCount = queue.filter((operation) => operation.status === "in-flight").length;
+  const mode = params.mode ?? (params.remoteEnabled ? "remote-ready" : "local-only");
 
   return {
     ...(params.previous ?? getDefaultSyncState()),
-    mode: params.mode ?? (params.remoteEnabled ? "remote-ready" : "local-only"),
+    mode,
     pendingCount,
     queuedCount: queue.length,
     failedCount,
-    inFlightCount
+    inFlightCount,
+    syncInProgress: mode === "syncing"
   };
 }
 

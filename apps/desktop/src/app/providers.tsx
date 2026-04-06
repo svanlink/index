@@ -13,6 +13,8 @@ import {
   type CreateDriveInput,
   type CreateProjectInput,
   type DashboardSnapshot,
+  type SyncCycleResult,
+  type SyncState,
   type UpdateProjectMetadataInput
 } from "@drive-project-catalog/data";
 import type { Category, Drive, Project, ProjectScanEvent, ScanRecord, ScanSessionSnapshot } from "@drive-project-catalog/domain";
@@ -41,8 +43,10 @@ interface CatalogStoreContextValue {
   selectedProject: Project | null;
   selectedDriveId: string | null;
   selectedDrive: Drive | null;
+  syncState: SyncState;
   isLoading: boolean;
   isMutating: boolean;
+  isSyncing: boolean;
   refresh(): Promise<void>;
   selectProject(projectId: string | null): void;
   selectDrive(driveId: string | null): void;
@@ -57,6 +61,7 @@ interface CatalogStoreContextValue {
   assignProjectsToDrive(projectIds: string[], driveId: string | null): Promise<void>;
   setProjectsCategory(projectIds: string[], category: Category | null): Promise<void>;
   planProjectsMove(projectIds: string[], targetDriveId: string): Promise<void>;
+  syncNow(): Promise<SyncCycleResult>;
 }
 
 const emptyDashboard: DashboardSnapshot = {
@@ -64,6 +69,21 @@ const emptyDashboard: DashboardSnapshot = {
   recentProjects: [],
   moveReminders: [],
   statusAlerts: []
+};
+
+const emptySyncState: SyncState = {
+  mode: "local-only",
+  pendingCount: 0,
+  queuedCount: 0,
+  failedCount: 0,
+  inFlightCount: 0,
+  syncInProgress: false,
+  lastPushAt: null,
+  lastPullAt: null,
+  lastError: null,
+  lastSyncError: null,
+  remoteCursor: null,
+  conflictPolicy: "updated-at-last-write-wins-local-tie-break"
 };
 
 const CatalogStoreContext = createContext<CatalogStoreContextValue | null>(null);
@@ -78,18 +98,21 @@ export function AppProviders({ children }: AppProvidersProps) {
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [scanSessions, setScanSessions] = useState<ScanSessionSnapshot[]>([]);
   const [dashboard, setDashboard] = useState<DashboardSnapshot>(emptyDashboard);
+  const [syncState, setSyncState] = useState<SyncState>(emptySyncState);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedDriveId, setSelectedDriveId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [nextProjects, nextDrives, nextScans, nextScanSessions, nextDashboard] = await Promise.all([
+    const [nextProjects, nextDrives, nextScans, nextScanSessions, nextDashboard, nextSyncState] = await Promise.all([
       repository.listProjects(),
       repository.listDrives(),
       repository.listScans(),
       repository.listScanSessions(),
-      repository.getDashboardSnapshot()
+      repository.getDashboardSnapshot(),
+      repository.getSyncState()
     ]);
 
     setProjects(nextProjects);
@@ -97,6 +120,7 @@ export function AppProviders({ children }: AppProvidersProps) {
     setScans(nextScans);
     setScanSessions(nextScanSessions);
     setDashboard(nextDashboard);
+    setSyncState(nextSyncState);
   }, []);
 
   useEffect(() => {
@@ -105,12 +129,13 @@ export function AppProviders({ children }: AppProvidersProps) {
     void (async () => {
       setIsLoading(true);
       try {
-        const [nextProjects, nextDrives, nextScans, nextScanSessions, nextDashboard] = await Promise.all([
+        const [nextProjects, nextDrives, nextScans, nextScanSessions, nextDashboard, nextSyncState] = await Promise.all([
           repository.listProjects(),
           repository.listDrives(),
           repository.listScans(),
           repository.listScanSessions(),
-          repository.getDashboardSnapshot()
+          repository.getDashboardSnapshot(),
+          repository.getSyncState()
         ]);
 
         if (!isMounted) {
@@ -122,6 +147,7 @@ export function AppProviders({ children }: AppProvidersProps) {
         setScans(nextScans);
         setScanSessions(nextScanSessions);
         setDashboard(nextDashboard);
+        setSyncState(nextSyncState);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -169,6 +195,17 @@ export function AppProviders({ children }: AppProvidersProps) {
     [drives, selectedDriveId]
   );
 
+  const syncNow = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const result = await repository.syncNow();
+      await refresh();
+      return result;
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [refresh]);
+
   const value = useMemo<CatalogStoreContextValue>(() => ({
     repository,
     projects,
@@ -180,8 +217,10 @@ export function AppProviders({ children }: AppProvidersProps) {
     selectedProject,
     selectedDriveId,
     selectedDrive,
+    syncState,
     isLoading,
     isMutating,
+    isSyncing,
     refresh,
     selectProject: setSelectedProjectId,
     selectDrive: setSelectedDriveId,
@@ -195,13 +234,15 @@ export function AppProviders({ children }: AppProvidersProps) {
     cancelProjectMove: (projectId) => runMutation(() => repository.cancelProjectMove(projectId)),
     assignProjectsToDrive: (projectIds, driveId) => runMutation(() => assignProjectsToDriveAction(repository, projectIds, driveId)),
     setProjectsCategory: (projectIds, category) => runMutation(() => setProjectsCategoryAction(repository, projectIds, category)),
-    planProjectsMove: (projectIds, targetDriveId) => runMutation(() => planProjectsMoveAction(repository, projectIds, targetDriveId))
+    planProjectsMove: (projectIds, targetDriveId) => runMutation(() => planProjectsMoveAction(repository, projectIds, targetDriveId)),
+    syncNow
   }), [
     dashboard,
     drives,
     getDriveDetailView,
     isLoading,
     isMutating,
+    isSyncing,
     listProjectScanEvents,
     projects,
     refresh,
@@ -211,7 +252,9 @@ export function AppProviders({ children }: AppProvidersProps) {
     selectedDrive,
     selectedDriveId,
     selectedProject,
-    selectedProjectId
+    selectedProjectId,
+    syncNow,
+    syncState
   ]);
 
   return <CatalogStoreContext.Provider value={value}>{children}</CatalogStoreContext.Provider>;

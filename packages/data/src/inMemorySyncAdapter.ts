@@ -42,6 +42,18 @@ export class InMemorySyncAdapter implements SyncAdapter {
     };
   }
 
+  async pull() {
+    this.#state = getSyncStateForQueue({
+      queue: this.#pending,
+      remoteEnabled: false,
+      previous: this.#state
+    });
+    return {
+      changes: [],
+      remoteCursor: this.#state.remoteCursor
+    };
+  }
+
   async getState(): Promise<SyncState> {
     return clone(
       getSyncStateForQueue({

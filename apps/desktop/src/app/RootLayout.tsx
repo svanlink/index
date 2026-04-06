@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { AppShell, type NavItem } from "@drive-project-catalog/ui";
-import { DesktopScanPanel } from "./DesktopScanPanel";
+import { ShellToolbarActions } from "./ShellToolbarActions";
 
 const navItems: NavItem[] = [
   { label: "Dashboard", to: "/" },
@@ -33,7 +33,7 @@ export function RootLayout() {
     : routeTitles[location.pathname] ?? "Drive Project Catalog";
 
   return (
-    <AppShell navItems={navItems} title={title} toolbarAction={<DesktopScanPanel />}>
+    <AppShell navItems={navItems} title={title} toolbarAction={<ShellToolbarActions />}>
       <Outlet />
     </AppShell>
   );

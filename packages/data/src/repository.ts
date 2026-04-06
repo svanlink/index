@@ -7,7 +7,7 @@ import type {
   ScanSessionSnapshot,
   ScanSummary
 } from "@drive-project-catalog/domain";
-import type { SyncOperation, SyncResult } from "./sync";
+import type { SyncCycleResult, SyncOperation, SyncResult, SyncState } from "./sync";
 import type { DriveDetailView } from "./catalogSelectors";
 
 export interface MoveReminder {
@@ -88,4 +88,6 @@ export interface CatalogRepository {
   ingestScanSnapshot(session: ScanSessionSnapshot): Promise<ScanRecord>;
   listPendingSyncOperations(): Promise<SyncOperation[]>;
   flushSync(): Promise<SyncResult>;
+  getSyncState(): Promise<SyncState>;
+  syncNow(): Promise<SyncCycleResult>;
 }

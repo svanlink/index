@@ -58,9 +58,11 @@ export interface SyncState {
   queuedCount: number;
   failedCount: number;
   inFlightCount: number;
+  syncInProgress: boolean;
   lastPushAt: string | null;
   lastPullAt: string | null;
   lastError: string | null;
+  lastSyncError: string | null;
   remoteCursor: string | null;
   conflictPolicy: SyncConflictPolicy;
 }
@@ -97,6 +99,13 @@ export interface SyncResult {
   pending: number;
 }
 
+export interface SyncCycleResult {
+  pushed: number;
+  pulled: number;
+  pending: number;
+  state: SyncState;
+}
+
 export interface RemoteSyncAdapter {
   readonly mode: SyncMode;
   pushChanges(request: SyncPushRequest): Promise<SyncPushResult>;
@@ -108,6 +117,7 @@ export interface SyncAdapter {
   listPending(): Promise<SyncOperation[]>;
   listQueue(): Promise<SyncOperation[]>;
   flush(): Promise<SyncResult>;
+  pull(): Promise<SyncPullResult>;
   getState(): Promise<SyncState>;
 }
 
@@ -118,9 +128,11 @@ export function getDefaultSyncState(): SyncState {
     queuedCount: 0,
     failedCount: 0,
     inFlightCount: 0,
+    syncInProgress: false,
     lastPushAt: null,
     lastPullAt: null,
     lastError: null,
+    lastSyncError: null,
     remoteCursor: null,
     conflictPolicy: "updated-at-last-write-wins-local-tie-break"
   };

@@ -43,9 +43,11 @@ type SyncStateRow = {
   queued_count: number;
   failed_count: number;
   in_flight_count: number;
+  sync_in_progress: number;
   last_push_at: string | null;
   last_pull_at: string | null;
   last_error: string | null;
+  last_sync_error: string | null;
   remote_cursor: string | null;
   conflict_policy: SyncState["conflictPolicy"];
 };
@@ -116,7 +118,8 @@ export class SqliteSyncAdapter implements SyncAdapter {
         mode: "syncing",
         previous: current
       }),
-      lastError: null
+      lastError: null,
+      lastSyncError: null
     }));
 
     try {
@@ -141,6 +144,7 @@ export class SqliteSyncAdapter implements SyncAdapter {
         }),
         lastPushAt: attemptedAt,
         lastError: pushResult.rejected[0]?.reason ?? null,
+        lastSyncError: pushResult.rejected[0]?.reason ?? null,
         remoteCursor: pushResult.remoteCursor ?? current.remoteCursor
       }));
 
@@ -163,7 +167,8 @@ export class SqliteSyncAdapter implements SyncAdapter {
           mode: "remote-ready",
           previous: current
         }),
-        lastError: error instanceof Error ? error.message : "Remote sync failed."
+        lastError: error instanceof Error ? error.message : "Remote sync failed.",
+        lastSyncError: error instanceof Error ? error.message : "Remote sync failed."
       }));
       return {
         pushed: 0,
@@ -175,6 +180,68 @@ export class SqliteSyncAdapter implements SyncAdapter {
   async getState(): Promise<SyncState> {
     const database = await this.#ensureReady();
     return this.#readState(database);
+  }
+
+  async pull() {
+    const database = await this.#ensureReady();
+    const queue = await this.#listQueue(database);
+    const current = await this.#readState(database);
+
+    if (!this.#remote) {
+      await this.#writeState(database, async (state) =>
+        getSyncStateForQueue({
+          queue,
+          remoteEnabled: false,
+          previous: state
+        })
+      );
+      return {
+        changes: [],
+        remoteCursor: current.remoteCursor
+      };
+    }
+
+    await this.#writeState(database, async (state) => ({
+      ...getSyncStateForQueue({
+        queue,
+        remoteEnabled: true,
+        mode: "syncing",
+        previous: state
+      }),
+      lastError: null,
+      lastSyncError: null
+    }));
+
+    try {
+      const result = await this.#remote.pullChanges({
+        sinceCursor: current.remoteCursor
+      });
+      await this.#writeState(database, async (state) => ({
+        ...getSyncStateForQueue({
+          queue,
+          remoteEnabled: true,
+          mode: "remote-ready",
+          previous: state
+        }),
+        lastPullAt: new Date().toISOString(),
+        lastError: null,
+        lastSyncError: null,
+        remoteCursor: result.remoteCursor ?? state.remoteCursor
+      }));
+      return result;
+    } catch (error) {
+      await this.#writeState(database, async (state) => ({
+        ...getSyncStateForQueue({
+          queue,
+          remoteEnabled: true,
+          mode: "remote-ready",
+          previous: state
+        }),
+        lastError: error instanceof Error ? error.message : "Remote sync pull failed.",
+        lastSyncError: error instanceof Error ? error.message : "Remote sync pull failed."
+      }));
+      throw error;
+    }
   }
 
   async #readState(database: SqlDatabase): Promise<SyncState> {
@@ -197,9 +264,11 @@ export class SqliteSyncAdapter implements SyncAdapter {
       queuedCount: state.queued_count,
       failedCount: state.failed_count,
       inFlightCount: state.in_flight_count,
+      syncInProgress: Boolean(state.sync_in_progress),
       lastPushAt: state.last_push_at,
       lastPullAt: state.last_pull_at,
       lastError: state.last_error,
+      lastSyncError: state.last_sync_error,
       remoteCursor: state.remote_cursor,
       conflictPolicy: state.conflict_policy
     };
@@ -234,9 +303,11 @@ export class SqliteSyncAdapter implements SyncAdapter {
             queued_count INTEGER NOT NULL DEFAULT 0,
             failed_count INTEGER NOT NULL DEFAULT 0,
             in_flight_count INTEGER NOT NULL DEFAULT 0,
+            sync_in_progress INTEGER NOT NULL DEFAULT 0,
             last_push_at TEXT,
             last_pull_at TEXT,
             last_error TEXT,
+            last_sync_error TEXT,
             remote_cursor TEXT,
             conflict_policy TEXT NOT NULL
           )`
@@ -246,6 +317,8 @@ export class SqliteSyncAdapter implements SyncAdapter {
         await this.#ensureColumn(database, "sync_state", "queued_count", "INTEGER NOT NULL DEFAULT 0");
         await this.#ensureColumn(database, "sync_state", "failed_count", "INTEGER NOT NULL DEFAULT 0");
         await this.#ensureColumn(database, "sync_state", "in_flight_count", "INTEGER NOT NULL DEFAULT 0");
+        await this.#ensureColumn(database, "sync_state", "sync_in_progress", "INTEGER NOT NULL DEFAULT 0");
+        await this.#ensureColumn(database, "sync_state", "last_sync_error", "TEXT");
 
         const queue = await this.#listQueue(database);
         const state = await this.#readState(database);
@@ -275,18 +348,20 @@ export class SqliteSyncAdapter implements SyncAdapter {
   async #insertInitialState(database: SqlDatabase, state: SyncState) {
     await database.execute(
       `INSERT INTO sync_state (
-        singleton, mode, pending_count, queued_count, failed_count, in_flight_count, last_push_at, last_pull_at, last_error, remote_cursor, conflict_policy
-      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        singleton, mode, pending_count, queued_count, failed_count, in_flight_count, sync_in_progress, last_push_at, last_pull_at, last_error, last_sync_error, remote_cursor, conflict_policy
+      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         state.mode,
         state.pendingCount,
         state.queuedCount,
         state.failedCount,
         state.inFlightCount,
-        state.lastPushAt,
-        state.lastPullAt,
-        state.lastError,
-        state.remoteCursor,
+        state.syncInProgress ? 1 : 0,
+        state.lastPushAt ?? null,
+        state.lastPullAt ?? null,
+        state.lastError ?? null,
+        state.lastSyncError ?? null,
+        state.remoteCursor ?? null,
         state.conflictPolicy
       ]
     );
@@ -297,17 +372,19 @@ export class SqliteSyncAdapter implements SyncAdapter {
     const next = await updater(current);
     await database.execute(
       `INSERT INTO sync_state (
-        singleton, mode, pending_count, queued_count, failed_count, in_flight_count, last_push_at, last_pull_at, last_error, remote_cursor, conflict_policy
-      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        singleton, mode, pending_count, queued_count, failed_count, in_flight_count, sync_in_progress, last_push_at, last_pull_at, last_error, last_sync_error, remote_cursor, conflict_policy
+      ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(singleton) DO UPDATE SET
         mode = excluded.mode,
         pending_count = excluded.pending_count,
         queued_count = excluded.queued_count,
         failed_count = excluded.failed_count,
         in_flight_count = excluded.in_flight_count,
+        sync_in_progress = excluded.sync_in_progress,
         last_push_at = excluded.last_push_at,
         last_pull_at = excluded.last_pull_at,
         last_error = excluded.last_error,
+        last_sync_error = excluded.last_sync_error,
         remote_cursor = excluded.remote_cursor,
         conflict_policy = excluded.conflict_policy`,
       [
@@ -316,10 +393,12 @@ export class SqliteSyncAdapter implements SyncAdapter {
         next.queuedCount,
         next.failedCount,
         next.inFlightCount,
-        next.lastPushAt,
-        next.lastPullAt,
-        next.lastError,
-        next.remoteCursor,
+        next.syncInProgress ? 1 : 0,
+        next.lastPushAt ?? null,
+        next.lastPullAt ?? null,
+        next.lastError ?? null,
+        next.lastSyncError ?? null,
+        next.remoteCursor ?? null,
         next.conflictPolicy
       ]
     );
