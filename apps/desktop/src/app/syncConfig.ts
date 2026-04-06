@@ -37,16 +37,21 @@ export function resolveSupabaseSyncConfig(env: Record<string, string | undefined
   const url = env.VITE_SUPABASE_URL?.trim();
   const anonKey = env.VITE_SUPABASE_ANON_KEY?.trim();
   const schema = env.VITE_SUPABASE_SCHEMA?.trim();
+  const usingPlaceholderValues = isPlaceholderSupabaseValue(url) || isPlaceholderSupabaseValue(anonKey);
 
-  if (!url && !anonKey) {
+  if ((!url && !anonKey) || usingPlaceholderValues) {
     return {
       config: null,
       diagnostics: {
         enabled: false,
         code: "missing",
-        message: "Supabase sync is disabled because no sync environment variables are configured in this build.",
+        message: usingPlaceholderValues
+          ? "Supabase sync is disabled because this build is still using placeholder example values."
+          : "Supabase sync is disabled because no sync environment variables are configured in this build.",
         details: [
-          "Set both VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable cloud transport.",
+          usingPlaceholderValues
+            ? "Replace the example VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY values with real project credentials, or remove them to stay fully local-only."
+            : "Set both VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable cloud transport.",
           "The app remains fully usable in local-first mode without these values, including the public web build."
         ]
       }
@@ -111,4 +116,13 @@ function isValidUrl(value: string) {
   } catch {
     return false;
   }
+}
+
+function isPlaceholderSupabaseValue(value?: string) {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === "https://your-project.supabase.co" || normalized === "your-supabase-anon-key";
 }
