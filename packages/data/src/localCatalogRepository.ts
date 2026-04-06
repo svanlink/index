@@ -18,7 +18,7 @@ import type {
   UpdateProjectMetadataInput
 } from "./repository";
 import { ingestScanSessionSnapshot } from "./scanIngestionService";
-import type { SyncAdapter, SyncMutationSource, SyncOperationType } from "./sync";
+import type { SyncAdapter, SyncCycleResult, SyncMutationSource, SyncOperationType, SyncState } from "./sync";
 
 const clone = <T>(value: T): T => structuredClone(value);
 
@@ -300,6 +300,24 @@ export class LocalCatalogRepository implements CatalogRepository {
     return this.sync.flush();
   }
 
+  async getSyncState(): Promise<SyncState> {
+    return this.sync.getState();
+  }
+
+  async syncNow(): Promise<SyncCycleResult> {
+    const pushResult = await this.sync.flush();
+    const pullResult = await this.sync.pull();
+    void pullResult;
+    const state = await this.sync.getState();
+
+    return {
+      pushed: pushResult.pushed,
+      pulled: 0,
+      pending: state.pendingCount,
+      state
+    };
+  }
+
   private async enqueue(type: SyncOperationType, payload: object, source: SyncMutationSource = "manual") {
     const descriptor = getSyncRecordDescriptor(type, payload);
     await this.sync.enqueue({
@@ -312,7 +330,9 @@ export class LocalCatalogRepository implements CatalogRepository {
       recordUpdatedAt: descriptor.recordUpdatedAt,
       payload,
       source,
+      status: "pending",
       attempts: 0,
+      lastAttemptAt: null,
       lastError: null
     });
   }

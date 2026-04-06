@@ -64,6 +64,33 @@ describe("LocalCatalogRepository", () => {
     expect(project?.moveStatus).toBe("none");
   });
 
+  it("compacts repeated edits for the same project in the sync queue", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new InMemorySyncAdapter()
+    );
+    const project = await repository.getProjectById("project-240401-apple-shoot");
+
+    expect(project).not.toBeNull();
+
+    await repository.saveProject({
+      ...project!,
+      correctedClient: "Apple Corp",
+      updatedAt: "2026-04-06T12:00:00.000Z"
+    });
+    await repository.saveProject({
+      ...project!,
+      correctedClient: "Apple Creative",
+      updatedAt: "2026-04-06T12:01:00.000Z"
+    });
+
+    const queue = await repository.listPendingSyncOperations();
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.recordId).toBe("project-240401-apple-shoot");
+    expect((queue[0]?.payload as { correctedClient?: string }).correctedClient).toBe("Apple Creative");
+  });
+
   it("creates manual projects and drives through the repository boundary", async () => {
     const repository = new LocalCatalogRepository(
       new InMemoryLocalPersistence(mockCatalogSnapshot),
@@ -130,6 +157,81 @@ describe("LocalCatalogRepository", () => {
 
     expect(session?.status).toBe("running");
     expect(project?.sizeStatus).toBe("pending");
+  });
+
+  it("keeps scan-ingestion queue entries deduplicated across repeated session updates", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new InMemorySyncAdapter()
+    );
+
+    await repository.ingestScanSnapshot({
+      scanId: "scan-drive-a-running",
+      rootPath: "/Volumes/Drive A",
+      driveName: "Drive A",
+      status: "running",
+      startedAt: "2026-04-06T10:00:00.000Z",
+      finishedAt: null,
+      foldersScanned: 10,
+      matchesFound: 1,
+      error: null,
+      sizeJobsPending: 1,
+      createdAt: "2026-04-06T10:00:00.000Z",
+      updatedAt: "2026-04-06T10:00:00.000Z",
+      projects: [
+        {
+          id: "scan-project-running",
+          folderName: "240401_Apple_ProductShoot",
+          folderPath: "/Volumes/Drive A/240401_Apple_ProductShoot",
+          relativePath: "240401_Apple_ProductShoot",
+          parsedDate: "240401",
+          parsedClient: "Apple",
+          parsedProject: "ProductShoot",
+          sourceDriveName: "Drive A",
+          scanTimestamp: "2026-04-06T10:01:00.000Z",
+          sizeStatus: "pending",
+          sizeBytes: null,
+          sizeError: null
+        }
+      ]
+    });
+    await repository.ingestScanSnapshot({
+      scanId: "scan-drive-a-running",
+      rootPath: "/Volumes/Drive A",
+      driveName: "Drive A",
+      status: "completed",
+      startedAt: "2026-04-06T10:00:00.000Z",
+      finishedAt: "2026-04-06T10:03:00.000Z",
+      foldersScanned: 12,
+      matchesFound: 1,
+      error: null,
+      sizeJobsPending: 0,
+      createdAt: "2026-04-06T10:00:00.000Z",
+      updatedAt: "2026-04-06T10:03:00.000Z",
+      projects: [
+        {
+          id: "scan-project-running",
+          folderName: "240401_Apple_ProductShoot",
+          folderPath: "/Volumes/Drive A/240401_Apple_ProductShoot",
+          relativePath: "240401_Apple_ProductShoot",
+          parsedDate: "240401",
+          parsedClient: "Apple",
+          parsedProject: "ProductShoot",
+          sourceDriveName: "Drive A",
+          scanTimestamp: "2026-04-06T10:02:00.000Z",
+          sizeStatus: "ready",
+          sizeBytes: 125_000_000_000,
+          sizeError: null
+        }
+      ]
+    });
+
+    const queue = await repository.listPendingSyncOperations();
+    const keys = queue.map((operation) => `${operation.entity}:${operation.recordId}`);
+
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys).toContain("scan:scan-drive-a-running");
+    expect(keys).toContain("scanSession:scan-drive-a-running");
   });
 
   it("remains compatible with the SQLite persistence adapter", async () => {
