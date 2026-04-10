@@ -9,6 +9,7 @@ describe("projectLinkingSelectors", () => {
       projects: [
         {
           id: "scan-project-apple",
+          folderType: "client" as const,
           folderName: "240401_Apple_ProductShoot",
           folderPath: "/Volumes/Drive A/240401_Apple_ProductShoot",
           relativePath: "240401_Apple_ProductShoot",

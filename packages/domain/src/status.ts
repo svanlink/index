@@ -10,16 +10,23 @@ export interface ProjectStatusState {
   hasUnknownSizeImpact: boolean;
 }
 
+export function getDisplayDate(project: Project) {
+  return project.correctedDate ?? project.parsedDate ?? null;
+}
+
 export function getDisplayClient(project: Project) {
-  return project.correctedClient ?? project.parsedClient;
+  return project.correctedClient ?? project.parsedClient ?? project.folderName;
 }
 
 export function getDisplayProject(project: Project) {
-  return project.correctedProject ?? project.parsedProject;
+  return project.correctedProject ?? project.parsedProject ?? project.folderName;
 }
 
 export function getParsedFolderName(project: Project) {
-  return `${project.parsedDate}_${project.parsedClient}_${project.parsedProject}`;
+  if (project.parsedDate && project.parsedClient && project.parsedProject) {
+    return `${project.parsedDate}_${project.parsedClient}_${project.parsedProject}`;
+  }
+  return project.folderName;
 }
 
 export function applyDerivedProjectStates(projects: Project[]): Project[] {
@@ -113,7 +120,15 @@ function getDuplicateProjectIds(projects: Project[]) {
   const buckets = new Map<string, Project[]>();
 
   for (const project of projects) {
-    const key = [project.parsedDate, project.parsedClient, project.parsedProject].join("::");
+    // personal_folder records have no parsed identity — bucket by raw folder name,
+    // unless the user has assigned corrected structured fields (upgrade scenario).
+    const effectiveDate = project.correctedDate ?? project.parsedDate;
+    const effectiveClient = project.correctedClient ?? project.parsedClient;
+    const effectiveProject = project.correctedProject ?? project.parsedProject;
+    const key =
+      project.folderType === "personal_folder" && !effectiveDate
+        ? `folder::${project.folderName}`
+        : [effectiveDate, effectiveClient, effectiveProject].join("::");
     const bucket = buckets.get(key);
 
     if (bucket) {

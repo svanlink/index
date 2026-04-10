@@ -1,6 +1,7 @@
 import type {
   Category,
   Drive,
+  FolderType,
   Project,
   ProjectScanEvent,
   ScanProjectRecord,
@@ -30,7 +31,16 @@ export interface SqliteLocalPersistenceOptions {
 
 interface Migration {
   version: number;
-  statements: string[];
+  statements?: string[];
+  run?: (database: SqlDatabase) => Promise<void>;
+}
+
+async function tableExists(database: SqlDatabase, tableName: string): Promise<boolean> {
+  const rows = await database.select<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [tableName]
+  );
+  return rows.length > 0;
 }
 
 const migrations: Migration[] = [
@@ -133,17 +143,374 @@ const migrations: Migration[] = [
   },
   {
     version: 2,
-    statements: [
-      `ALTER TABLE scans ADD COLUMN created_at TEXT`,
-      `ALTER TABLE scans ADD COLUMN updated_at TEXT`,
-      `UPDATE scans SET created_at = COALESCE(created_at, started_at), updated_at = COALESCE(updated_at, finished_at, started_at)`,
-      `ALTER TABLE project_scan_events ADD COLUMN created_at TEXT`,
-      `ALTER TABLE project_scan_events ADD COLUMN updated_at TEXT`,
-      `UPDATE project_scan_events SET created_at = COALESCE(created_at, observed_at), updated_at = COALESCE(updated_at, observed_at)`,
-      `ALTER TABLE scan_sessions ADD COLUMN created_at TEXT`,
-      `ALTER TABLE scan_sessions ADD COLUMN updated_at TEXT`,
-      `UPDATE scan_sessions SET created_at = COALESCE(created_at, started_at), updated_at = COALESCE(updated_at, finished_at, started_at)`
-    ]
+    // Add created_at / updated_at timestamps to scan-related tables.
+    // ALTER TABLE ADD COLUMN is not idempotent in SQLite — guard each add via pragma.
+    run: async (database: SqlDatabase) => {
+      const addColumnIfMissing = async (
+        tableName: string,
+        columnName: string,
+        definition: string
+      ) => {
+        const columns = await database.select<{ name: string }>(
+          `PRAGMA table_info(${tableName})`
+        );
+        if (!columns.some((column) => column.name === columnName)) {
+          await database.execute(`ALTER TABLE ${tableName} ADD COLUMN ${definition}`);
+        }
+      };
+
+      await addColumnIfMissing("scans", "created_at", "created_at TEXT");
+      await addColumnIfMissing("scans", "updated_at", "updated_at TEXT");
+      await database.execute(
+        "UPDATE scans SET created_at = COALESCE(created_at, started_at), updated_at = COALESCE(updated_at, finished_at, started_at)"
+      );
+
+      await addColumnIfMissing("project_scan_events", "created_at", "created_at TEXT");
+      await addColumnIfMissing("project_scan_events", "updated_at", "updated_at TEXT");
+      await database.execute(
+        "UPDATE project_scan_events SET created_at = COALESCE(created_at, observed_at), updated_at = COALESCE(updated_at, observed_at)"
+      );
+
+      await addColumnIfMissing("scan_sessions", "created_at", "created_at TEXT");
+      await addColumnIfMissing("scan_sessions", "updated_at", "updated_at TEXT");
+      await database.execute(
+        "UPDATE scan_sessions SET created_at = COALESCE(created_at, started_at), updated_at = COALESCE(updated_at, finished_at, started_at)"
+      );
+    }
+  },
+  {
+    version: 3,
+    // Recreate projects table to make parsed fields nullable and add new columns.
+    // SQLite does not support ALTER COLUMN, so a table recreation is required.
+    // Uses imperative `run` so the migration is recoverable from partial failures:
+    // if a previous run crashed after dropping `projects` but before renaming
+    // `projects_v3`, this re-run detects the state and continues from there
+    // instead of crashing on `INSERT ... FROM projects` when the legacy table
+    // no longer exists.
+    run: async (database: SqlDatabase) => {
+      const hasProjects = await tableExists(database, "projects");
+      const hasProjectsV3 = await tableExists(database, "projects_v3");
+
+      if (hasProjects && !hasProjectsV3) {
+        // Fresh run: create v3, copy from legacy, drop legacy, rename.
+        await database.execute(`CREATE TABLE projects_v3 (
+          id TEXT PRIMARY KEY,
+          folder_type TEXT NOT NULL DEFAULT 'client',
+          is_standardized INTEGER NOT NULL DEFAULT 1,
+          folder_name TEXT NOT NULL DEFAULT '',
+          folder_path TEXT,
+          parsed_date TEXT,
+          parsed_client TEXT,
+          parsed_project TEXT,
+          corrected_client TEXT,
+          corrected_project TEXT,
+          category TEXT,
+          size_bytes INTEGER,
+          size_status TEXT NOT NULL,
+          current_drive_id TEXT,
+          target_drive_id TEXT,
+          move_status TEXT NOT NULL,
+          missing_status TEXT NOT NULL,
+          duplicate_status TEXT NOT NULL,
+          is_unassigned INTEGER NOT NULL,
+          is_manual INTEGER NOT NULL,
+          last_seen_at TEXT,
+          last_scanned_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )`);
+        // Migrate existing records — treat all as 'client' type since they matched the
+        // convention at scan time. Reconstruct folder_name from parsed fields.
+        await database.execute(`INSERT INTO projects_v3
+          SELECT
+            id,
+            'client' AS folder_type,
+            1 AS is_standardized,
+            COALESCE(parsed_date || '_' || parsed_client || '_' || parsed_project, id) AS folder_name,
+            NULL AS folder_path,
+            parsed_date,
+            parsed_client,
+            parsed_project,
+            corrected_client,
+            corrected_project,
+            category,
+            size_bytes,
+            size_status,
+            current_drive_id,
+            target_drive_id,
+            move_status,
+            missing_status,
+            duplicate_status,
+            is_unassigned,
+            is_manual,
+            last_seen_at,
+            last_scanned_at,
+            created_at,
+            updated_at
+          FROM projects`);
+        await database.execute("DROP TABLE projects");
+        await database.execute("ALTER TABLE projects_v3 RENAME TO projects");
+      } else if (!hasProjects && hasProjectsV3) {
+        // Partial failure recovery: legacy projects was already dropped,
+        // rename projects_v3 to complete the migration.
+        await database.execute("ALTER TABLE projects_v3 RENAME TO projects");
+      } else if (hasProjects && hasProjectsV3) {
+        // Unusual partial failure: both tables exist. Drop the new one and
+        // restart the full migration path on the next boot by leaving projects
+        // alone — but since we're already running, just redo it cleanly.
+        await database.execute("DROP TABLE projects_v3");
+        await database.execute(`CREATE TABLE projects_v3 (
+          id TEXT PRIMARY KEY,
+          folder_type TEXT NOT NULL DEFAULT 'client',
+          is_standardized INTEGER NOT NULL DEFAULT 1,
+          folder_name TEXT NOT NULL DEFAULT '',
+          folder_path TEXT,
+          parsed_date TEXT,
+          parsed_client TEXT,
+          parsed_project TEXT,
+          corrected_client TEXT,
+          corrected_project TEXT,
+          category TEXT,
+          size_bytes INTEGER,
+          size_status TEXT NOT NULL,
+          current_drive_id TEXT,
+          target_drive_id TEXT,
+          move_status TEXT NOT NULL,
+          missing_status TEXT NOT NULL,
+          duplicate_status TEXT NOT NULL,
+          is_unassigned INTEGER NOT NULL,
+          is_manual INTEGER NOT NULL,
+          last_seen_at TEXT,
+          last_scanned_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )`);
+        await database.execute(`INSERT INTO projects_v3
+          SELECT
+            id,
+            'client' AS folder_type,
+            1 AS is_standardized,
+            COALESCE(parsed_date || '_' || parsed_client || '_' || parsed_project, id) AS folder_name,
+            NULL AS folder_path,
+            parsed_date,
+            parsed_client,
+            parsed_project,
+            corrected_client,
+            corrected_project,
+            category,
+            size_bytes,
+            size_status,
+            current_drive_id,
+            target_drive_id,
+            move_status,
+            missing_status,
+            duplicate_status,
+            is_unassigned,
+            is_manual,
+            last_seen_at,
+            last_scanned_at,
+            created_at,
+            updated_at
+          FROM projects`);
+        await database.execute("DROP TABLE projects");
+        await database.execute("ALTER TABLE projects_v3 RENAME TO projects");
+      }
+      // If neither table exists we're on a completely fresh DB where migration 1
+      // hasn't created `projects` yet — this should never happen since migration 1
+      // runs first, but noop-ing here is safer than crashing.
+
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_projects_current_drive_id ON projects (current_drive_id)"
+      );
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_projects_target_drive_id ON projects (target_drive_id)"
+      );
+
+      // Add folder_type to scan session projects so scan records carry the classification too.
+      // ALTER TABLE ADD COLUMN is not idempotent in SQLite, so guard via pragma.
+      const columns = await database.select<{ name: string }>(
+        "PRAGMA table_info(scan_session_projects)"
+      );
+      if (!columns.some((column) => column.name === "folder_type")) {
+        await database.execute(
+          "ALTER TABLE scan_session_projects ADD COLUMN folder_type TEXT NOT NULL DEFAULT 'client'"
+        );
+      }
+    }
+  },
+  {
+    version: 4,
+    // Add corrected_date column — allows users to assign/override a date for any project type.
+    // Nullable; null means the parsed date (or folder name for personal_folder) is used.
+    // ALTER TABLE ADD COLUMN is not idempotent in SQLite — guard via pragma check.
+    run: async (database: SqlDatabase) => {
+      const columns = await database.select<{ name: string }>(
+        "PRAGMA table_info(projects)"
+      );
+      if (!columns.some((column) => column.name === "corrected_date")) {
+        await database.execute("ALTER TABLE projects ADD COLUMN corrected_date TEXT");
+      }
+    }
+  },
+  {
+    version: 5,
+    // Recreate scan_session_projects to make parsed_date, parsed_client, parsed_project nullable.
+    // Migration 1 declared them NOT NULL, but personal_folder scan records correctly produce null
+    // for all three fields. Inserting null into a NOT NULL column throws a SQLite constraint
+    // violation, breaking scan ingestion for any drive that contains non-standard folders.
+    // SQLite does not support ALTER COLUMN, so a table recreation is required.
+    // Uses `run` for partial-failure recovery (see migration 3 for rationale).
+    //
+    // Self-healing against partial-failure states from earlier migrations:
+    //   1. Probes the legacy table schema before referencing `folder_type`. Migration 3 owned the
+    //      ALTER TABLE ADD COLUMN folder_type, and historical DB states exist where migration 3
+    //      was marked applied without its trailing ALTER having executed (e.g., manual repairs).
+    //      Hard-coding `COALESCE(folder_type, 'client')` in the SELECT causes prepare-time
+    //      failures on those DBs. We build the SELECT dynamically with a literal 'client'
+    //      fallback when the legacy column is missing.
+    //   2. Verifies legacy vs v5 row counts after copy, BEFORE the destructive DROP TABLE
+    //      scan_session_projects. Guards against silent data loss on mid-copy constraint
+    //      violations or driver-level truncation.
+    run: async (database: SqlDatabase) => {
+      const createV5 = `CREATE TABLE scan_session_projects_v5 (
+        id TEXT PRIMARY KEY,
+        scan_id TEXT NOT NULL,
+        folder_name TEXT NOT NULL,
+        folder_path TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        folder_type TEXT NOT NULL DEFAULT 'client',
+        parsed_date TEXT,
+        parsed_client TEXT,
+        parsed_project TEXT,
+        source_drive_name TEXT NOT NULL,
+        scan_timestamp TEXT NOT NULL,
+        size_status TEXT NOT NULL,
+        size_bytes INTEGER,
+        size_error TEXT
+      )`;
+
+      const legacyHasColumn = async (columnName: string): Promise<boolean> => {
+        const columns = await database.select<{ name: string }>(
+          "PRAGMA table_info(scan_session_projects)"
+        );
+        return columns.some((column) => column.name === columnName);
+      };
+
+      const buildCopySql = (legacyHasFolderType: boolean): string => {
+        const folderTypeExpr = legacyHasFolderType
+          ? "COALESCE(folder_type, 'client')"
+          : "'client'";
+        return `INSERT INTO scan_session_projects_v5
+          SELECT
+            id,
+            scan_id,
+            folder_name,
+            folder_path,
+            relative_path,
+            ${folderTypeExpr} AS folder_type,
+            NULLIF(parsed_date, '') AS parsed_date,
+            NULLIF(parsed_client, '') AS parsed_client,
+            NULLIF(parsed_project, '') AS parsed_project,
+            source_drive_name,
+            scan_timestamp,
+            size_status,
+            size_bytes,
+            size_error
+          FROM scan_session_projects`;
+      };
+
+      const countRows = async (tableName: string): Promise<number> => {
+        const rows = await database.select<{ count: number }>(
+          `SELECT COUNT(*) as count FROM ${tableName}`
+        );
+        return Number(rows[0]?.count ?? 0);
+      };
+
+      const copyLegacyIntoV5 = async (): Promise<void> => {
+        const hasFolderType = await legacyHasColumn("folder_type");
+        await database.execute(buildCopySql(hasFolderType));
+      };
+
+      const verifyCopyOrThrow = async (): Promise<void> => {
+        const legacyCount = await countRows("scan_session_projects");
+        const v5Count = await countRows("scan_session_projects_v5");
+        if (legacyCount !== v5Count) {
+          throw new Error(
+            `Migration 5 copy verification failed: legacy=${legacyCount} rows, v5=${v5Count} rows. ` +
+              `Aborting before DROP TABLE scan_session_projects to preserve legacy data.`
+          );
+        }
+      };
+
+      const hasLegacy = await tableExists(database, "scan_session_projects");
+      const hasV5 = await tableExists(database, "scan_session_projects_v5");
+
+      if (hasLegacy && !hasV5) {
+        await database.execute(createV5);
+        await copyLegacyIntoV5();
+        await verifyCopyOrThrow();
+        await database.execute("DROP TABLE scan_session_projects");
+        await database.execute("ALTER TABLE scan_session_projects_v5 RENAME TO scan_session_projects");
+      } else if (!hasLegacy && hasV5) {
+        // Partial failure recovery: legacy was dropped, rename v5 to complete.
+        await database.execute("ALTER TABLE scan_session_projects_v5 RENAME TO scan_session_projects");
+      } else if (hasLegacy && hasV5) {
+        // Both exist: drop v5 and redo cleanly.
+        await database.execute("DROP TABLE scan_session_projects_v5");
+        await database.execute(createV5);
+        await copyLegacyIntoV5();
+        await verifyCopyOrThrow();
+        await database.execute("DROP TABLE scan_session_projects");
+        await database.execute("ALTER TABLE scan_session_projects_v5 RENAME TO scan_session_projects");
+      }
+
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_scan_session_projects_scan_id ON scan_session_projects (scan_id)"
+      );
+    }
+  },
+  {
+    version: 6,
+    // Add observed_folder_type to project_scan_events so classification drift is detectable.
+    // NULL means the event predates this migration (no drift information available).
+    // ALTER TABLE ADD COLUMN is not idempotent in SQLite — guard via pragma check.
+    run: async (database: SqlDatabase) => {
+      const columns = await database.select<{ name: string }>(
+        "PRAGMA table_info(project_scan_events)"
+      );
+      if (!columns.some((column) => column.name === "observed_folder_type")) {
+        await database.execute(
+          "ALTER TABLE project_scan_events ADD COLUMN observed_folder_type TEXT"
+        );
+      }
+    }
+  },
+  {
+    version: 7,
+    // Defensive invariant: `scan_session_projects` MUST have `folder_type`.
+    // Migration 3 originally added this column via a trailing ALTER TABLE, but historical DB
+    // states exist where migration 3 was marked applied without that ALTER having executed
+    // (e.g., manual DB repair during incident response). When that happens, migration 5's
+    // table recreation also fails because its INSERT ... SELECT references folder_type.
+    //
+    // This migration repairs those DBs: it probes the column via PRAGMA table_info and adds
+    // it with the safe default when missing. On healthy DBs this is a no-op. It is idempotent
+    // and safe to run against any state migration 5 may have left behind.
+    run: async (database: SqlDatabase) => {
+      // If the table is missing entirely, earlier migrations failed catastrophically and we
+      // have nothing safe to repair here — let the downstream scan-ingestion code surface it.
+      if (!(await tableExists(database, "scan_session_projects"))) {
+        return;
+      }
+      const columns = await database.select<{ name: string }>(
+        "PRAGMA table_info(scan_session_projects)"
+      );
+      if (!columns.some((column) => column.name === "folder_type")) {
+        await database.execute(
+          "ALTER TABLE scan_session_projects ADD COLUMN folder_type TEXT NOT NULL DEFAULT 'client'"
+        );
+      }
+    }
   }
 ];
 
@@ -294,6 +661,48 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
     });
   }
 
+  async deleteProject(projectId: string): Promise<void> {
+    const database = await this.#ensureReady();
+    await withTransaction(database, async () => {
+      await database.execute("DELETE FROM project_scan_events WHERE project_id = ?", [projectId]);
+      await database.execute("DELETE FROM projects WHERE id = ?", [projectId]);
+    });
+  }
+
+  async deleteDrive(driveId: string): Promise<void> {
+    const database = await this.#ensureReady();
+    await withTransaction(database, async () => {
+      // 1. Nullify drive references on projects (projects survive drive deletion).
+      await database.execute("UPDATE projects SET current_drive_id = NULL WHERE current_drive_id = ?", [driveId]);
+      await database.execute("UPDATE projects SET target_drive_id = NULL WHERE target_drive_id = ?", [driveId]);
+
+      // 2. Cascade scans: delete project_scan_events linked to scans for this drive, then the scans.
+      await database.execute(
+        "DELETE FROM project_scan_events WHERE scan_id IN (SELECT id FROM scans WHERE drive_id = ?)",
+        [driveId]
+      );
+      await database.execute("DELETE FROM scans WHERE drive_id = ?", [driveId]);
+
+      // 3. Cascade scan_sessions: delete child scan_session_projects first (no FK constraint,
+      //    so ordering is up to us), then the parent scan_sessions rows. Ties via
+      //    scan_sessions.requested_drive_id — the drive the user targeted when initiating the
+      //    scan. Sessions with requested_drive_id = NULL are preserved.
+      //
+      //    H3 fix: the prior implementation left orphaned scan_session_projects and
+      //    scan_sessions rows after drive deletion, diverging from the in-memory/storage
+      //    adapter behaviour (which drops the whole ScanSessionSnapshot including its
+      //    embedded `projects` array).
+      await database.execute(
+        "DELETE FROM scan_session_projects WHERE scan_id IN (SELECT scan_id FROM scan_sessions WHERE requested_drive_id = ?)",
+        [driveId]
+      );
+      await database.execute("DELETE FROM scan_sessions WHERE requested_drive_id = ?", [driveId]);
+
+      // 4. Finally, delete the drive row.
+      await database.execute("DELETE FROM drives WHERE id = ?", [driveId]);
+    });
+  }
+
   async #ensureReady() {
     if (!this.#readyPromise) {
       this.#readyPromise = (async () => {
@@ -348,39 +757,35 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
         continue;
       }
 
-      await withTransaction(database, async () => {
+      // Run each statement individually. DDL statements in SQLite are auto-committed
+      // by the tauri-plugin-sql layer even inside an explicit BEGIN/COMMIT, so we
+      // execute them one-by-one and only mark the migration as applied after all
+      // statements succeed. Migrations must be idempotent against partial failures:
+      // plain `statements` should use CREATE TABLE IF NOT EXISTS / DROP TABLE IF EXISTS
+      // guards; complex table-recreation migrations should use `run` with explicit
+      // state checks via `tableExists`.
+      if (migration.statements) {
         for (const statement of migration.statements) {
           await database.execute(statement);
         }
+      }
 
-        await database.execute(
-          "INSERT INTO catalog_migrations (version, applied_at) VALUES (?, ?)",
-          [migration.version, new Date().toISOString()]
-        );
-      });
+      if (migration.run) {
+        await migration.run(database);
+      }
+
+      await database.execute(
+        "INSERT OR IGNORE INTO catalog_migrations (version, applied_at) VALUES (?, ?)",
+        [migration.version, new Date().toISOString()]
+      );
     }
   }
 
   async #isEmpty(database: SqlDatabase) {
-    const tables = [
-      "drives",
-      "projects",
-      "scans",
-      "project_scan_events",
-      "scan_sessions",
-      "scan_session_projects"
-    ];
-
-    for (const table of tables) {
-      const rows = await database.select<{ count: number }>(
-        `SELECT COUNT(*) as count FROM ${table}`
-      );
-      if (Number(rows[0]?.count ?? 0) > 0) {
-        return false;
-      }
-    }
-
-    return true;
+    const rows = await database.select<{ count: number }>(
+      "SELECT COUNT(*) as count FROM drives"
+    );
+    return Number(rows[0]?.count ?? 0) === 0;
   }
 
   async #readSnapshotFromDatabase(database: SqlDatabase): Promise<CatalogSnapshot> {
@@ -452,9 +857,14 @@ type DriveRow = {
 
 type ProjectRow = {
   id: string;
-  parsed_date: string;
-  parsed_client: string;
-  parsed_project: string;
+  folder_type: string;
+  is_standardized: number;
+  folder_name: string;
+  folder_path: string | null;
+  parsed_date: string | null;
+  parsed_client: string | null;
+  parsed_project: string | null;
+  corrected_date: string | null;
   corrected_client: string | null;
   corrected_project: string | null;
   category: string | null;
@@ -492,6 +902,7 @@ type ProjectScanEventRow = {
   scan_id: string;
   observed_folder_name: string;
   observed_drive_name: string;
+  observed_folder_type: string | null;
   observed_at: string;
   created_at: string;
   updated_at: string;
@@ -525,9 +936,10 @@ type ScanSessionProjectRow = {
   folder_name: string;
   folder_path: string;
   relative_path: string;
-  parsed_date: string;
-  parsed_client: string;
-  parsed_project: string;
+  folder_type: string;
+  parsed_date: string | null;
+  parsed_client: string | null;
+  parsed_project: string | null;
   source_drive_name: string;
   scan_timestamp: string;
   size_status: "unknown" | "pending" | "ready" | "failed";
@@ -551,12 +963,17 @@ function mapDriveRow(row: DriveRow) {
   };
 }
 
-function mapProjectRow(row: ProjectRow) {
+function mapProjectRow(row: ProjectRow): Project {
   return {
     id: row.id,
+    folderType: row.folder_type as FolderType,
+    isStandardized: fromSqlBoolean(row.is_standardized),
+    folderName: row.folder_name,
+    folderPath: row.folder_path,
     parsedDate: row.parsed_date,
     parsedClient: row.parsed_client,
     parsedProject: row.parsed_project,
+    correctedDate: row.corrected_date,
     correctedClient: row.corrected_client,
     correctedProject: row.corrected_project,
     category: row.category as Category | null,
@@ -585,8 +1002,7 @@ function mapScanRow(row: ScanRow) {
     status: row.status,
     foldersScanned: row.folders_scanned,
     matchesFound: row.matches_found,
-    notes: row.notes
-    ,
+    notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -599,6 +1015,7 @@ function mapProjectScanEventRow(row: ProjectScanEventRow) {
     scanId: row.scan_id,
     observedFolderName: row.observed_folder_name,
     observedDriveName: row.observed_drive_name,
+    observedFolderType: (row.observed_folder_type as FolderType | null) ?? null,
     observedAt: row.observed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -644,6 +1061,7 @@ function groupSessionProjects(rows: ScanSessionProjectRow[]) {
       folderName: row.folder_name,
       folderPath: row.folder_path,
       relativePath: row.relative_path,
+      folderType: row.folder_type as FolderType,
       parsedDate: row.parsed_date,
       parsedClient: row.parsed_client,
       parsedProject: row.parsed_project,
@@ -701,17 +1119,29 @@ async function upsertDriveRow(database: SqlDatabase, drive: Drive) {
 }
 
 async function upsertProjectRow(database: SqlDatabase, project: Project) {
+  // Defensive defaults for every NOT NULL column. SQLite's column-level DEFAULT
+  // is ignored when NULL is bound explicitly, so we have to materialise these
+  // values here or the INSERT fails with (code: 1299) NOT NULL constraint.
+  const nowIso = new Date().toISOString();
+  const createdAt = project.createdAt ?? nowIso;
+  const updatedAt = project.updatedAt ?? nowIso;
   await database.execute(
     `INSERT INTO projects (
-      id, parsed_date, parsed_client, parsed_project, corrected_client, corrected_project,
+      id, folder_type, is_standardized, folder_name, folder_path,
+      parsed_date, parsed_client, parsed_project, corrected_date, corrected_client, corrected_project,
       category, size_bytes, size_status, current_drive_id, target_drive_id, move_status,
       missing_status, duplicate_status, is_unassigned, is_manual, last_seen_at, last_scanned_at,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
+      folder_type = excluded.folder_type,
+      is_standardized = excluded.is_standardized,
+      folder_name = excluded.folder_name,
+      folder_path = excluded.folder_path,
       parsed_date = excluded.parsed_date,
       parsed_client = excluded.parsed_client,
       parsed_project = excluded.parsed_project,
+      corrected_date = excluded.corrected_date,
       corrected_client = excluded.corrected_client,
       corrected_project = excluded.corrected_project,
       category = excluded.category,
@@ -730,25 +1160,30 @@ async function upsertProjectRow(database: SqlDatabase, project: Project) {
       updated_at = excluded.updated_at`,
     [
       project.id,
+      project.folderType ?? 'client',
+      toSqlBoolean(project.isStandardized ?? true),
+      project.folderName ?? '',
+      project.folderPath,
       project.parsedDate,
       project.parsedClient,
       project.parsedProject,
+      project.correctedDate,
       project.correctedClient,
       project.correctedProject,
       project.category,
       project.sizeBytes,
-      project.sizeStatus,
+      project.sizeStatus ?? 'pending',
       project.currentDriveId,
       project.targetDriveId,
-      project.moveStatus,
-      project.missingStatus,
-      project.duplicateStatus,
-      toSqlBoolean(project.isUnassigned),
-      toSqlBoolean(project.isManual),
+      project.moveStatus ?? 'none',
+      project.missingStatus ?? 'normal',
+      project.duplicateStatus ?? 'normal',
+      toSqlBoolean(project.isUnassigned ?? false),
+      toSqlBoolean(project.isManual ?? false),
       project.lastSeenAt,
       project.lastScannedAt,
-      project.createdAt,
-      project.updatedAt
+      createdAt,
+      updatedAt
     ]
   );
 }
@@ -786,13 +1221,14 @@ async function upsertScanRow(database: SqlDatabase, scan: ScanRecord) {
 async function upsertProjectScanEventRow(database: SqlDatabase, event: ProjectScanEvent) {
   await database.execute(
     `INSERT INTO project_scan_events (
-      id, project_id, scan_id, observed_folder_name, observed_drive_name, observed_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      id, project_id, scan_id, observed_folder_name, observed_drive_name, observed_folder_type, observed_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       project_id = excluded.project_id,
       scan_id = excluded.scan_id,
       observed_folder_name = excluded.observed_folder_name,
       observed_drive_name = excluded.observed_drive_name,
+      observed_folder_type = excluded.observed_folder_type,
       observed_at = excluded.observed_at,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at`,
@@ -802,6 +1238,7 @@ async function upsertProjectScanEventRow(database: SqlDatabase, event: ProjectSc
       event.scanId,
       event.observedFolderName,
       event.observedDriveName,
+      event.observedFolderType,
       event.observedAt,
       event.createdAt,
       event.updatedAt
@@ -866,16 +1303,17 @@ async function writeScanSessionRecord(database: SqlDatabase, session: ScanSessio
   for (const project of session.projects) {
     await database.execute(
       `INSERT INTO scan_session_projects (
-        id, scan_id, folder_name, folder_path, relative_path, parsed_date,
+        id, scan_id, folder_name, folder_path, relative_path, folder_type, parsed_date,
         parsed_client, parsed_project, source_drive_name, scan_timestamp,
         size_status, size_bytes, size_error
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         project.id,
         session.scanId,
         project.folderName,
         project.folderPath,
         project.relativePath,
+        project.folderType,
         project.parsedDate,
         project.parsedClient,
         project.parsedProject,
@@ -889,6 +1327,19 @@ async function writeScanSessionRecord(database: SqlDatabase, session: ScanSessio
   }
 }
 
+/**
+ * Wraps a sequence of DML statements (INSERT / UPDATE / DELETE) in a single transaction.
+ *
+ * **DDL WARNING**: This helper does NOT protect DDL statements (CREATE / ALTER / DROP / RENAME).
+ * The `tauri-plugin-sql` layer — and SQLite itself in certain pragma combinations — auto-commits
+ * DDL mid-transaction, which means a ROLLBACK will NOT revert schema changes executed inside
+ * the operation callback. If you need atomic schema changes, you must model recovery explicitly
+ * (see migrations 3 and 5 for the canonical pattern: guarded `tableExists` / `PRAGMA table_info`
+ * checks plus post-copy row-count verification before any destructive step).
+ *
+ * Use this helper only for DML batches — granular upserts, cascading deletes, scan session
+ * rewrites. Do not place migration logic or any DDL inside the operation.
+ */
 async function withTransaction(database: SqlDatabase, operation: () => Promise<void>) {
   await database.execute("BEGIN IMMEDIATE TRANSACTION");
 

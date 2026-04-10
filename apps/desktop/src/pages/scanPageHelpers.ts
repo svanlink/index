@@ -12,7 +12,3 @@ export function formatScanDuration(durationMs: number | null | undefined) {
   const seconds = totalSeconds % 60;
   return seconds === 0 ? `${minutes} min` : `${minutes} min ${seconds} sec`;
 }
-
-export function formatScanStatusLabel(status: string) {
-  return status.charAt(0).toUpperCase() + status.slice(1);
-}

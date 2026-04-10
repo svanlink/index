@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { PageHeader } from "@drive-project-catalog/ui";
+
+
 import { FeedbackNotice, SectionCard } from "./pagePrimitives";
 import { useCatalogStore } from "../app/providers";
 import {
@@ -14,12 +15,25 @@ import {
 import { getRuntimeEnvironmentDiagnostics, getSupabaseSyncDiagnostics } from "../app/syncConfig";
 
 export function SettingsPage() {
-  const { syncState, syncNow, isSyncing, startupSyncResult } = useCatalogStore();
+  const {
+    syncState,
+    syncNow,
+    isSyncing,
+    startupSyncResult,
+    reclassifyLegacyFolderTypes,
+    isMutating
+  } = useCatalogStore();
   const [feedback, setFeedback] = useState<{
     tone: "success" | "warning" | "error" | "info";
     title: string;
     messages: string[];
   } | null>(null);
+  const [reclassifyFeedback, setReclassifyFeedback] = useState<{
+    tone: "success" | "warning" | "error" | "info";
+    title: string;
+    messages: string[];
+  } | null>(null);
+  const [isReclassifying, setIsReclassifying] = useState(false);
 
   const enabled = isSyncEnabled(syncState);
   const summaryMessages = useMemo(() => getSyncSummaryMessages(syncState), [syncState]);
@@ -27,6 +41,52 @@ export function SettingsPage() {
   const startupTone = useMemo(() => getStartupSyncTone(startupSyncResult), [startupSyncResult]);
   const configDiagnostics = useMemo(() => getSupabaseSyncDiagnostics(), []);
   const runtimeDiagnostics = useMemo(() => getRuntimeEnvironmentDiagnostics(), []);
+
+  async function handleReclassify() {
+    setReclassifyFeedback(null);
+    setIsReclassifying(true);
+    try {
+      const result = await reclassifyLegacyFolderTypes();
+      const upgraded = result.clientReclassifiedCount + result.personalProjectReclassifiedCount;
+      if (result.examinedCount === 0) {
+        setReclassifyFeedback({
+          tone: "info",
+          title: "No legacy folder types to reclassify",
+          messages: [
+            "All non-manual projects are already classified as client or personal_project.",
+            "This action only examines rows currently stored as personal_folder."
+          ]
+        });
+      } else if (upgraded === 0) {
+        setReclassifyFeedback({
+          tone: "info",
+          title: "Reclassify complete — no upgrades",
+          messages: [
+            `Examined ${result.examinedCount} personal_folder row${result.examinedCount === 1 ? "" : "s"}.`,
+            "The classifier agreed all of them should remain personal_folder."
+          ]
+        });
+      } else {
+        setReclassifyFeedback({
+          tone: "success",
+          title: "Reclassify complete",
+          messages: [
+            `Examined ${result.examinedCount} personal_folder row${result.examinedCount === 1 ? "" : "s"}.`,
+            `Upgraded ${result.clientReclassifiedCount} to client and ${result.personalProjectReclassifiedCount} to personal_project.`,
+            `${result.unchangedCount} row${result.unchangedCount === 1 ? "" : "s"} left unchanged.`
+          ]
+        });
+      }
+    } catch (error) {
+      setReclassifyFeedback({
+        tone: "error",
+        title: "Reclassify failed",
+        messages: [error instanceof Error ? error.message : "The reclassify action did not complete."]
+      });
+    } finally {
+      setIsReclassifying(false);
+    }
+  }
 
   async function handleSync() {
     setFeedback(null);
@@ -55,11 +115,6 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Settings"
-        title="Sync and local environment"
-        description="Review whether cloud transport is enabled, inspect queue health, and manually run or retry sync without changing the current offline-first workflow."
-      />
 
       <SectionCard
         title="Sync status"
@@ -100,6 +155,40 @@ export function SettingsPage() {
           ) : null}
 
           {feedback ? <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} /> : null}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Legacy folder type recovery"
+        description="One-shot maintenance action that re-runs the folder classifier against existing projects still stored as personal_folder. Useful for projects imported before the classifier was refined — for example, rows left over from the early blanket-assignment migration. The action never downgrades structured projects and never touches manually created entries."
+        action={
+          <button
+            type="button"
+            className="button-success"
+            disabled={isReclassifying || isMutating}
+            onClick={() => void handleReclassify()}
+          >
+            {isReclassifying ? "Reclassifying..." : "Reclassify legacy folder types"}
+          </button>
+        }
+      >
+        <div className="space-y-4">
+          <FeedbackNotice
+            tone="info"
+            title="What this does"
+            messages={[
+              "Examines every non-manual project currently stored as personal_folder.",
+              "Upgrades rows whose folder name matches the YYMMDD_Client_Project pattern to client or personal_project.",
+              "Skips manually created projects and never changes structured rows that are already client or personal_project."
+            ]}
+          />
+          {reclassifyFeedback ? (
+            <FeedbackNotice
+              tone={reclassifyFeedback.tone}
+              title={reclassifyFeedback.title}
+              messages={reclassifyFeedback.messages}
+            />
+          ) : null}
         </div>
       </SectionCard>
 
@@ -150,26 +239,18 @@ export function SettingsPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface-subtle)" }}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
-        {label}
-      </p>
-      <p className="mt-2 text-base font-semibold" style={{ color: "var(--color-text)" }}>
-        {value}
-      </p>
+    <div>
+      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
+      <p className="mt-0.5 text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>{value}</p>
     </div>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
-        {label}
-      </p>
-      <p className="mt-2 text-sm leading-6" style={{ color: "var(--color-text-muted)" }}>
-        {value}
-      </p>
+    <div>
+      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
+      <p className="mt-0.5 text-[13px]" style={{ color: "var(--color-text-muted)" }}>{value}</p>
     </div>
   );
 }

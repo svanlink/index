@@ -42,7 +42,7 @@ export function DesktopScanPanel() {
 
       {isPanelOpen ? (
         <div className="fixed inset-0 z-40 flex items-start justify-end bg-[rgba(22,22,20,0.16)] px-4 py-4">
-          <aside className="w-full max-w-[440px] rounded-[24px] border p-6 shadow-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-surface-elevated)" }}>
+          <aside className="w-full max-w-[440px] rounded-lg border p-6 " style={{ borderColor: "var(--color-border)", background: "var(--color-surface-elevated)" }}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
@@ -97,12 +97,12 @@ export function DesktopScanPanel() {
               </label>
 
               {!isDesktopScanAvailable ? (
-                <p className="rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "#ddcfb8", background: "var(--color-warning-soft)", color: "var(--color-warning)" }}>
+                <p className="rounded-md border px-4 py-3 text-sm" style={{ borderColor: "#ddcfb8", background: "var(--color-warning-soft)", color: "var(--color-warning)" }}>
                   Desktop scan commands are only available in the Tauri app. The public web build can still show persisted scan state, but starting a scan requires the desktop app.
                 </p>
               ) : null}
               {lastError ? (
-                <p className="rounded-[18px] border px-4 py-3 text-sm" style={{ borderColor: "#dcc6c0", background: "var(--color-danger-soft)", color: "var(--color-danger)" }}>
+                <p className="rounded-md border px-4 py-3 text-sm" style={{ borderColor: "#dcc6c0", background: "var(--color-danger-soft)", color: "var(--color-danger)" }}>
                   {lastError}
                 </p>
               ) : null}
@@ -118,7 +118,7 @@ export function DesktopScanPanel() {
             </div>
 
             {summarySession ? (
-              <div className="mt-6 space-y-4 rounded-[20px] border p-5" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+              <div className="mt-6 space-y-4 rounded-lg border p-5" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
@@ -170,7 +170,7 @@ export function DesktopScanPanel() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[16px] border bg-white px-4 py-3" style={{ borderColor: "var(--color-border)" }}>
+    <div className="rounded-md border bg-white px-4 py-3" style={{ borderColor: "var(--color-border)" }}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>{label}</p>
       <p className="mt-2 text-base font-semibold tabular-nums" style={{ color: "var(--color-text)" }}>{value}</p>
     </div>

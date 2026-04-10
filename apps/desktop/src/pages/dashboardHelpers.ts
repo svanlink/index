@@ -1,4 +1,15 @@
-import { getDisplayClient, getDisplayProject, getProjectStatusLabels, type Drive, type Project } from "@drive-project-catalog/domain";
+import { getDisplayProject, getProjectStatusLabels, type Drive, type FolderType, type Project } from "@drive-project-catalog/domain";
+import { getDriveNameById } from "@drive-project-catalog/data";
+
+const FOLDER_TYPE_LABELS: Record<FolderType, string> = {
+  client: "Client",
+  personal_project: "Personal project",
+  personal_folder: "Personal folder"
+};
+
+export function getFolderTypeLabel(folderType: FolderType): string {
+  return FOLDER_TYPE_LABELS[folderType];
+}
 
 export function formatBytes(value: number | null) {
   if (value === null) {
@@ -22,16 +33,9 @@ export function getProjectName(project: Project) {
   return getDisplayProject(project);
 }
 
-export function getProjectClient(project: Project) {
-  return getDisplayClient(project);
-}
 
 export function getDriveName(drives: Drive[], driveId: string | null) {
-  if (!driveId) {
-    return "Unassigned";
-  }
-
-  return drives.find((drive) => drive.id === driveId)?.displayName ?? "Unknown drive";
+  return getDriveNameById(drives, driveId);
 }
 
 export function formatDate(value: string | null) {
@@ -42,7 +46,8 @@ export function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString();
 }
 
-export function formatParsedDate(value: string) {
+export function formatParsedDate(value: string | null) {
+  if (!value) return "—";
   if (value.length !== 6) {
     return value;
   }

@@ -8,21 +8,29 @@ export function findCatalogProjectForScanRecord(
   drives: Drive[]
 ) {
   const mappedDriveId = getMappedDriveId(session, drives);
-  const exactMatches = projects.filter((project) =>
-    project.parsedDate === record.parsedDate &&
-    project.parsedClient === record.parsedClient &&
-    project.parsedProject === record.parsedProject
-  );
+
+  // personal_folder records have no parsed fields — match by folderName only
+  const exactMatches =
+    record.folderType === "personal_folder"
+      ? projects.filter((project) => project.folderName === record.folderName)
+      : projects.filter(
+          (project) =>
+            project.parsedDate === record.parsedDate &&
+            project.parsedClient === record.parsedClient &&
+            project.parsedProject === record.parsedProject
+        );
 
   if (exactMatches.length === 0) {
     return null;
   }
 
   if (mappedDriveId) {
-    return exactMatches.find((project) => project.currentDriveId === mappedDriveId)
-      ?? exactMatches.find((project) => project.targetDriveId === mappedDriveId)
-      ?? exactMatches[0]
-      ?? null;
+    return (
+      exactMatches.find((project) => project.currentDriveId === mappedDriveId) ??
+      exactMatches.find((project) => project.targetDriveId === mappedDriveId) ??
+      exactMatches[0] ??
+      null
+    );
   }
 
   return exactMatches[0] ?? null;

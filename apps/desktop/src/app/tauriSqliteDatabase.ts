@@ -33,4 +33,3 @@ async function loadTauriDatabase() {
   return Database.load(databasePath);
 }
 
-export { databasePath as desktopCatalogDatabasePath };

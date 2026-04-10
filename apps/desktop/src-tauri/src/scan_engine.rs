@@ -1,3 +1,34 @@
+//! # Scan Engine — Import Safety Contract
+//!
+//! This module is **read-only with respect to the filesystem**. It may only:
+//!
+//! - Read directory entries (`fs::read_dir`)
+//! - Read file metadata (`DirEntry::metadata`, `DirEntry::file_type`)
+//! - Read file sizes (`metadata.len()`)
+//!
+//! It must **never**:
+//!
+//! - Rename, move, copy, or delete files or directories
+//! - Write to any file or create any directory
+//! - Change file permissions or attributes
+//! - Normalize or auto-correct folder names on disk
+//!
+//! Folder name corrections are purely database metadata written only through
+//! the explicit user edit flow in the UI. The `correctedClient` and
+//! `correctedProject` fields never influence the filesystem.
+//!
+//! ## Enforcement
+//!
+//! The `.clippy.toml` at the crate root forbids the specific `std::fs` write
+//! functions via `disallowed_methods`. This module additionally carries
+//! `#[deny(clippy::disallowed_methods)]` so any accidental import of a write
+//! function fails the build rather than producing a warning.
+//!
+//! The `#[cfg(test)]` module is explicitly exempted because tests need to
+//! create temporary fixture directories.
+
+#![cfg_attr(not(test), deny(clippy::disallowed_methods))]
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -8,26 +39,76 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
-    thread,
+    thread::{self, JoinHandle},
 };
 use tauri::State;
 
-const MAX_SCAN_DEPTH: usize = 2;
+const MAX_SCAN_DEPTH: usize = 1;
 const CANCELLED_ERROR: &str = "scan cancelled";
 const IGNORED_SYSTEM_FOLDERS: &[&str] = &[
+    // Windows
     "$RECYCLE.BIN",
     "System Volume Information",
+    // macOS
     ".Spotlight-V100",
     ".Trashes",
     ".fseventsd",
+    // Camera / memory card system folders
+    "DCIM",
+    "MISC",
+    // Unix filesystem recovery
+    "LOST+FOUND",
 ];
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ParsedProjectFolder {
-    pub parsed_date: String,
-    pub parsed_client: String,
-    pub parsed_project: String,
+/// Classification result for a scanned folder name.
+/// Every folder is classified — none are silently discarded.
+#[derive(Debug, Clone)]
+enum FolderClassification {
+    /// YYMMDD_ClientName_ProjectName (client is not "Internal")
+    Client {
+        date: String,
+        client: String,
+        project: String,
+    },
+    /// YYMMDD_Internal_ProjectName
+    PersonalProject { date: String, project: String },
+    /// Anything that does not match the structured patterns
+    PersonalFolder,
+}
+
+impl FolderClassification {
+    fn folder_type_str(&self) -> &'static str {
+        match self {
+            FolderClassification::Client { .. } => "client",
+            FolderClassification::PersonalProject { .. } => "personal_project",
+            FolderClassification::PersonalFolder => "personal_folder",
+        }
+    }
+
+    fn parsed_date(&self) -> Option<&str> {
+        match self {
+            FolderClassification::Client { date, .. } | FolderClassification::PersonalProject { date, .. } => {
+                Some(date.as_str())
+            }
+            FolderClassification::PersonalFolder => None,
+        }
+    }
+
+    fn parsed_client(&self) -> Option<&str> {
+        match self {
+            FolderClassification::Client { client, .. } => Some(client.as_str()),
+            _ => None,
+        }
+    }
+
+    fn parsed_project(&self) -> Option<&str> {
+        match self {
+            FolderClassification::Client { project, .. } | FolderClassification::PersonalProject { project, .. } => {
+                Some(project.as_str())
+            }
+            FolderClassification::PersonalFolder => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -37,9 +118,10 @@ pub struct ScanProjectRecord {
     pub folder_name: String,
     pub folder_path: String,
     pub relative_path: String,
-    pub parsed_date: String,
-    pub parsed_client: String,
-    pub parsed_project: String,
+    pub folder_type: String,
+    pub parsed_date: Option<String>,
+    pub parsed_client: Option<String>,
+    pub parsed_project: Option<String>,
     pub source_drive_name: String,
     pub scan_timestamp: String,
     pub size_status: String,
@@ -82,10 +164,33 @@ pub struct AppScanState {
     sessions: Mutex<HashMap<String, Arc<ScanSession>>>,
 }
 
+/// Lifecycle state for a scan session.
+///
+/// # Mutual exclusion (H5)
+///
+/// The `finalized` flag is the single source of truth for whether a terminal
+/// status has been written to `snapshot`. It is always flipped via `swap()`
+/// while the `snapshot` mutex is held, which guarantees that exactly one
+/// terminal transition wins — even if `cancel()` and `mark_completed()` race
+/// across threads.
+///
+/// The `cancel_requested` flag stays a fast-path `AtomicBool` so that the
+/// scan's directory-walk hot loop can check cancellation without taking the
+/// snapshot mutex on every entry.
+///
+/// # Size worker lifecycle (H8)
+///
+/// `size_workers` tracks every `JoinHandle` returned by
+/// `spawn_size_calculation`. On `Drop`, we signal cancellation and join all
+/// outstanding workers, so a closing window / dropped session cannot leak a
+/// detached directory-walk thread that keeps reading the filesystem after the
+/// session has been discarded. Tests can trigger the same cleanup
+/// synchronously via `join_size_workers_for_test()`.
 struct ScanSession {
     cancel_requested: AtomicBool,
-    scan_work_finished: AtomicBool,
+    finalized: AtomicBool,
     snapshot: Mutex<ScanSnapshot>,
+    size_workers: Mutex<Vec<JoinHandle<()>>>,
 }
 
 impl AppScanState {
@@ -116,7 +221,7 @@ impl ScanSession {
     fn new(scan_id: String, root_path: String, drive_name: String) -> Self {
         Self {
             cancel_requested: AtomicBool::new(false),
-            scan_work_finished: AtomicBool::new(false),
+            finalized: AtomicBool::new(false),
             snapshot: Mutex::new(ScanSnapshot {
                 scan_id,
                 root_path,
@@ -130,6 +235,7 @@ impl ScanSession {
                 size_jobs_pending: 0,
                 projects: Vec::new(),
             }),
+            size_workers: Mutex::new(Vec::new()),
         }
     }
 
@@ -137,13 +243,33 @@ impl ScanSession {
         self.snapshot.lock().expect("scan snapshot poisoned").clone()
     }
 
+    /// Cooperative cancellation request.
+    ///
+    /// Fast-path: if the session is already finalized (a terminal status was
+    /// written by the scan thread), cancel is a no-op — a finalized session
+    /// must never be mutated again.
+    ///
+    /// Otherwise sets `cancel_requested` so the scan's directory-walk loop
+    /// will unwind on its next `is_cancelled()` check, and eagerly writes
+    /// "cancelled" to the snapshot so the UI sees the transition immediately.
+    /// The scan thread's subsequent `mark_*` call will attempt to write the
+    /// final terminal status — and because that call performs
+    /// `finalized.swap(true)` *inside* the snapshot lock, it is guaranteed
+    /// to either win the race (overwriting "cancelled" with "completed" when
+    /// the scan had already returned Ok), or lose and become a no-op.
     fn cancel(&self) {
-        if self.scan_work_finished.load(Ordering::Relaxed) {
+        if self.finalized.load(Ordering::Acquire) {
             return;
         }
 
-        self.cancel_requested.store(true, Ordering::Relaxed);
+        self.cancel_requested.store(true, Ordering::Release);
         let mut snapshot = self.snapshot.lock().expect("scan snapshot poisoned");
+        // Re-check under the snapshot lock: a concurrent mark_* may have
+        // finalized the session between our fast-path check above and
+        // acquiring the lock. If so, leave the terminal status intact.
+        if self.finalized.load(Ordering::Acquire) {
+            return;
+        }
         if snapshot.status == "running" {
             snapshot.status = "cancelled".to_string();
             snapshot.finished_at = Some(timestamp_now());
@@ -151,11 +277,12 @@ impl ScanSession {
     }
 
     fn is_cancelled(&self) -> bool {
-        self.cancel_requested.load(Ordering::Relaxed)
+        self.cancel_requested.load(Ordering::Acquire)
     }
 
-    fn mark_scan_work_finished(&self) {
-        self.scan_work_finished.store(true, Ordering::Relaxed);
+    #[cfg(test)]
+    fn is_finalized(&self) -> bool {
+        self.finalized.load(Ordering::Acquire)
     }
 
     fn increment_folders_scanned(&self) {
@@ -168,7 +295,7 @@ impl ScanSession {
         folder_name: String,
         folder_path: String,
         relative_path: String,
-        parsed: ParsedProjectFolder,
+        classification: &FolderClassification,
         source_drive_name: String,
     ) -> String {
         let mut snapshot = self.snapshot.lock().expect("scan snapshot poisoned");
@@ -181,9 +308,10 @@ impl ScanSession {
             folder_name,
             folder_path,
             relative_path,
-            parsed_date: parsed.parsed_date,
-            parsed_client: parsed.parsed_client,
-            parsed_project: parsed.parsed_project,
+            folder_type: classification.folder_type_str().to_string(),
+            parsed_date: classification.parsed_date().map(str::to_string),
+            parsed_client: classification.parsed_client().map(str::to_string),
+            parsed_project: classification.parsed_project().map(str::to_string),
             source_drive_name,
             scan_timestamp: timestamp_now(),
             size_status: "pending".to_string(),
@@ -216,16 +344,31 @@ impl ScanSession {
         }
     }
 
+    /// Mark the session as completed.
+    ///
+    /// The `finalized.swap(true)` call runs *inside* the snapshot lock, so
+    /// it serialises with any concurrent `mark_cancelled` / `mark_failed` /
+    /// `cancel` that is also trying to acquire the lock. Only the first
+    /// caller wins; subsequent callers become no-ops.
+    ///
+    /// When `execute_scan` returns `Ok(())`, the scan genuinely finished
+    /// traversing every target folder — so "completed" always wins over a
+    /// "cancelled" that a racing `cancel()` may have written just before
+    /// we took the lock.
     fn mark_completed(&self) {
         let mut snapshot = self.snapshot.lock().expect("scan snapshot poisoned");
-        if snapshot.status == "running" {
-            snapshot.status = "completed".to_string();
-            snapshot.finished_at = Some(timestamp_now());
+        if self.finalized.swap(true, Ordering::AcqRel) {
+            return;
         }
+        snapshot.status = "completed".to_string();
+        snapshot.finished_at = Some(timestamp_now());
     }
 
     fn mark_cancelled(&self) {
         let mut snapshot = self.snapshot.lock().expect("scan snapshot poisoned");
+        if self.finalized.swap(true, Ordering::AcqRel) {
+            return;
+        }
         snapshot.status = "cancelled".to_string();
         if snapshot.finished_at.is_none() {
             snapshot.finished_at = Some(timestamp_now());
@@ -237,9 +380,49 @@ impl ScanSession {
 
     fn mark_failed(&self, error: String) {
         let mut snapshot = self.snapshot.lock().expect("scan snapshot poisoned");
+        if self.finalized.swap(true, Ordering::AcqRel) {
+            return;
+        }
         snapshot.status = "failed".to_string();
         snapshot.error = Some(error);
         snapshot.finished_at = Some(timestamp_now());
+    }
+
+    /// Register a spawned size worker so it can be joined on Drop (H8).
+    fn register_size_worker(&self, handle: JoinHandle<()>) {
+        self.size_workers
+            .lock()
+            .expect("size workers poisoned")
+            .push(handle);
+    }
+
+    /// Drain and join every outstanding size worker.
+    ///
+    /// Used by `Drop` for real cleanup and by tests to synchronously wait
+    /// for all spawned workers to finish without relying on polling
+    /// `size_jobs_pending`.
+    fn drain_and_join_size_workers(&self) {
+        let handles: Vec<JoinHandle<()>> = {
+            let mut guard = self.size_workers.lock().expect("size workers poisoned");
+            std::mem::take(&mut *guard)
+        };
+        for handle in handles {
+            // Best-effort: a panicked worker produces Err, which we swallow
+            // intentionally to avoid panicking during Drop.
+            let _ = handle.join();
+        }
+    }
+}
+
+impl Drop for ScanSession {
+    /// H8: ensure detached size workers never outlive the session. Setting
+    /// `cancel_requested` before joining causes any worker still inside
+    /// `calculate_directory_size` to bail out of its hot loop on the next
+    /// `is_cancelled()` check, so the join completes promptly instead of
+    /// blocking on a full disk walk.
+    fn drop(&mut self) {
+        self.cancel_requested.store(true, Ordering::Release);
+        self.drain_and_join_size_workers();
     }
 }
 
@@ -266,23 +449,15 @@ pub fn start_scan(
     state.insert_session(scan_id.clone(), Arc::clone(&session));
 
     thread::spawn(move || {
+        // The scan thread is the sole writer of terminal status. Each mark_*
+        // method atomically flips `finalized` under the snapshot lock, so
+        // concurrent `cancel()` calls either race in before this point (and
+        // get overwritten by mark_completed when execute_scan actually
+        // succeeded) or arrive after (and become no-ops). See H5.
         match execute_scan(root_path, drive_name, Arc::clone(&session)) {
-            Ok(()) => {
-                session.mark_scan_work_finished();
-                if session.is_cancelled() {
-                    session.mark_cancelled();
-                } else {
-                    session.mark_completed();
-                }
-            }
-            Err(error) if error == CANCELLED_ERROR => {
-                session.mark_scan_work_finished();
-                session.mark_cancelled();
-            }
-            Err(error) => {
-                session.mark_scan_work_finished();
-                session.mark_failed(error);
-            }
+            Ok(()) => session.mark_completed(),
+            Err(error) if error == CANCELLED_ERROR => session.mark_cancelled(),
+            Err(error) => session.mark_failed(error),
         }
     });
 
@@ -342,7 +517,9 @@ fn scan_directory(
         let file_type = entry
             .file_type()
             .map_err(|error| format!("failed to read file type for {}: {error}", entry.path().display()))?;
-        if !file_type.is_dir() || file_type.is_symlink() {
+        if !file_type.is_dir() {
+            // Symlinks are also skipped: DirEntry::file_type() returns the symlink type itself,
+            // not the target, so symlinks to directories have is_dir() == false here.
             continue;
         }
 
@@ -358,40 +535,56 @@ fn scan_directory(
 
         session.increment_folders_scanned();
         let child_path = entry.path();
+        let classification = classify_folder_name(&folder_name);
 
-        if let Some(parsed) = parse_project_folder_name(&folder_name) {
-            let relative_path = child_path
-                .strip_prefix(root_path)
-                .unwrap_or(&child_path)
-                .to_string_lossy()
-                .to_string();
-            let project_id = session.register_match(
-                folder_name,
-                child_path.to_string_lossy().to_string(),
-                relative_path,
-                parsed,
-                drive_name.to_string(),
-            );
-            spawn_size_calculation(Arc::clone(session), project_id, child_path);
-            continue;
-        }
+        let relative_path = child_path
+            .strip_prefix(root_path)
+            .unwrap_or(&child_path)
+            .to_string_lossy()
+            .to_string();
 
-        if child_depth < MAX_SCAN_DEPTH {
-            scan_directory(root_path, &child_path, child_depth, drive_name, session)?;
-        }
+        let project_id = session.register_match(
+            folder_name,
+            child_path.to_string_lossy().to_string(),
+            relative_path,
+            &classification,
+            drive_name.to_string(),
+        );
+        spawn_size_calculation(Arc::clone(session), project_id, child_path.clone());
+
+        // Intentionally no recursion: the scanner is a single-level sweep of the drive
+        // root. Every top-level entry becomes a project record; nothing below is walked.
+        // Keeps semantics predictable for the user and avoids depth-sensitive edge cases.
     }
 
     Ok(())
 }
 
 fn spawn_size_calculation(session: Arc<ScanSession>, project_id: String, path: PathBuf) {
-    thread::spawn(move || {
-        let result = calculate_directory_size(&path, &session);
-        session.finish_size_job(&project_id, result);
+    // H8: track the join handle on the session so Drop can wait for every
+    // outstanding size worker. The worker holds its own Arc clone of the
+    // session so it stays alive until the calc completes; the tracking Arc
+    // is the one the rest of the app keeps for status queries.
+    let worker_session = Arc::clone(&session);
+    let handle = thread::spawn(move || {
+        let result = calculate_directory_size(&path, &worker_session);
+        worker_session.finish_size_job(&project_id, result);
     });
+    session.register_size_worker(handle);
 }
 
+/// Maximum number of filesystem entries visited across the entire recursive walk
+/// for a single project folder. Prevents runaway walks on extremely large trees.
+/// When the ceiling is hit the function returns the partial size accumulated so
+/// far — it does not error and does not return zero.
+const MAX_SIZE_WALK_ENTRIES: u64 = 500_000;
+
 fn calculate_directory_size(path: &Path, session: &ScanSession) -> Result<u64, String> {
+    let mut entry_count = 0_u64;
+    calculate_directory_size_inner(path, session, &mut entry_count)
+}
+
+fn calculate_directory_size_inner(path: &Path, session: &ScanSession, entry_count: &mut u64) -> Result<u64, String> {
     if session.is_cancelled() {
         return Err(CANCELLED_ERROR.to_string());
     }
@@ -404,6 +597,13 @@ fn calculate_directory_size(path: &Path, session: &ScanSession) -> Result<u64, S
             return Err(CANCELLED_ERROR.to_string());
         }
 
+        *entry_count += 1;
+        if *entry_count >= MAX_SIZE_WALK_ENTRIES {
+            // Return partial size rather than erroring — the ceiling is a
+            // safeguard against pathological trees, not a hard failure.
+            return Ok(total_size);
+        }
+
         let entry = entry.map_err(|error| format!("failed to size entry in {}: {error}", path.display()))?;
         let metadata = entry
             .metadata()
@@ -412,7 +612,7 @@ fn calculate_directory_size(path: &Path, session: &ScanSession) -> Result<u64, S
         if metadata.is_file() {
             total_size += metadata.len();
         } else if metadata.is_dir() {
-            total_size += calculate_directory_size(&entry.path(), session)?;
+            total_size += calculate_directory_size_inner(&entry.path(), session, entry_count)?;
         }
     }
 
@@ -423,27 +623,47 @@ fn should_ignore_directory(name: &str) -> bool {
     name.starts_with('.') || IGNORED_SYSTEM_FOLDERS.contains(&name)
 }
 
-fn parse_project_folder_name(name: &str) -> Option<ParsedProjectFolder> {
-    let mut parts = name.split('_');
-    let parsed_date = parts.next()?;
-    let parsed_client = parts.next()?;
-    let parsed_project = parts.next()?;
+/// Classify a folder name into one of three types.
+/// Never returns an error — every name produces a classification.
+///
+/// Rules (evaluated in order):
+///   1. YYMMDD_ClientName_ProjectName (exactly 3 parts, date is 6 digits, client ≠ "Internal") → Client
+///   2. YYMMDD_Internal_ProjectName (client is literally "Internal") → PersonalProject
+///   3. Anything else → PersonalFolder
+fn classify_folder_name(name: &str) -> FolderClassification {
+    let parts: Vec<&str> = name.split('_').collect();
 
-    if parts.next().is_some() {
-        return None;
-    }
-    if parsed_date.len() != 6 || !parsed_date.chars().all(|character| character.is_ascii_digit()) {
-        return None;
-    }
-    if parsed_client.is_empty() || parsed_project.is_empty() {
-        return None;
+    // Must have exactly 3 underscore-delimited parts
+    if parts.len() != 3 {
+        return FolderClassification::PersonalFolder;
     }
 
-    Some(ParsedProjectFolder {
-        parsed_date: parsed_date.to_string(),
-        parsed_client: parsed_client.to_string(),
-        parsed_project: parsed_project.to_string(),
-    })
+    let date = parts[0];
+    let client = parts[1];
+    let project = parts[2];
+
+    // Date segment must be exactly 6 ASCII digits
+    if date.len() != 6 || !date.bytes().all(|b| b.is_ascii_digit()) {
+        return FolderClassification::PersonalFolder;
+    }
+
+    // Client and project segments must be non-empty
+    if client.is_empty() || project.is_empty() {
+        return FolderClassification::PersonalFolder;
+    }
+
+    if client == "Internal" {
+        FolderClassification::PersonalProject {
+            date: date.to_string(),
+            project: project.to_string(),
+        }
+    } else {
+        FolderClassification::Client {
+            date: date.to_string(),
+            client: client.to_string(),
+            project: project.to_string(),
+        }
+    }
 }
 
 fn derive_drive_name(path: &Path) -> String {
@@ -458,27 +678,66 @@ fn timestamp_now() -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)] // test fixtures legitimately create and write temp directories
 mod tests {
     use super::*;
     use tempfile::tempdir;
 
     #[test]
-    fn parses_strict_project_folder_names() {
-        let parsed = parse_project_folder_name("240401_Apple_ProductShoot").expect("expected strict match");
-        assert_eq!(parsed.parsed_date, "240401");
-        assert_eq!(parsed.parsed_client, "Apple");
-        assert_eq!(parsed.parsed_project, "ProductShoot");
+    fn classifies_client_folders() {
+        let c = classify_folder_name("240401_Apple_ProductShoot");
+        assert!(matches!(c, FolderClassification::Client { .. }));
+        assert_eq!(c.folder_type_str(), "client");
+        assert_eq!(c.parsed_date(), Some("240401"));
+        assert_eq!(c.parsed_client(), Some("Apple"));
+        assert_eq!(c.parsed_project(), Some("ProductShoot"));
+    }
 
-        assert!(parse_project_folder_name("240401_Apple").is_none());
-        assert!(parse_project_folder_name("240401_Apple_Product_Shoot").is_none());
-        assert!(parse_project_folder_name("24A401_Apple_ProductShoot").is_none());
-        assert!(parse_project_folder_name("240401__ProductShoot").is_none());
+    #[test]
+    fn classifies_personal_project_when_client_is_internal() {
+        let c = classify_folder_name("240401_Internal_Archive");
+        assert!(matches!(c, FolderClassification::PersonalProject { .. }));
+        assert_eq!(c.folder_type_str(), "personal_project");
+        assert_eq!(c.parsed_date(), Some("240401"));
+        assert_eq!(c.parsed_client(), None);
+        assert_eq!(c.parsed_project(), Some("Archive"));
+    }
+
+    #[test]
+    fn classifies_personal_folder_for_non_standard_names() {
+        // Too few parts
+        let c = classify_folder_name("240401_Apple");
+        assert!(matches!(c, FolderClassification::PersonalFolder));
+
+        // Too many parts
+        let c = classify_folder_name("240401_Apple_Product_Shoot");
+        assert!(matches!(c, FolderClassification::PersonalFolder));
+
+        // Non-digit date
+        let c = classify_folder_name("24A401_Apple_ProductShoot");
+        assert!(matches!(c, FolderClassification::PersonalFolder));
+
+        // Empty client
+        let c = classify_folder_name("240401__ProductShoot");
+        assert!(matches!(c, FolderClassification::PersonalFolder));
+
+        // Plain folder name
+        let c = classify_folder_name("Archive");
+        assert!(matches!(c, FolderClassification::PersonalFolder));
+
+        // Internal-like but not exact case
+        let c = classify_folder_name("240401_internal_Archive");
+        assert!(matches!(c, FolderClassification::Client { .. }), "lowercase 'internal' is a client name, not personal_project");
     }
 
     #[test]
     fn ignores_hidden_and_system_folders() {
         assert!(should_ignore_directory(".hidden"));
         assert!(should_ignore_directory(".Spotlight-V100"));
+        assert!(should_ignore_directory("DCIM"));
+        assert!(should_ignore_directory("MISC"));
+        assert!(should_ignore_directory("LOST+FOUND"));
+        assert!(should_ignore_directory("$RECYCLE.BIN"));
         assert!(!should_ignore_directory("240401_Apple_ProductShoot"));
     }
 
@@ -527,12 +786,23 @@ mod tests {
 
         let snapshot = session.snapshot();
         assert_eq!(snapshot.status, "running");
-        assert_eq!(snapshot.matches_found, 2);
-        assert_eq!(snapshot.projects.len(), 2);
+        // Depth=1 sweep: only top-level entries are recorded.
+        // Finds: 240401_Apple_ProductShoot (client), Archive (personal_folder), Deep (personal_folder).
+        assert_eq!(snapshot.matches_found, 3);
+        assert_eq!(snapshot.projects.len(), 3);
         assert!(snapshot.projects.iter().all(|project| project.size_status == "ready"));
-        assert!(snapshot.projects.iter().any(|project| project.folder_name == "240401_Apple_ProductShoot"));
-        assert!(snapshot.projects.iter().any(|project| project.folder_name == "240320_Nike_Ad"));
-        assert!(!snapshot.projects.iter().any(|project| project.folder_name == "240228_Too_Deep"));
+
+        // Top-level structured project is present
+        assert!(snapshot.projects.iter().any(|p| p.folder_name == "240401_Apple_ProductShoot" && p.folder_type == "client"));
+
+        // Top-level unstructured containers are recorded as personal_folder
+        assert!(snapshot.projects.iter().any(|p| p.folder_name == "Archive" && p.folder_type == "personal_folder"));
+        assert!(snapshot.projects.iter().any(|p| p.folder_name == "Deep" && p.folder_type == "personal_folder"));
+
+        // Nothing below the top level is walked
+        assert!(!snapshot.projects.iter().any(|p| p.folder_name == "240320_Nike_Ad"));
+        assert!(!snapshot.projects.iter().any(|p| p.folder_name == "LevelTwo"));
+        assert!(!snapshot.projects.iter().any(|p| p.folder_name == "240228_Too_Deep"));
 
         let direct = snapshot
             .projects
@@ -561,7 +831,48 @@ mod tests {
     }
 
     #[test]
-    fn cancel_after_scan_work_finishes_does_not_override_completion() {
+    fn cancel_racing_before_finalization_is_overwritten_by_mark_completed() {
+        // H5: cancel() runs after execute_scan returns Ok but before
+        // mark_completed(). cancel() sees finalized=false and eagerly writes
+        // "cancelled" to the snapshot so the UI sees the transition. The
+        // scan thread then calls mark_completed(), which atomically flips
+        // `finalized` under the snapshot lock and overwrites "cancelled"
+        // with "completed" — because execute_scan actually succeeded,
+        // completed is the correct terminal state.
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path();
+        fs::create_dir(root.join("Archive")).expect("archive");
+
+        let session = Arc::new(ScanSession::new(
+            "scan-race".to_string(),
+            root.to_string_lossy().to_string(),
+            "Drive A".to_string(),
+        ));
+
+        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
+            .expect("scan should succeed");
+
+        // cancel() wins to lock and writes "cancelled"
+        session.cancel();
+        assert_eq!(session.snapshot().status, "cancelled");
+        assert!(!session.is_finalized());
+
+        // mark_completed() overwrites since finalized was still false
+        session.mark_completed();
+        assert!(session.is_finalized());
+
+        let snapshot = session.snapshot();
+        assert_eq!(
+            snapshot.status, "completed",
+            "completed must win over a race-written cancelled"
+        );
+    }
+
+    #[test]
+    fn cancel_after_finalization_is_a_noop() {
+        // H5: once a mark_* has run and set `finalized`, any subsequent
+        // cancel() must not mutate the snapshot and must not set
+        // cancel_requested. A finalized session is immutable.
         let temp = tempdir().expect("tempdir");
         let root = temp.path();
         fs::create_dir(root.join("Archive")).expect("archive");
@@ -572,13 +883,148 @@ mod tests {
             "Drive A".to_string(),
         ));
 
-        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session)).expect("scan should succeed");
-        session.mark_scan_work_finished();
-        session.cancel();
+        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
+            .expect("scan should succeed");
         session.mark_completed();
+        assert!(session.is_finalized());
+
+        session.cancel();
 
         let snapshot = session.snapshot();
         assert_eq!(snapshot.status, "completed");
-        assert!(!session.is_cancelled());
+        assert!(
+            !session.is_cancelled(),
+            "cancel() after finalization must not set cancel_requested"
+        );
+    }
+
+    #[test]
+    fn mark_failed_after_cancel_is_noop_when_cancel_won_first() {
+        // H5: if mark_cancelled runs first (via CANCELLED_ERROR unwind),
+        // a subsequent mark_failed must not overwrite it because finalized
+        // is already set.
+        let session = Arc::new(ScanSession::new(
+            "scan-double-terminal".to_string(),
+            "/tmp".to_string(),
+            "Drive A".to_string(),
+        ));
+
+        session.mark_cancelled();
+        assert_eq!(session.snapshot().status, "cancelled");
+        assert!(session.is_finalized());
+
+        session.mark_failed("IO error".to_string());
+
+        let snapshot = session.snapshot();
+        assert_eq!(
+            snapshot.status, "cancelled",
+            "first terminal transition must win; mark_failed must not overwrite"
+        );
+        assert_eq!(snapshot.error.as_deref(), Some(CANCELLED_ERROR));
+    }
+
+    #[test]
+    fn mark_completed_is_idempotent() {
+        let session = Arc::new(ScanSession::new(
+            "scan-idempotent".to_string(),
+            "/tmp".to_string(),
+            "Drive A".to_string(),
+        ));
+
+        session.mark_completed();
+        let first_finished_at = session.snapshot().finished_at.clone();
+        assert!(first_finished_at.is_some());
+
+        // A second call must be a no-op and must not update finished_at.
+        session.mark_completed();
+        let second_finished_at = session.snapshot().finished_at.clone();
+        assert_eq!(first_finished_at, second_finished_at);
+    }
+
+    #[test]
+    fn size_workers_are_tracked_and_joinable() {
+        // H8: every spawned size worker must be registered on the session
+        // so drain_and_join_size_workers can synchronously wait for them.
+        // After joining, size_jobs_pending must be zero.
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path();
+        for i in 0..3 {
+            let project_name = format!("24040{i}_Client_Proj{i}");
+            let project = root.join(&project_name);
+            fs::create_dir(&project).expect("project");
+            fs::write(project.join("file.bin"), vec![0_u8; 2048]).expect("file");
+        }
+
+        let session = Arc::new(ScanSession::new(
+            "scan-sizes".to_string(),
+            root.to_string_lossy().to_string(),
+            "Drive A".to_string(),
+        ));
+
+        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
+            .expect("scan should succeed");
+
+        // At least one worker should have been spawned.
+        {
+            let guard = session.size_workers.lock().expect("size workers");
+            assert_eq!(guard.len(), 3, "one worker per registered match");
+        }
+
+        session.drain_and_join_size_workers();
+
+        let snapshot = session.snapshot();
+        assert_eq!(
+            snapshot.size_jobs_pending, 0,
+            "all workers must have decremented the pending counter by the time join returns"
+        );
+        assert!(snapshot.projects.iter().all(|p| p.size_status == "ready"));
+
+        // After draining, the worker list is empty.
+        let guard = session.size_workers.lock().expect("size workers");
+        assert!(guard.is_empty());
+    }
+
+    #[test]
+    fn dropping_session_signals_cancel_and_joins_workers() {
+        // H8: dropping a ScanSession must not leak detached size workers.
+        // We trigger a scan, drop the outer Arc, and verify (via an indirect
+        // signal — the unique owner path) that Drop runs without hanging.
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path();
+        let project = root.join("240401_Apple_ProductShoot");
+        fs::create_dir(&project).expect("project");
+        fs::write(project.join("capture.mov"), vec![0_u8; 256]).expect("file");
+
+        let session = Arc::new(ScanSession::new(
+            "scan-drop".to_string(),
+            root.to_string_lossy().to_string(),
+            "Drive A".to_string(),
+        ));
+
+        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
+            .expect("scan should succeed");
+
+        // Size workers may still be running — don't wait for them here.
+        // Arc::try_unwrap succeeds only when this is the sole reference,
+        // so we can drop the session directly and trigger its Drop impl.
+        // Any workers still holding their own clone will release it inside
+        // finish_size_job, after which the session's real drop runs.
+        match Arc::try_unwrap(session) {
+            Ok(owned) => {
+                // Drop runs here: should signal cancel + join all workers.
+                drop(owned);
+            }
+            Err(still_shared) => {
+                // A worker thread still holds an Arc. Wait for it to release
+                // by joining outstanding workers, then drop.
+                still_shared.drain_and_join_size_workers();
+                match Arc::try_unwrap(still_shared) {
+                    Ok(owned) => drop(owned),
+                    Err(_) => panic!("size worker thread leaked an Arc reference"),
+                }
+            }
+        }
+
+        // If we reach this line, Drop returned — no hang, no leak.
     }
 }

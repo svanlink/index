@@ -149,6 +149,7 @@ describe("LocalCatalogRepository", () => {
       projects: [
         {
           id: "scan-project-running",
+          folderType: "client" as const,
           folderName: "240401_Apple_ProductShoot",
           folderPath: "/Volumes/Drive A/240401_Apple_ProductShoot",
           relativePath: "240401_Apple_ProductShoot",
@@ -193,6 +194,7 @@ describe("LocalCatalogRepository", () => {
       projects: [
         {
           id: "scan-project-running",
+          folderType: "client" as const,
           folderName: "240401_Apple_ProductShoot",
           folderPath: "/Volumes/Drive A/240401_Apple_ProductShoot",
           relativePath: "240401_Apple_ProductShoot",
@@ -223,6 +225,7 @@ describe("LocalCatalogRepository", () => {
       projects: [
         {
           id: "scan-project-running",
+          folderType: "client" as const,
           folderName: "240401_Apple_ProductShoot",
           folderPath: "/Volumes/Drive A/240401_Apple_ProductShoot",
           relativePath: "240401_Apple_ProductShoot",
@@ -418,6 +421,360 @@ describe("LocalCatalogRepository", () => {
 
     expect(result.status).toBe("completed");
     expect(result.reason).toBe("recovered-and-ran");
+  });
+
+  // -------------------------------------------------------------------------
+  // Case E — Edit / update flow
+  // -------------------------------------------------------------------------
+
+  it("updateProjectMetadata writes only DB metadata — folderName and folderPath are untouched", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new InMemorySyncAdapter()
+    );
+
+    const before = await repository.getProjectById("project-240401-apple-shoot");
+    expect(before).not.toBeNull();
+
+    const updated = await repository.updateProjectMetadata({
+      projectId: "project-240401-apple-shoot",
+      correctedDate: null,
+      correctedClient: "Apple Creative",
+      correctedProject: "Global Campaign",
+      category: "photo",
+      folderType: null
+    });
+
+    expect(updated.correctedClient).toBe("Apple Creative");
+    expect(updated.correctedProject).toBe("Global Campaign");
+    // Disk-level identity fields must never change
+    expect(updated.folderName).toBe(before!.folderName);
+    expect(updated.folderPath).toBe(before!.folderPath);
+    expect(updated.parsedDate).toBe(before!.parsedDate);
+    expect(updated.parsedClient).toBe(before!.parsedClient);
+    expect(updated.parsedProject).toBe(before!.parsedProject);
+  });
+
+  it("re-scanning a project after an edit does not overwrite corrected metadata", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new InMemorySyncAdapter()
+    );
+
+    // User edits the project
+    await repository.updateProjectMetadata({
+      projectId: "project-240401-apple-shoot",
+      correctedDate: null,
+      correctedClient: "Apple Creative",
+      correctedProject: "Global Campaign",
+      category: "photo",
+      folderType: null
+    });
+
+    // Drive is re-scanned — same folder observed again
+    await repository.ingestScanSnapshot({
+      scanId: "scan-drive-a-rescan",
+      rootPath: "/Volumes/Drive A",
+      driveName: "Drive A",
+      status: "completed",
+      startedAt: "2026-04-08T10:00:00.000Z",
+      finishedAt: "2026-04-08T10:05:00.000Z",
+      foldersScanned: 1,
+      matchesFound: 1,
+      error: null,
+      sizeJobsPending: 0,
+      createdAt: "2026-04-08T10:00:00.000Z",
+      updatedAt: "2026-04-08T10:05:00.000Z",
+      projects: [
+        {
+          id: "scan-project-rescan",
+          folderType: "client" as const,
+          folderName: "240401_Apple_ProductShoot",
+          folderPath: "/Volumes/Drive A/240401_Apple_ProductShoot",
+          relativePath: "240401_Apple_ProductShoot",
+          parsedDate: "240401",
+          parsedClient: "Apple",
+          parsedProject: "ProductShoot",
+          sourceDriveName: "Drive A",
+          scanTimestamp: "2026-04-08T10:01:00.000Z",
+          sizeStatus: "ready",
+          sizeBytes: 130_000_000_000,
+          sizeError: null
+        }
+      ]
+    });
+
+    const project = await repository.getProjectById("project-240401-apple-shoot");
+
+    // Corrections must survive the rescan
+    expect(project?.correctedClient).toBe("Apple Creative");
+    expect(project?.correctedProject).toBe("Global Campaign");
+    // But physical scan data is updated
+    expect(project?.sizeBytes).toBe(130_000_000_000);
+  });
+
+  it("reclassifies a personal_folder to client when folderType is provided in updateProjectMetadata", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new InMemorySyncAdapter()
+    );
+
+    // Inject a personal_folder project
+    const personalFolder = mockCatalogSnapshot.projects.find((p) => p.folderType === "personal_project")!;
+    const unclassified = await repository.saveProject({
+      ...personalFolder,
+      id: "project-tutorials",
+      folderType: "personal_folder",
+      folderName: "Tutorials",
+      folderPath: "/Volumes/Drive A/Tutorials",
+      parsedDate: null,
+      parsedClient: null,
+      parsedProject: null,
+      correctedDate: null,
+      correctedClient: null,
+      correctedProject: null,
+      isStandardized: false
+    });
+
+    expect(unclassified.folderType).toBe("personal_folder");
+    expect(unclassified.isStandardized).toBe(false);
+
+    // User reclassifies it via the edit flow
+    const reclassified = await repository.updateProjectMetadata({
+      projectId: "project-tutorials",
+      correctedDate: "240315",
+      correctedClient: "Internal",
+      correctedProject: "Tutorials",
+      category: "personal",
+      folderType: "personal_project"
+    });
+
+    expect(reclassified.folderType).toBe("personal_project");
+    expect(reclassified.isStandardized).toBe(true);
+    expect(reclassified.correctedDate).toBe("240315");
+    // Disk-level folder name is NOT changed
+    expect(reclassified.folderName).toBe("Tutorials");
+    expect(reclassified.folderPath).toBe("/Volumes/Drive A/Tutorials");
+  });
+
+  describe("reclassifyLegacyFolderTypes", () => {
+    async function seedProject(
+      repository: LocalCatalogRepository,
+      overrides: {
+        id: string;
+        folderName: string;
+        folderType: "client" | "personal_project" | "personal_folder";
+        isManual?: boolean;
+        isStandardized?: boolean;
+        parsedDate?: string | null;
+        parsedClient?: string | null;
+        parsedProject?: string | null;
+      }
+    ) {
+      const template = mockCatalogSnapshot.projects.find((p) => p.folderType === "personal_project")!;
+      return repository.saveProject({
+        ...template,
+        id: overrides.id,
+        folderType: overrides.folderType,
+        folderName: overrides.folderName,
+        folderPath: `/Volumes/Drive A/${overrides.folderName}`,
+        parsedDate: overrides.parsedDate ?? null,
+        parsedClient: overrides.parsedClient ?? null,
+        parsedProject: overrides.parsedProject ?? null,
+        correctedDate: null,
+        correctedClient: null,
+        correctedProject: null,
+        isManual: overrides.isManual ?? false,
+        isStandardized: overrides.isStandardized ?? false
+      });
+    }
+
+    it("upgrades a legacy personal_folder whose name matches the client pattern", async () => {
+      const repository = new LocalCatalogRepository(
+        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemorySyncAdapter()
+      );
+
+      await seedProject(repository, {
+        id: "project-legacy-apple",
+        folderName: "240401_Apple_ProductShoot",
+        folderType: "personal_folder"
+      });
+
+      const result = await repository.reclassifyLegacyFolderTypes();
+
+      expect(result.examinedCount).toBe(1);
+      expect(result.clientReclassifiedCount).toBe(1);
+      expect(result.personalProjectReclassifiedCount).toBe(0);
+      expect(result.unchangedCount).toBe(0);
+
+      const upgraded = await repository.getProjectById("project-legacy-apple");
+      expect(upgraded?.folderType).toBe("client");
+      expect(upgraded?.isStandardized).toBe(true);
+      expect(upgraded?.parsedDate).toBe("240401");
+      expect(upgraded?.parsedClient).toBe("Apple");
+      expect(upgraded?.parsedProject).toBe("ProductShoot");
+      // Disk-level folder identity is preserved
+      expect(upgraded?.folderName).toBe("240401_Apple_ProductShoot");
+    });
+
+    it("upgrades a legacy personal_folder whose name matches the personal_project pattern", async () => {
+      const repository = new LocalCatalogRepository(
+        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemorySyncAdapter()
+      );
+
+      await seedProject(repository, {
+        id: "project-legacy-internal",
+        folderName: "240401_Internal_Archive",
+        folderType: "personal_folder"
+      });
+
+      const result = await repository.reclassifyLegacyFolderTypes();
+
+      expect(result.examinedCount).toBe(1);
+      expect(result.clientReclassifiedCount).toBe(0);
+      expect(result.personalProjectReclassifiedCount).toBe(1);
+      expect(result.unchangedCount).toBe(0);
+
+      const upgraded = await repository.getProjectById("project-legacy-internal");
+      expect(upgraded?.folderType).toBe("personal_project");
+      expect(upgraded?.isStandardized).toBe(true);
+      expect(upgraded?.parsedDate).toBe("240401");
+      expect(upgraded?.parsedClient).toBeNull();
+      expect(upgraded?.parsedProject).toBe("Archive");
+    });
+
+    it("counts unchanged personal_folder rows that cannot be upgraded", async () => {
+      const repository = new LocalCatalogRepository(
+        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemorySyncAdapter()
+      );
+
+      await seedProject(repository, {
+        id: "project-legacy-unstructured",
+        folderName: "Miscellaneous Notes",
+        folderType: "personal_folder"
+      });
+
+      const result = await repository.reclassifyLegacyFolderTypes();
+
+      expect(result.examinedCount).toBe(1);
+      expect(result.unchangedCount).toBe(1);
+      expect(result.clientReclassifiedCount).toBe(0);
+      expect(result.personalProjectReclassifiedCount).toBe(0);
+
+      const untouched = await repository.getProjectById("project-legacy-unstructured");
+      expect(untouched?.folderType).toBe("personal_folder");
+    });
+
+    it("skips manually created personal_folder rows even if the name would classify", async () => {
+      const repository = new LocalCatalogRepository(
+        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemorySyncAdapter()
+      );
+
+      await seedProject(repository, {
+        id: "project-manual-personal",
+        folderName: "240401_Apple_ProductShoot",
+        folderType: "personal_folder",
+        isManual: true
+      });
+
+      const result = await repository.reclassifyLegacyFolderTypes();
+
+      expect(result.examinedCount).toBe(0);
+      expect(result.clientReclassifiedCount).toBe(0);
+
+      const untouched = await repository.getProjectById("project-manual-personal");
+      expect(untouched?.folderType).toBe("personal_folder");
+      expect(untouched?.isManual).toBe(true);
+    });
+
+    it("does not downgrade structured rows (client / personal_project are never examined)", async () => {
+      const repository = new LocalCatalogRepository(
+        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemorySyncAdapter()
+      );
+
+      // A client row whose folderName would NOT classify — if we examined it,
+      // we would downgrade it to personal_folder. The guard must prevent that.
+      await seedProject(repository, {
+        id: "project-legacy-client-unstructured",
+        folderName: "Miscellaneous Notes",
+        folderType: "client",
+        parsedDate: "240401",
+        parsedClient: "Apple",
+        parsedProject: "ProductShoot"
+      });
+
+      const result = await repository.reclassifyLegacyFolderTypes();
+
+      expect(result.examinedCount).toBe(0);
+      expect(result.clientReclassifiedCount).toBe(0);
+      expect(result.personalProjectReclassifiedCount).toBe(0);
+
+      const untouched = await repository.getProjectById("project-legacy-client-unstructured");
+      expect(untouched?.folderType).toBe("client");
+    });
+
+    it("reports mixed counts across a batch of legacy rows", async () => {
+      const repository = new LocalCatalogRepository(
+        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemorySyncAdapter()
+      );
+
+      await seedProject(repository, {
+        id: "project-legacy-a",
+        folderName: "240401_Apple_ProductShoot",
+        folderType: "personal_folder"
+      });
+      await seedProject(repository, {
+        id: "project-legacy-b",
+        folderName: "240402_Nike_Campaign",
+        folderType: "personal_folder"
+      });
+      await seedProject(repository, {
+        id: "project-legacy-c",
+        folderName: "240403_Internal_Planning",
+        folderType: "personal_folder"
+      });
+      await seedProject(repository, {
+        id: "project-legacy-d",
+        folderName: "Random Notes",
+        folderType: "personal_folder"
+      });
+
+      const result = await repository.reclassifyLegacyFolderTypes();
+
+      expect(result.examinedCount).toBe(4);
+      expect(result.clientReclassifiedCount).toBe(2);
+      expect(result.personalProjectReclassifiedCount).toBe(1);
+      expect(result.unchangedCount).toBe(1);
+    });
+
+    it("enqueues sync operations for each upgraded row", async () => {
+      const repository = new LocalCatalogRepository(
+        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemorySyncAdapter()
+      );
+
+      await seedProject(repository, {
+        id: "project-legacy-sync",
+        folderName: "240401_Apple_ProductShoot",
+        folderType: "personal_folder"
+      });
+
+      // Baseline pending queue before reclassify (the seed itself enqueued one op).
+      await repository.flushSync();
+      await expect(repository.listPendingSyncOperations()).resolves.toHaveLength(0);
+
+      await repository.reclassifyLegacyFolderTypes();
+
+      const queued = await repository.listPendingSyncOperations();
+      expect(queued).toHaveLength(1);
+      expect(queued[0]?.recordId).toBe("project-legacy-sync");
+    });
   });
 
   it("recovers stale sync-in-progress state before a manual sync cycle", async () => {

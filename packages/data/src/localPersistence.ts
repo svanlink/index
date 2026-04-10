@@ -27,4 +27,6 @@ export interface LocalPersistenceAdapter {
   upsertProjectScanEvent(event: ProjectScanEvent): Promise<void>;
   upsertProjectScanEvents(events: ProjectScanEvent[]): Promise<void>;
   upsertScanSession(session: ScanSessionSnapshot): Promise<void>;
+  deleteProject(projectId: string): Promise<void>;
+  deleteDrive(driveId: string): Promise<void>;
 }

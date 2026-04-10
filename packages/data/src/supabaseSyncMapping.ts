@@ -1,5 +1,6 @@
 import type {
   Drive,
+  FolderType,
   Project,
   ProjectScanEvent,
   ScanRecord,
@@ -14,8 +15,24 @@ export const supabaseSyncTables = {
   projectScanEvents: "project_scan_events"
 } as const;
 
+/**
+ * Domain fields that are intentionally NOT projected onto Supabase rows.
+ *
+ * Two reasons a field can land here:
+ *  1. It is a local-machine-only attribute (filesystem paths that have no
+ *     meaning on another device — e.g. `rootPath`, `folderPath`).
+ *  2. It is a derived value the domain layer recomputes from other state
+ *     and the persisted/synced copy would only drift (e.g. `reservedIncomingBytes`,
+ *     which `getDriveCapacitySnapshot` recalculates from project move plans).
+ *
+ * `supabaseSyncMapping.test.ts` consumes this object as the **single source
+ * of truth** for the to/from symmetry contract: any field listed here is
+ * skipped during round-trip equality, and any field NOT listed here MUST be
+ * preserved exactly through `to → from`.
+ */
 export const localOnlySyncFields = {
-  scanSession: ["rootPath"],
+  drive: ["reservedIncomingBytes"],
+  scanSession: ["rootPath", "projects"],
   scanSessionProject: ["folderPath", "relativePath"]
 } as const;
 
@@ -34,9 +51,14 @@ export interface SupabaseDriveRow {
 
 export interface SupabaseProjectRow {
   id: string;
-  parsed_date: string;
-  parsed_client: string;
-  parsed_project: string;
+  folder_type: FolderType;
+  is_standardized: boolean;
+  folder_name: string;
+  folder_path: string | null;
+  parsed_date: string | null;
+  parsed_client: string | null;
+  parsed_project: string | null;
+  corrected_date: string | null;
   corrected_client: string | null;
   corrected_project: string | null;
   category: Project["category"];
@@ -95,12 +117,17 @@ export interface SupabaseProjectScanEventRow {
   scan_id: string;
   observed_folder_name: string;
   observed_drive_name: string;
+  observed_folder_type: FolderType | null;
   observed_at: string;
   created_at: string;
   updated_at: string;
 }
 
 export function toSupabaseDriveRow(drive: Drive) {
+  // NOTE: `reservedIncomingBytes` is intentionally omitted — it is a derived
+  // field recomputed by `getDriveCapacitySnapshot` from the project move plan.
+  // See `localOnlySyncFields.drive` for the contract; the symmetry test in
+  // `supabaseSyncMapping.test.ts` enforces this exclusion.
   return {
     id: drive.id,
     volume_name: drive.volumeName,
@@ -116,6 +143,11 @@ export function toSupabaseDriveRow(drive: Drive) {
 }
 
 export function fromSupabaseDriveRow(row: SupabaseDriveRow): Drive {
+  // NOTE: `reservedIncomingBytes` is seeded to 0 here on purpose. Callers
+  // that surface drives in the UI must run them through `getDriveCapacitySnapshot`
+  // (or `catalogSelectors`) so the field is recomputed from the local project
+  // move plan. Do NOT persist this value back to Supabase — see
+  // `localOnlySyncFields.drive` and the symmetry test for the enforced contract.
   return {
     id: row.id,
     volumeName: row.volume_name,
@@ -134,9 +166,14 @@ export function fromSupabaseDriveRow(row: SupabaseDriveRow): Drive {
 export function toSupabaseProjectRow(project: Project) {
   return {
     id: project.id,
+    folder_type: project.folderType,
+    is_standardized: project.isStandardized,
+    folder_name: project.folderName,
+    folder_path: project.folderPath,
     parsed_date: project.parsedDate,
     parsed_client: project.parsedClient,
     parsed_project: project.parsedProject,
+    corrected_date: project.correctedDate,
     corrected_client: project.correctedClient,
     corrected_project: project.correctedProject,
     category: project.category,
@@ -159,9 +196,14 @@ export function toSupabaseProjectRow(project: Project) {
 export function fromSupabaseProjectRow(row: SupabaseProjectRow): Project {
   return {
     id: row.id,
+    folderType: row.folder_type,
+    isStandardized: Boolean(row.is_standardized),
+    folderName: row.folder_name,
+    folderPath: row.folder_path,
     parsedDate: row.parsed_date,
     parsedClient: row.parsed_client,
     parsedProject: row.parsed_project,
+    correctedDate: row.corrected_date,
     correctedClient: row.corrected_client,
     correctedProject: row.corrected_project,
     category: row.category,
@@ -212,6 +254,12 @@ export function fromSupabaseScanRow(row: SupabaseScanRow): ScanRecord {
 }
 
 export function toSupabaseScanSessionRow(session: ScanSessionSnapshot) {
+  // NOTE: `rootPath` and `projects` are intentionally omitted.
+  //  - `rootPath` is a local filesystem path that has no meaning on another
+  //    device.
+  //  - `projects` is a child collection persisted as `scan_session_projects`
+  //    rows; they are synced through their own entity, not as a column.
+  // See `localOnlySyncFields.scanSession`. The symmetry test enforces this.
   return {
     scan_id: session.scanId,
     drive_name: session.driveName,
@@ -235,6 +283,11 @@ export function toSupabaseScanSessionRow(session: ScanSessionSnapshot) {
 }
 
 export function fromSupabaseScanSessionRow(row: SupabaseScanSessionRow): ScanSessionSnapshot {
+  // NOTE: `rootPath` is restored as an empty string and `projects` as an empty
+  // array — both are local-only by contract (`localOnlySyncFields.scanSession`).
+  // The local persistence layer reattaches `projects` from `scan_session_projects`;
+  // `rootPath` is not recoverable from the remote and stays empty for any pulled
+  // session that did not originate on this device.
   return {
     scanId: row.scan_id,
     rootPath: "",
@@ -275,6 +328,7 @@ export function toSupabaseProjectScanEventRow(event: ProjectScanEvent) {
     scan_id: event.scanId,
     observed_folder_name: event.observedFolderName,
     observed_drive_name: event.observedDriveName,
+    observed_folder_type: event.observedFolderType,
     observed_at: event.observedAt,
     created_at: event.createdAt,
     updated_at: event.updatedAt
@@ -288,6 +342,7 @@ export function fromSupabaseProjectScanEventRow(row: SupabaseProjectScanEventRow
     scanId: row.scan_id,
     observedFolderName: row.observed_folder_name,
     observedDriveName: row.observed_drive_name,
+    observedFolderType: row.observed_folder_type ?? null,
     observedAt: row.observed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at

@@ -4,23 +4,25 @@
 
 :root {
   --font-sans:
-    "SF Pro Display",
     "Inter",
+    -apple-system,
     "Segoe UI",
     sans-serif;
 
-  --color-canvas: #f4f2ee;
-  --color-surface: #fbfaf8;
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
   --color-surface-elevated: #ffffff;
-  --color-surface-subtle: #f2f0eb;
-  --color-sidebar: #161718;
-  --color-sidebar-muted: #8f9398;
-  --color-sidebar-border: rgba(255, 255, 255, 0.08);
-  --color-border: #d7d2ca;
-  --color-border-strong: #c4beb5;
-  --color-text: #17181a;
-  --color-text-muted: #676b70;
-  --color-text-soft: #8a8f96;
+  --color-surface-subtle: #f5f3f0;
+  --color-sidebar: #fcfaf8;
+  --color-sidebar-hover: #f0ede8;
+  --color-sidebar-active: #ece8e2;
+  --color-sidebar-muted: #8a8582;
+  --color-sidebar-border: #e8e4df;
+  --color-border: #e8e4df;
+  --color-border-strong: #d4cfc8;
+  --color-text: #1d1c1a;
+  --color-text-muted: #6b6662;
+  --color-text-soft: #9c9692;
   --color-accent: #445c78;
   --color-accent-soft: #e4eaf0;
   --color-success: #5e725d;
@@ -32,8 +34,17 @@
   --color-info: #54708a;
   --color-info-soft: #e8eef3;
 
-  --shadow-soft: 0 1px 2px rgba(24, 28, 32, 0.05), 0 10px 28px rgba(24, 28, 32, 0.04);
-  --shadow-panel: 0 1px 2px rgba(17, 24, 39, 0.04), 0 18px 40px rgba(17, 24, 39, 0.05);
+  --color-reserved: #b18f63;
+  --color-progress-track: #e8e4df;
+  --color-free-indicator: #d4cfc8;
+  --color-border-danger: #dcc6c0;
+  --color-border-warning: #ddcfb8;
+  --color-border-success: #c7d8cb;
+  --color-border-info: #c9d5df;
+  --color-success-deep: #345046;
+
+  --shadow-soft: none;
+  --shadow-panel: none;
 
   color: var(--color-text);
   background: var(--color-canvas);
@@ -51,9 +62,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(68, 92, 120, 0.08), transparent 26%),
-    linear-gradient(180deg, #f6f4ef 0%, #f0ede7 100%);
+  background: var(--color-canvas);
   color: var(--color-text);
 }
 
@@ -85,54 +94,130 @@ select {
 
 @layer components {
   .app-panel {
-    @apply rounded-[24px] border bg-[color:var(--color-surface-elevated)];
+    @apply rounded-lg border bg-[color:var(--color-surface-elevated)];
     border-color: var(--color-border);
-    box-shadow: var(--shadow-panel);
   }
 
   .app-panel-subtle {
-    @apply rounded-[20px] border bg-[color:var(--color-surface)];
+    @apply rounded-lg border bg-[color:var(--color-surface)];
     border-color: var(--color-border);
   }
 
   .field-shell {
-    @apply rounded-[16px] border bg-[color:var(--color-surface-elevated)] px-4 py-3;
+    @apply rounded-md border bg-[color:var(--color-surface-elevated)] px-3 py-2;
     border-color: var(--color-border);
+    transition: border-color 120ms ease;
+  }
+
+  .field-shell:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  .field-shell:focus-within {
+    border-color: var(--color-accent);
+    outline: none;
+  }
+
+  .field-shell--active {
+    border-color: var(--color-accent);
   }
 
   .button-secondary {
-    @apply rounded-[14px] border px-4 py-2.5 text-sm font-medium transition;
+    @apply rounded-md border px-3 py-1.5 text-[13px] font-medium;
     border-color: var(--color-border-strong);
     background: var(--color-surface-elevated);
     color: var(--color-text);
+    transition: background 120ms ease;
   }
 
   .button-secondary:hover {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    background: var(--color-surface-subtle);
+  }
+
+  .button-secondary:active {
+    background: var(--color-border);
+  }
+
+  .button-secondary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
   }
 
   .button-primary {
-    @apply rounded-[14px] px-4 py-2.5 text-sm font-medium transition;
+    @apply rounded-md px-3 py-1.5 text-[13px] font-medium;
     background: var(--color-accent);
-    color: #f7f8fa;
+    color: #fff;
+    transition: background 120ms ease;
   }
 
   .button-primary:hover {
     background: #374d66;
   }
 
+  .button-primary:active {
+    background: #2e4155;
+  }
+
+  .button-primary:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
   .button-danger {
-    @apply rounded-[14px] border px-4 py-2.5 text-sm font-medium transition;
-    border-color: #d9c1bb;
+    @apply rounded-md border px-3 py-1.5 text-[13px] font-medium;
+    border-color: var(--color-border-danger);
     background: var(--color-danger-soft);
     color: var(--color-danger);
+    transition: background 120ms ease;
+  }
+
+  .button-danger:hover {
+    background: #f0ddd9;
+  }
+
+  .button-danger:active {
+    background: #e8d0cb;
+  }
+
+  .button-danger:focus-visible {
+    outline: 2px solid var(--color-danger);
+    outline-offset: 1px;
   }
 
   .button-success {
-    @apply rounded-[14px] border px-4 py-2.5 text-sm font-medium transition;
+    @apply rounded-md border px-3 py-1.5 text-[13px] font-medium;
     border-color: #cad8ca;
     background: var(--color-success-soft);
     color: var(--color-success);
+    transition: background 120ms ease;
+  }
+
+  .button-success:hover {
+    background: #dae6d9;
+  }
+
+  .button-success:active {
+    background: #cdd9cc;
+  }
+
+  .button-success:focus-visible {
+    outline: 2px solid var(--color-success);
+    outline-offset: 1px;
+  }
+
+  /* Link card — interactive card with consistent focus ring */
+  .link-card:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(68, 92, 120, 0.13);
+  }
+
+  /* Search suggestion item hover — replaces inline onMouseEnter/Leave handlers */
+  .search-suggestion-item:hover {
+    background: var(--color-surface-subtle);
+  }
+
+  /* Keyboard shortcut key appearance */
+  kbd {
+    font-family: inherit;
   }
 }

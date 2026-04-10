@@ -1,9 +1,10 @@
-import { applyDerivedProjectStates, type Drive, type Project, type ProjectScanEvent, type ScanRecord, type ScanSessionSnapshot } from "@drive-project-catalog/domain";
+import { applyDerivedProjectStates, classifyFolderName, type Drive, type Project, type ProjectScanEvent, type ScanRecord, type ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import {
   buildDashboardSnapshot,
   buildDriveDetailView,
   decorateDrivesWithCapacity,
   filterProjects,
+  sortProjects,
   type DriveDetailView
 } from "./catalogSelectors";
 import type { LocalPersistenceAdapter } from "./localPersistence";
@@ -16,6 +17,7 @@ import type {
   DriveUpsert,
   ProjectListFilters,
   ProjectUpsert,
+  ReclassifyLegacyFolderTypesResult,
   UpdateProjectMetadataInput
 } from "./repository";
 import { ingestScanSessionSnapshot } from "./scanIngestionService";
@@ -153,6 +155,17 @@ export class LocalCatalogRepository implements CatalogRepository {
     return savedEvent;
   }
 
+  /**
+   * EDIT FLOW — writes user corrections to the database only.
+   *
+   * Updates correctedDate, correctedClient, correctedProject, category, and
+   * optionally folderType (for reclassifying personal_folder entries).
+   * It never touches the filesystem. Folder names on disk are never renamed,
+   * normalized, or auto-corrected as a side effect.
+   *
+   * When folderType is changed to a structured type (client / personal_project),
+   * isStandardized is automatically set to true.
+   */
   async updateProjectMetadata(input: UpdateProjectMetadataInput): Promise<Project> {
     const project = await this.getProjectById(input.projectId);
 
@@ -160,8 +173,19 @@ export class LocalCatalogRepository implements CatalogRepository {
       throw new Error(`Project ${input.projectId} was not found`);
     }
 
+    const nextFolderType = input.folderType ?? project.folderType;
+
+    if (project.folderType !== "personal_folder" && nextFolderType === "personal_folder") {
+      throw new Error("Cannot reclassify a structured project back to personal_folder. Use the edit flow to correct metadata only.");
+    }
+
+    const isStandardized = nextFolderType !== "personal_folder" ? true : project.isStandardized;
+
     return this.saveProject({
       ...project,
+      folderType: nextFolderType,
+      isStandardized,
+      correctedDate: normalizeOptionalText(input.correctedDate),
       correctedClient: normalizeOptionalText(input.correctedClient),
       correctedProject: normalizeOptionalText(input.correctedProject),
       category: input.category,
@@ -172,11 +196,19 @@ export class LocalCatalogRepository implements CatalogRepository {
   async createProject(input: CreateProjectInput): Promise<Project> {
     const createdAt = new Date().toISOString();
     const currentDriveId = input.currentDriveId ?? null;
+    const folderName = input.parsedDate && input.parsedClient && input.parsedProject
+      ? `${input.parsedDate}_${input.parsedClient}_${input.parsedProject}`
+      : (input.parsedClient || input.parsedProject || "manual-project");
     const project: Project = {
-      id: `project-${slugify(input.parsedDate)}-${slugify(input.parsedClient)}-${slugify(input.parsedProject)}-${crypto.randomUUID().slice(0, 8)}`,
-      parsedDate: input.parsedDate,
-      parsedClient: input.parsedClient,
-      parsedProject: input.parsedProject,
+      id: `project-${slugify(input.parsedDate ?? "")}-${slugify(input.parsedClient ?? "")}-${slugify(input.parsedProject ?? "")}-${crypto.randomUUID().slice(0, 8)}`,
+      folderType: "client",
+      isStandardized: true,
+      folderName,
+      folderPath: null,
+      parsedDate: input.parsedDate ?? null,
+      parsedClient: input.parsedClient ?? null,
+      parsedProject: input.parsedProject ?? null,
+      correctedDate: null,
       correctedClient: null,
       correctedProject: null,
       category: input.category,
@@ -279,6 +311,17 @@ export class LocalCatalogRepository implements CatalogRepository {
     });
   }
 
+  /**
+   * IMPORT FLOW — read-only with respect to the filesystem.
+   *
+   * Reads a completed ScanSessionSnapshot and persists the classified metadata
+   * (projects, drive, scan record) to the database. No folder is renamed, moved,
+   * copied, or deleted as a side effect. The raw `folderName` and `folderPath`
+   * captured by the scanner are stored exactly as observed on disk.
+   *
+   * Corrections (`correctedClient`, `correctedProject`) are always `null` for
+   * newly discovered projects. They can only be set via `updateProjectMetadata`.
+   */
   async ingestScanSnapshot(session: ScanSessionSnapshot): Promise<ScanRecord> {
     const snapshot = await this.persistence.readSnapshot();
     const ingestion = ingestScanSessionSnapshot(snapshot, session);
@@ -301,6 +344,130 @@ export class LocalCatalogRepository implements CatalogRepository {
     await this.enqueue("scanSession.upsert", ingestion.session, "scan");
 
     return ingestion.scan;
+  }
+
+  /**
+   * One-shot maintenance action that rewalks every non-manual project whose
+   * stored `folderType` is `personal_folder` and promotes it to `client` or
+   * `personal_project` when the current classifier disagrees.
+   *
+   * This exists because migration 3 (see `sqliteLocalPersistence.ts`)
+   * blanket-assigned `folder_type = 'client'` to legacy rows — but the same
+   * bug also caused later classification passes to leave rows as
+   * `personal_folder` without the correct upgrade when the legacy data was
+   * re-examined. Running the current classifier against `folderName` is
+   * deterministic, safe, and matches exactly what a fresh scan would
+   * produce for the same folder.
+   *
+   * Safety invariants:
+   *   1. Never touches `isManual: true` projects (those were user-created).
+   *   2. Never downgrades `client` / `personal_project` → `personal_folder`
+   *      (mirrors the guard in `updateProjectMetadata`).
+   *   3. Writes through `saveProject` so derived states, sync enqueue, and
+   *      `updatedAt` bookkeeping all run identically to a normal edit.
+   *   4. Returns a structured summary so the UI can report counts.
+   */
+  async reclassifyLegacyFolderTypes(): Promise<ReclassifyLegacyFolderTypesResult> {
+    const projects = await this.persistence.listProjects();
+
+    const result: ReclassifyLegacyFolderTypesResult = {
+      examinedCount: 0,
+      clientReclassifiedCount: 0,
+      personalProjectReclassifiedCount: 0,
+      unchangedCount: 0
+    };
+
+    for (const project of projects) {
+      // Only consider rows the importer owns and that are currently
+      // catch-all personal_folder. Structured rows are respected.
+      if (project.isManual) continue;
+      if (project.folderType !== "personal_folder") continue;
+
+      result.examinedCount += 1;
+
+      const classification = classifyFolderName(project.folderName);
+
+      if (classification.folderType === "personal_folder") {
+        result.unchangedCount += 1;
+        continue;
+      }
+
+      // Upgrade only — never downgrade.
+      const updatedAt = new Date().toISOString();
+      await this.saveProject({
+        ...project,
+        folderType: classification.folderType,
+        isStandardized: true,
+        parsedDate: classification.parsedDate,
+        parsedClient: classification.parsedClient,
+        parsedProject: classification.parsedProject,
+        updatedAt
+      });
+
+      if (classification.folderType === "client") {
+        result.clientReclassifiedCount += 1;
+      } else {
+        result.personalProjectReclassifiedCount += 1;
+      }
+    }
+
+    return result;
+  }
+
+  async deleteProject(projectId: string): Promise<void> {
+    await this.persistence.deleteProject(projectId);
+    // Remove any pending upsert operations for this record so they cannot
+    // re-create the project on the remote after it has been deleted locally.
+    // Full delete propagation to the remote requires a "delete" sync operation
+    // type which is not yet implemented — for now, deletions remain local-only.
+    // TODO: implement a project.delete SyncOperationType to propagate deletions.
+    await this.cancelPendingQueueEntriesForRecord("project", projectId);
+  }
+
+  async deleteDrive(driveId: string): Promise<void> {
+    await this.persistence.deleteDrive(driveId);
+    // Same as deleteProject: remove stale upserts so the deleted drive cannot
+    // be re-created remotely. Delete propagation is not yet implemented.
+    // TODO: implement a drive.delete SyncOperationType to propagate deletions.
+    await this.cancelPendingQueueEntriesForRecord("drive", driveId);
+  }
+
+  /**
+   * Remove all pending (non-in-flight) sync queue entries for a given record.
+   *
+   * This is a best-effort cleanup: it prevents stale upsert operations from
+   * re-creating a locally deleted record on the remote. In-flight entries are
+   * left intact — they will either be accepted by the remote (where the
+   * subsequent delete propagation, once implemented, will undo them) or fail
+   * on their own.
+   *
+   * Implementation note: SyncAdapter does not expose a per-record removal API,
+   * so we read the current queue, filter out the target entries, and re-hydrate
+   * the adapter by flushing the old queue and re-enqueueing the survivors. This
+   * is safe because flush() only removes dispatchable (pending/failed) entries
+   * anyway — in-flight entries are preserved by the adapter implementations.
+   */
+  private async cancelPendingQueueEntriesForRecord(
+    entity: "project" | "drive",
+    recordId: string
+  ): Promise<void> {
+    const queue = await this.sync.listQueue();
+    const toRequeue = queue.filter(
+      (op) => !(op.entity === entity && op.recordId === recordId && op.status !== "in-flight")
+    );
+
+    if (toRequeue.length === queue.length) {
+      // Nothing to remove.
+      return;
+    }
+
+    // Flush removes all dispatchable entries from the adapter's internal queue.
+    await this.sync.flush();
+
+    // Re-enqueue the entries we want to keep.
+    for (const op of toRequeue) {
+      await this.sync.enqueue(op);
+    }
   }
 
   async listPendingSyncOperations() {
@@ -483,10 +650,6 @@ function buildStartupMessage(params: {
   }
 
   return "Ran a conservative startup pull to refresh remote changes.";
-}
-
-function sortProjects(projects: Project[]) {
-  return clone(projects).sort((left, right) => right.parsedDate.localeCompare(left.parsedDate));
 }
 
 function upsertById<T extends { id: string }>(items: T[], input: T) {

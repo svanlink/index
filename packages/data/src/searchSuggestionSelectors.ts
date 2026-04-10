@@ -1,5 +1,6 @@
-import { getDisplayClient, getDisplayProject, getProjectStatusState, type Category, type Drive, type Project } from "@drive-project-catalog/domain";
-import { getDriveNameById } from "./catalogSelectors";
+import { getDisplayProject, getProjectStatusState, type Category, type Drive, type Project } from "@drive-project-catalog/domain";
+import { buildDriveNameMap, getDriveNameFromMap } from "./catalogSelectors";
+import { UNASSIGNED_DRIVE_FILTER_VALUE } from "./projectListSelectors";
 
 export type SearchSuggestionGroupKey = "clients" | "projects" | "drives";
 
@@ -45,6 +46,7 @@ export function buildProjectSearchSuggestions(
   }
 
   const filteredProjects = applyNonSearchFilters(projects, filters);
+  const driveNameMap = buildDriveNameMap(drives);
   const groupBuckets: Record<SearchSuggestionGroupKey, SearchSuggestion[]> = {
     clients: [],
     projects: [],
@@ -53,14 +55,17 @@ export function buildProjectSearchSuggestions(
   const seen = new Set<string>();
 
   for (const project of filteredProjects) {
-    for (const label of uniqueLabels([getDisplayClient(project), project.parsedClient])) {
+    // Use only the actual client fields — do not fall back to folderName here.
+    // getDisplayClient falls back to folderName for personal_folder entries, which
+    // would incorrectly surface folder names (e.g. "Tutorials") as client suggestions.
+    for (const label of uniqueLabels([project.correctedClient ?? project.parsedClient])) {
       const suggestion = toSuggestion("client", label, normalizedQuery);
       if (suggestion && remember(seen, suggestion)) {
         groupBuckets.clients.push(suggestion);
       }
     }
 
-    for (const label of uniqueLabels([getDisplayProject(project), project.parsedProject])) {
+    for (const label of uniqueLabels([getDisplayProject(project), project.parsedProject, project.folderName])) {
       const suggestion = toSuggestion("project", label, normalizedQuery);
       if (suggestion && remember(seen, suggestion)) {
         groupBuckets.projects.push(suggestion);
@@ -68,8 +73,8 @@ export function buildProjectSearchSuggestions(
     }
 
     for (const label of uniqueLabels([
-      getDriveNameById(drives, project.currentDriveId),
-      getDriveNameById(drives, project.targetDriveId)
+      getDriveNameFromMap(driveNameMap, project.currentDriveId),
+      getDriveNameFromMap(driveNameMap, project.targetDriveId)
     ])) {
       const suggestion = toSuggestion("drive", label, normalizedQuery);
       if (suggestion && remember(seen, suggestion)) {
@@ -102,7 +107,7 @@ function applyNonSearchFilters(projects: Project[], filters: SearchSuggestionFil
     }
 
     if (filters.currentDriveId) {
-      if (filters.currentDriveId === "__unassigned__") {
+      if (filters.currentDriveId === UNASSIGNED_DRIVE_FILTER_VALUE) {
         if (project.currentDriveId !== null) {
           return false;
         }

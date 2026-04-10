@@ -1,4 +1,4 @@
-import type { ScanStatus } from "./enums";
+import type { FolderType, ScanStatus, SizeStatus } from "./enums";
 
 export interface ScanRecord {
   id: string;
@@ -19,6 +19,7 @@ export interface ProjectScanEvent {
   scanId: string;
   observedFolderName: string;
   observedDriveName: string;
+  observedFolderType: FolderType | null;
   observedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -29,12 +30,13 @@ export interface ScanProjectRecord {
   folderName: string;
   folderPath: string;
   relativePath: string;
-  parsedDate: string;
-  parsedClient: string;
-  parsedProject: string;
+  folderType: FolderType;
+  parsedDate: string | null;
+  parsedClient: string | null;
+  parsedProject: string | null;
   sourceDriveName: string;
   scanTimestamp: string;
-  sizeStatus: "unknown" | "pending" | "ready" | "failed";
+  sizeStatus: SizeStatus;
   sizeBytes: number | null;
   sizeError: string | null;
 }

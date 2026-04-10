@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ScanSessionSnapshot, ScanStartRequest, ScanStartResponse } from "@drive-project-catalog/domain";
+import {
+  parseScanSessionSnapshot,
+  parseScanSessionSnapshotList,
+  ScanSnapshotValidationError
+} from "@drive-project-catalog/data";
 
 export function isDesktopScanAvailable() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -18,37 +23,40 @@ export async function startDesktopScan(request: ScanStartRequest) {
   }
 }
 
-export async function cancelDesktopScan(scanId: string) {
+export async function cancelDesktopScan(scanId: string): Promise<ScanSessionSnapshot> {
   if (!isDesktopScanAvailable()) {
     throw new Error("Desktop scan cancellation is only available in the Tauri desktop app.");
   }
 
   try {
-    return await invoke<ScanSessionSnapshot>("cancel_scan", { scanId });
+    const raw = await invoke<unknown>("cancel_scan", { scanId });
+    return parseScanSessionSnapshot(raw, "cancel_scan");
   } catch (error) {
     throw new Error(normalizeScanCommandError("cancel", error));
   }
 }
 
-export async function getDesktopScanSnapshot(scanId: string) {
+export async function getDesktopScanSnapshot(scanId: string): Promise<ScanSessionSnapshot> {
   if (!isDesktopScanAvailable()) {
     throw new Error("Desktop scan state is only available in the Tauri desktop app.");
   }
 
   try {
-    return await invoke<ScanSessionSnapshot>("get_scan_snapshot", { scanId });
+    const raw = await invoke<unknown>("get_scan_snapshot", { scanId });
+    return parseScanSessionSnapshot(raw, "get_scan_snapshot");
   } catch (error) {
     throw new Error(normalizeScanCommandError("snapshot", error));
   }
 }
 
-export async function listDesktopScanSnapshots() {
+export async function listDesktopScanSnapshots(): Promise<ScanSessionSnapshot[]> {
   if (!isDesktopScanAvailable()) {
     throw new Error("Desktop scan state is only available in the Tauri desktop app.");
   }
 
   try {
-    return await invoke<ScanSessionSnapshot[]>("list_scan_snapshots");
+    const raw = await invoke<unknown>("list_scan_snapshots");
+    return parseScanSessionSnapshotList(raw, "list_scan_snapshots");
   } catch (error) {
     throw new Error(normalizeScanCommandError("list", error));
   }
@@ -70,6 +78,13 @@ export async function pickDesktopScanDirectory(defaultPath?: string | null) {
 }
 
 function normalizeScanCommandError(action: "start" | "cancel" | "snapshot" | "list", error: unknown) {
+  if (error instanceof ScanSnapshotValidationError) {
+    // A structural violation at the IPC boundary is an engineering bug, not
+    // a user-recoverable error. Surface a specific message so it ends up in
+    // logs and the UI FeedbackNotice rather than being silenced.
+    return `The desktop scan returned an invalid snapshot (${error.path}: ${error.expected}). This is an internal error — please restart the app and report the scan id if it persists.`;
+  }
+
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.toLowerCase();
 

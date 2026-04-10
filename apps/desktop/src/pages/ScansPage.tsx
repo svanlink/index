@@ -6,10 +6,9 @@ import {
   getScanStatusMessage,
   type ScanHistoryStatusFilter
 } from "@drive-project-catalog/data";
-import { PageHeader } from "@drive-project-catalog/ui";
 import { useCatalogStore } from "../app/providers";
 import { formatDate } from "./dashboardHelpers";
-import { EmptyState, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
+import { EmptyState, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
 import { formatScanDuration } from "./scanPageHelpers";
 
 const statusFilters: Array<{ label: string; value: ScanHistoryStatusFilter }> = [
@@ -33,28 +32,22 @@ export function ScansPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Scans"
-        title="Scan history"
-        description="Review completed, running, cancelled, failed, and interrupted desktop scan sessions from the persisted local catalog."
-      />
-
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap gap-1">
           {statusFilters.map((filter) => (
             <button
               key={filter.value}
               type="button"
               onClick={() => setStatusFilter(filter.value)}
               className={[
-                "rounded-full border px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition",
-                statusFilter === filter.value ? "text-white" : "bg-white"
+                "rounded border px-2 py-1 text-[11px] font-medium transition-colors",
+                statusFilter === filter.value ? "text-white" : ""
               ].join(" ")}
               style={
                 statusFilter === filter.value
                   ? { borderColor: "var(--color-accent)", background: "var(--color-accent)" }
-                  : { borderColor: "var(--color-border-strong)", color: "var(--color-text-muted)" }
+                  : { borderColor: "var(--color-border)", color: "var(--color-text-muted)" }
               }
             >
               {filter.label}
@@ -62,73 +55,57 @@ export function ScansPage() {
           ))}
         </div>
 
-        <label className="space-y-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
-            Drive filter
-          </span>
-          <select
-            value={driveFilter}
-            onChange={(event) => {
-              const next = new URLSearchParams(searchParams);
-              if (event.target.value) {
-                next.set("drive", event.target.value);
-              } else {
-                next.delete("drive");
-              }
-              setSearchParams(next);
-            }}
-            className="field-shell min-w-[240px] bg-transparent px-4 py-3 outline-none"
-          >
-            <option value="">All drives</option>
-            {drives.map((drive) => (
-              <option key={drive.id} value={drive.id}>
-                {drive.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
+        <select
+          value={driveFilter}
+          onChange={(event) => {
+            const next = new URLSearchParams(searchParams);
+            if (event.target.value) {
+              next.set("drive", event.target.value);
+            } else {
+              next.delete("drive");
+            }
+            setSearchParams(next);
+          }}
+          className="field-shell min-w-[200px] bg-transparent text-[13px] outline-none"
+        >
+          <option value="">All drives</option>
+          {drives.map((drive) => (
+            <option key={drive.id} value={drive.id}>{drive.displayName}</option>
+          ))}
+        </select>
       </div>
 
-      <SectionCard
-        title="Scan sessions"
-        description="Newest first, with durable session lifecycle state, path mapping, and ingestion summaries ready for operational review."
-      >
+      <SectionCard title="Scan sessions">
         {isLoading ? (
           <LoadingState label="Loading scan history" />
         ) : sessions.length === 0 ? (
           <EmptyState
-            title={scanSessions.length === 0 ? "No scan sessions yet" : "No scan sessions match this filter"}
-            description={
-              scanSessions.length === 0
-                ? "Run the first desktop scan to populate history, reconciliation summaries, and session outcomes."
-                : "Start a scan or loosen the filters to review persisted sessions."
-            }
+            title={scanSessions.length === 0 ? "No scan sessions yet" : "No matches"}
+            description={scanSessions.length === 0
+              ? "Run the first desktop scan to populate history."
+              : "Loosen the filters to see sessions."}
           />
         ) : (
-          <div className="space-y-4">
+          <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
             {sessions.map((session) => (
-              <article
-                key={session.scanId}
-                className="rounded-[20px] border px-5 py-5"
-                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
-              >
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <article key={session.scanId} className="py-4 first:pt-0">
+                <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2">
                       <StatusBadge label={getScanStatusLabel(session)} />
                       <Link
                         to={`/scans/${session.scanId}`}
-                        className="text-[18px] font-semibold transition hover:opacity-75"
+                        className="text-[14px] font-semibold hover:underline"
                         style={{ color: "var(--color-text)" }}
                       >
                         {session.driveName}
                       </Link>
                     </div>
-                    <p className="mt-2 text-sm break-all" style={{ color: "var(--color-text-muted)" }}>
+                    <p className="mt-0.5 text-[12px] break-all" style={{ color: "var(--color-text-muted)" }}>
                       {session.targetPath}
                     </p>
                     {(session.status === "failed" || session.status === "interrupted" || session.status === "cancelled") ? (
-                      <p className="mt-3 text-sm leading-6" style={{ color: session.status === "cancelled" ? "var(--color-warning)" : "var(--color-danger)" }}>
+                      <p className="mt-1 text-[12px]" style={{ color: session.status === "cancelled" ? "var(--color-warning)" : "var(--color-danger)" }}>
                         {getScanStatusMessage({
                           status: session.status,
                           error: session.error,
@@ -139,40 +116,28 @@ export function ScansPage() {
                       </p>
                     ) : null}
                   </div>
-
-                  <Link to={`/scans/${session.scanId}`} className="button-secondary shrink-0">
-                    View detail
-                  </Link>
+                  <Link to={`/scans/${session.scanId}`} className="button-secondary shrink-0">Detail</Link>
                 </div>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                  <Metric label="Started" value={formatDate(session.startedAt)} />
-                  <Metric label="Ended" value={formatDate(session.finishedAt)} />
-                  <Metric label="Duration" value={formatScanDuration(session.durationMs)} />
-                  <Metric label="Folders scanned" value={String(session.foldersScanned)} />
-                  <Metric label="Matches found" value={String(session.matchesFound)} />
+                <div className="mt-2 flex flex-wrap gap-6">
+                  <MetricCard label="Started" value={formatDate(session.startedAt)} />
+                  <MetricCard label="Ended" value={formatDate(session.finishedAt)} />
+                  <MetricCard label="Duration" value={formatScanDuration(session.durationMs)} />
+                  <MetricCard label="Folders" value={String(session.foldersScanned)} />
+                  <MetricCard label="Matches" value={String(session.matchesFound)} />
                 </div>
 
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <Metric label="New projects" value={String(session.newProjectsCount)} />
-                  <Metric label="Updated projects" value={String(session.updatedProjectsCount)} />
-                  <Metric label="Missing projects" value={String(session.missingProjectsCount)} />
-                  <Metric label="Duplicates flagged" value={String(session.duplicatesFlaggedCount)} />
+                <div className="mt-1 flex flex-wrap gap-6">
+                  <MetricCard label="New" value={String(session.newProjectsCount)} />
+                  <MetricCard label="Updated" value={String(session.updatedProjectsCount)} />
+                  <MetricCard label="Missing" value={String(session.missingProjectsCount)} />
+                  <MetricCard label="Duplicates" value={String(session.duplicatesFlaggedCount)} />
                 </div>
               </article>
             ))}
           </div>
         )}
       </SectionCard>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[16px] border bg-white px-4 py-3" style={{ borderColor: "var(--color-border)" }}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-2 text-base font-semibold tabular-nums" style={{ color: "var(--color-text)" }}>{value}</p>
     </div>
   );
 }

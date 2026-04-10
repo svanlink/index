@@ -6,8 +6,7 @@ import {
   SqliteSyncAdapter,
   StorageLocalPersistence,
   StorageSyncAdapter,
-  createRemoteSyncAdapter,
-  mockCatalogSnapshot
+  createRemoteSyncAdapter
 } from "@drive-project-catalog/data";
 import { createTauriSqliteDatabaseLoader } from "./tauriSqliteDatabase";
 import { getSupabaseSyncConfig } from "./syncConfig";
@@ -23,7 +22,7 @@ export const repository =
     ? new LocalCatalogRepository(
         new SqliteLocalPersistence({
           loadDatabase: loadDesktopDatabase,
-          seed: mockCatalogSnapshot,
+          seed: { drives: [], projects: [], scans: [], projectScanEvents: [], scanSessions: [] },
           legacyStorage: window.localStorage,
           legacyStorageKey: catalogStorageKey
         }),
@@ -37,7 +36,7 @@ export const repository =
         new StorageLocalPersistence({
           storage: window.localStorage,
           storageKey: catalogStorageKey,
-          seed: mockCatalogSnapshot
+          seed: { drives: [], projects: [], scans: [], projectScanEvents: [], scanSessions: [] }
         }),
         new StorageSyncAdapter({
           storage: window.localStorage,
@@ -46,6 +45,6 @@ export const repository =
         })
       )
     : new LocalCatalogRepository(
-        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemoryLocalPersistence({ drives: [], projects: [], scans: [], projectScanEvents: [], scanSessions: [] }),
         new InMemorySyncAdapter()
       );

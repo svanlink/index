@@ -89,6 +89,39 @@ export function markSyncOperationsInFlight(
   });
 }
 
+/**
+ * Reconcile any stranded in-flight sync operations by flipping them to `failed`.
+ *
+ * This is the mid-run recovery counterpart to `recoverInterruptedState` (which is
+ * designed to run at boot). Any caller that observes a queue containing in-flight
+ * rows — outside of a currently-running flush cycle — is looking at orphaned state
+ * from a prior interrupted push. This helper rewrites those rows to `failed` so
+ * the next `listDispatchableSyncOperations` call will retry them.
+ *
+ * The fallbackError message is only applied to operations that do not already
+ * carry a lastError (e.g. from a previous settled rejection); an existing error
+ * is preserved so diagnostic context is not lost.
+ */
+export function reconcileInFlightSyncOperations(
+  queue: SyncOperation[],
+  fallbackError: string
+): { queue: SyncOperation[]; recoveredCount: number } {
+  let recoveredCount = 0;
+  const nextQueue = queue.map((operation) => {
+    const normalized = normalizeSyncOperation(operation);
+    if (normalized.status !== "in-flight") {
+      return normalized;
+    }
+    recoveredCount += 1;
+    return {
+      ...normalized,
+      status: "failed" as const,
+      lastError: normalized.lastError ?? fallbackError
+    };
+  });
+  return { queue: nextQueue, recoveredCount };
+}
+
 export function settleSyncQueue(params: {
   queue: SyncOperation[];
   acceptedOperationIds: string[];
@@ -106,10 +139,7 @@ export function settleSyncQueue(params: {
         return operation;
       }
 
-      const reason = rejectedById.get(operation.id) ?? params.fallbackError ?? null;
-      if (!reason) {
-        return operation;
-      }
+      const reason = rejectedById.get(operation.id) ?? params.fallbackError ?? "Unacknowledged in-flight operation";
 
       return {
         ...operation,

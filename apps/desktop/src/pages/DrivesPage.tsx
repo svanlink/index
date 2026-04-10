@@ -1,9 +1,55 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { PageHeader } from "@drive-project-catalog/ui";
+import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate } from "./dashboardHelpers";
-import { CapacityLegend, EmptyState, LoadingState, SectionCard } from "./pagePrimitives";
+import { EmptyState, FeedbackNotice, LoadingState } from "./pagePrimitives";
+
+type FeedbackState = {
+  tone: "success" | "warning" | "error" | "info";
+  title: string;
+  messages: string[];
+} | null;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getDriveScanSession(
+  drive: Drive,
+  scanSessions: ScanSessionSnapshot[]
+): ScanSessionSnapshot | null {
+  return (
+    [...scanSessions]
+      .filter(
+        (s) =>
+          s.requestedDriveId === drive.id ||
+          s.driveName === drive.volumeName ||
+          s.driveName === drive.displayName
+      )
+      .sort((a, b) =>
+        (b.finishedAt ?? b.updatedAt ?? b.startedAt).localeCompare(
+          a.finishedAt ?? a.updatedAt ?? a.startedAt
+        )
+      )[0] ?? null
+  );
+}
+
+function useDriveMetrics(projects: { currentDriveId: string | null }[]) {
+  return useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const project of projects) {
+      if (project.currentDriveId) {
+        counts[project.currentDriveId] = (counts[project.currentDriveId] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [projects]);
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 interface DriveFormState {
   volumeName: string;
@@ -11,195 +57,338 @@ interface DriveFormState {
   capacityTerabytes: string;
 }
 
-const initialDriveForm: DriveFormState = {
-  volumeName: "",
-  displayName: "",
-  capacityTerabytes: ""
-};
+const initialDriveForm: DriveFormState = { volumeName: "", displayName: "", capacityTerabytes: "" };
 
 export function DrivesPage() {
   const navigate = useNavigate();
-  const { drives, projects, isLoading, isMutating, createDrive } = useCatalogStore();
+  const { drives, projects, scanSessions, isLoading, isMutating, createDrive } = useCatalogStore();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [driveForm, setDriveForm] = useState<DriveFormState>(initialDriveForm);
+  const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const projectCounts = useDriveMetrics(projects);
 
-  const projectCounts = useMemo(() => {
-    return projects.reduce<Record<string, number>>((accumulator, project) => {
-      if (project.currentDriveId) {
-        accumulator[project.currentDriveId] = (accumulator[project.currentDriveId] ?? 0) + 1;
-      }
-      return accumulator;
-    }, {});
-  }, [projects]);
+  // S6/M7 — auto-dismiss feedback. Cleanup clears the prior timer on every
+  // feedback change, so rapidly-changing notices never stack.
+  useEffect(() => {
+    if (!feedback) return;
+    const timeoutId = window.setTimeout(() => setFeedback(null), 2800);
+    return () => window.clearTimeout(timeoutId);
+  }, [feedback]);
 
+  // S6/H11 — createDrive errors are surfaced via feedback instead of being
+  // silently swallowed. Validation errors (e.g. empty volume name) now
+  // produce a visible error notice so the user knows why the form failed.
   async function handleCreateDrive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    const drive = await createDrive({
-      volumeName: driveForm.volumeName.trim(),
-      displayName: driveForm.displayName.trim() || null,
-      totalCapacityBytes: driveForm.capacityTerabytes
-        ? Math.round(Number(driveForm.capacityTerabytes) * 1_000_000_000_000)
-        : null
-    });
-
-    setDriveForm(initialDriveForm);
-    setIsCreateOpen(false);
-    navigate(`/drives/${drive.id}`);
+    try {
+      const drive = await createDrive({
+        volumeName: driveForm.volumeName.trim(),
+        displayName: driveForm.displayName.trim() || null,
+        totalCapacityBytes: driveForm.capacityTerabytes
+          ? Math.round(Number(driveForm.capacityTerabytes) * 1_000_000_000_000)
+          : null
+      });
+      setDriveForm(initialDriveForm);
+      setIsCreateOpen(false);
+      setFeedback({
+        tone: "success",
+        title: "Drive added",
+        messages: [`"${drive.displayName}" is now in the catalog.`]
+      });
+      navigate(`/drives/${drive.id}`);
+    } catch (error) {
+      setIsCreateOpen(true);
+      setFeedback({
+        tone: "error",
+        title: "Could not add drive",
+        messages: [error instanceof Error ? error.message : "The drive could not be created."]
+      });
+    }
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Drives"
-        title="Drives overview"
-        description="Work with real local drive records, create new manual drives, and open a drive detail view for current, incoming, and missing project context."
-        actions={
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setIsCreateOpen((current) => !current)}
-          >
-            {isCreateOpen ? "Close form" : "Create drive"}
-          </button>
-        }
-      />
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div />
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={() => setIsCreateOpen((c) => !c)}
+        >
+          {isCreateOpen ? "Discard" : "Add drive"}
+        </button>
+      </div>
 
-      {isCreateOpen ? (
-        <SectionCard title="Create manual drive" description="Manual drives can exist before the physical drive is connected or scanned.">
-          <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={handleCreateDrive}>
-            <FormField label="Drive name">
-              <input
-                required
-                value={driveForm.volumeName}
-                onChange={(event) => setDriveForm((current) => ({ ...current, volumeName: event.target.value }))}
-                className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                placeholder="Archive Drive"
-              />
-            </FormField>
-            <FormField label="Display name (optional)">
-              <input
-                value={driveForm.displayName}
-                onChange={(event) => setDriveForm((current) => ({ ...current, displayName: event.target.value }))}
-                className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                placeholder="Studio Archive"
-              />
-            </FormField>
-            <FormField label="Capacity (TB, optional)">
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={driveForm.capacityTerabytes}
-                onChange={(event) => setDriveForm((current) => ({ ...current, capacityTerabytes: event.target.value }))}
-                className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                placeholder="4"
-              />
-            </FormField>
-            <div className="md:col-span-2 xl:col-span-3 flex items-center justify-end gap-3">
-              <button type="button" className="button-secondary" onClick={() => setIsCreateOpen(false)}>
-                Cancel
-              </button>
-              <button type="submit" className="button-success" disabled={isMutating}>
-                {isMutating ? "Saving..." : "Create drive"}
-              </button>
-            </div>
-          </form>
-        </SectionCard>
+      {feedback ? (
+        <FeedbackNotice
+          tone={feedback.tone}
+          title={feedback.title}
+          messages={feedback.messages}
+        />
       ) : null}
 
-      <SectionCard title="Drive cards" description="Capacity, reservation, and project counts across the current local drive catalog.">
-        {isLoading ? (
-          <LoadingState label="Loading drives" />
-        ) : drives.length === 0 ? (
-          <EmptyState title="No drives found" description="Create a manual drive to start planning storage." />
-        ) : (
-          <section className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-            {drives.map((drive) => (
-              <article key={drive.id} className="rounded-[24px] border p-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--color-text-soft)" }}>Drive</p>
-                    <h4 className="mt-2 text-[26px] font-semibold leading-none" style={{ color: "var(--color-text)" }}>{drive.displayName}</h4>
-                    <p className="mt-2 text-sm" style={{ color: "var(--color-text-muted)" }}>
-                      {drive.lastScannedAt ? `Last scanned ${formatDate(drive.lastScannedAt)}` : "Manual drive, not yet scanned"}
-                    </p>
-                  </div>
-                  <span className="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ borderColor: "var(--color-border)", background: "var(--color-surface-elevated)", color: "var(--color-text-muted)" }}>
-                    {drive.createdManually ? "Manual" : "Scanned"}
-                  </span>
-                </div>
+      {isCreateOpen ? (
+        <CreateDriveForm
+          form={driveForm}
+          onChange={setDriveForm}
+          onSubmit={handleCreateDrive}
+          onCancel={() => setIsCreateOpen(false)}
+          isMutating={isMutating}
+        />
+      ) : null}
 
-                <div className="mt-6 overflow-hidden rounded-full" style={{ background: "#e5dfd5" }}>
-                  <div
-                    className="relative h-2.5 rounded-full"
-                    style={{
-                      width:
-                        drive.totalCapacityBytes && drive.usedBytes !== null
-                          ? `${Math.max(8, (drive.usedBytes / drive.totalCapacityBytes) * 100)}%`
-                          : "30%",
-                      background: "var(--color-accent)"
-                    }}
-                  >
-                    {drive.totalCapacityBytes && drive.reservedIncomingBytes > 0 ? (
-                      <div
-                        className="absolute right-0 top-0 h-full rounded-full"
-                        style={{
-                          width: `${Math.max(6, (drive.reservedIncomingBytes / drive.totalCapacityBytes) * 100)}%`,
-                          background: "#b18f63"
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-                <CapacityLegend
-                  usedLabel="Used"
-                  reservedLabel={drive.reservedIncomingBytes > 0 ? "Reserved" : undefined}
-                  freeLabel="Free"
+      {isLoading ? (
+        <LoadingState label="Loading drives…" />
+      ) : drives.length === 0 ? (
+        <EmptyState
+          title="No drives in catalog"
+          description="Add a manual drive to start planning storage, or run a scan to index a connected volume."
+        />
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {drives.map((drive) => (
+            <DriveCard
+              key={drive.id}
+              drive={drive}
+              projectCount={projectCounts[drive.id] ?? 0}
+              scanSession={getDriveScanSession(drive, scanSessions)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DriveCard
+// ---------------------------------------------------------------------------
+
+function DriveCard({
+  drive,
+  projectCount,
+  scanSession
+}: {
+  drive: Drive;
+  projectCount: number;
+  scanSession: ScanSessionSnapshot | null;
+}) {
+  const isScanning = scanSession?.status === "running";
+  const scanFailed =
+    scanSession?.status === "failed" || scanSession?.status === "interrupted";
+  const hasCapacity = drive.totalCapacityBytes !== null && drive.usedBytes !== null;
+  const usedPercent = hasCapacity
+    ? Math.max(4, (drive.usedBytes! / drive.totalCapacityBytes!) * 100)
+    : null;
+  const reservedPercent =
+    hasCapacity && drive.reservedIncomingBytes > 0
+      ? Math.max(3, (drive.reservedIncomingBytes / drive.totalCapacityBytes!) * 100)
+      : null;
+
+  return (
+    <article
+      className="app-panel flex flex-col overflow-hidden"
+      style={{ padding: 0 }}
+    >
+      {isScanning ? (
+        <div className="h-0.5 w-full shrink-0" style={{ background: "var(--color-accent)" }} />
+      ) : null}
+
+      <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="truncate text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
+            {drive.displayName}
+          </h4>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[12px]" style={{ color: "var(--color-text-soft)" }}>
+            {drive.volumeName !== drive.displayName ? <span>{drive.volumeName}</span> : null}
+            {drive.createdManually ? <span>Manual</span> : null}
+          </div>
+          <ScanStatusLine drive={drive} scanSession={scanSession} />
+        </div>
+        {isScanning ? (
+          <ScanStateIndicator state="scanning" />
+        ) : scanFailed ? (
+          <ScanStateIndicator state="failed" />
+        ) : null}
+      </div>
+
+      <div className="px-4 pb-3">
+        <div className="overflow-hidden rounded-full" style={{ height: 6, background: "var(--color-surface-subtle)" }}>
+          {usedPercent !== null ? (
+            <div
+              className="relative h-full rounded-full"
+              style={{ width: `${usedPercent}%`, background: "var(--color-accent)" }}
+            >
+              {reservedPercent !== null ? (
+                <div
+                  className="absolute right-0 top-0 h-full rounded-full"
+                  style={{ width: `${reservedPercent}%`, background: "var(--color-reserved)" }}
                 />
+              ) : null}
+            </div>
+          ) : (
+            <div className="h-full w-1/3 rounded-full opacity-25" style={{ background: "var(--color-border-strong)" }} />
+          )}
+        </div>
+        <div className="mt-1.5 flex gap-4 text-[11px]" style={{ color: "var(--color-text-soft)" }}>
+          <span>{hasCapacity ? `${formatBytes(drive.usedBytes)} used` : "Unknown"}</span>
+          <span>{formatBytes(drive.freeBytes)} free</span>
+          <span>{projectCount} projects</span>
+        </div>
+      </div>
 
-                <div className="mt-5 space-y-3">
-                  <DriveMetric label="Capacity" value={formatBytes(drive.totalCapacityBytes)} />
-                  <DriveMetric label="Used" value={formatBytes(drive.usedBytes)} />
-                  <DriveMetric label="Free" value={formatBytes(drive.freeBytes)} />
-                  <DriveMetric label="Reserved incoming" value={formatBytes(drive.reservedIncomingBytes)} />
-                  <DriveMetric label="Projects" value={String(projectCounts[drive.id] ?? 0)} />
-                </div>
+      <div className="flex items-center gap-2 border-t px-4 py-2.5" style={{ borderColor: "var(--color-border)" }}>
+        <Link to={`/drives/${drive.id}`} className="text-[13px] font-medium hover:underline" style={{ color: "var(--color-accent)" }}>
+          Open
+        </Link>
+        <span style={{ color: "var(--color-border-strong)" }}>·</span>
+        <Link to={`/projects?drive=${drive.id}`} className="text-[13px] font-medium hover:underline" style={{ color: "var(--color-accent)" }}>
+          Projects
+        </Link>
+      </div>
+    </article>
+  );
+}
 
-                <div className="mt-5 flex gap-3">
-                  <Link to={`/drives/${drive.id}`} className="button-secondary flex-1 text-center">
-                    Open detail
-                  </Link>
-                  <Link
-                    to={`/projects?drive=${drive.id}`}
-                    className="button-secondary flex-1 text-center"
-                  >
-                    View projects
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </section>
-        )}
-      </SectionCard>
+// ---------------------------------------------------------------------------
+// DriveCard sub-components
+// ---------------------------------------------------------------------------
+
+function ScanStatusLine({
+  drive,
+  scanSession
+}: {
+  drive: Drive;
+  scanSession: ScanSessionSnapshot | null;
+}) {
+  if (scanSession?.status === "running") {
+    return (
+      <p className="mt-1.5 text-[12px] font-medium" style={{ color: "var(--color-accent)" }}>
+        Scanning in progress…
+      </p>
+    );
+  }
+
+  const lastScan = scanSession?.finishedAt ?? drive.lastScannedAt;
+
+  return (
+    <p className="mt-1.5 text-[12px]" style={{ color: "var(--color-text-soft)" }}>
+      {lastScan ? `Last indexed ${formatDate(lastScan)}` : "Not yet scanned"}
+    </p>
+  );
+}
+
+function ScanStateIndicator({ state }: { state: "scanning" | "failed" }) {
+  if (state === "scanning") {
+    return (
+      <span
+        className="flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium"
+        style={{ borderColor: "var(--color-accent-soft)", background: "var(--color-accent-soft)", color: "var(--color-accent)" }}
+      >
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--color-accent)" }} />
+        Scanning
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="rounded border px-1.5 py-0.5 text-[11px] font-medium"
+      style={{ borderColor: "#dcc6c0", background: "var(--color-danger-soft)", color: "var(--color-danger)" }}
+    >
+      Failed
+    </span>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Create drive form
+// ---------------------------------------------------------------------------
+
+function CreateDriveForm({
+  form,
+  onChange,
+  onSubmit,
+  onCancel,
+  isMutating
+}: {
+  form: DriveFormState;
+  onChange: (next: DriveFormState) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onCancel: () => void;
+  isMutating: boolean;
+}) {
+  return (
+    <div className="app-panel px-4 py-4">
+      <p className="mb-3 text-[13px] font-semibold" style={{ color: "var(--color-text)" }}>
+        Add manual drive
+      </p>
+
+      <form className="grid gap-4 md:grid-cols-3" onSubmit={onSubmit}>
+        <FormField label="Drive name" required>
+          <input
+            required
+            value={form.volumeName}
+            onChange={(e) => onChange({ ...form, volumeName: e.target.value })}
+            className="field-shell w-full bg-transparent px-4 py-3 outline-none"
+            placeholder="Archive Drive"
+          />
+        </FormField>
+        <FormField label="Display name">
+          <input
+            value={form.displayName}
+            onChange={(e) => onChange({ ...form, displayName: e.target.value })}
+            className="field-shell w-full bg-transparent px-4 py-3 outline-none"
+            placeholder="Studio Archive (optional)"
+          />
+        </FormField>
+        <FormField label="Capacity (TB)">
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            value={form.capacityTerabytes}
+            onChange={(e) => onChange({ ...form, capacityTerabytes: e.target.value })}
+            className="field-shell w-full bg-transparent px-4 py-3 outline-none"
+            placeholder="4"
+          />
+        </FormField>
+
+        <div className="flex items-center justify-end gap-3 pt-1 md:col-span-3">
+          <button type="button" className="button-secondary" onClick={onCancel}>
+            Discard
+          </button>
+          <button type="submit" className="button-success" disabled={isMutating}>
+            {isMutating ? "Saving…" : "Create drive"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
 
-function DriveMetric({ label, value }: { label: string; value: string }) {
+function FormField({
+  label,
+  required,
+  children
+}: {
+  label: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex items-center justify-between rounded-[16px] border bg-white px-4 py-3 text-sm" style={{ borderColor: "var(--color-border)" }}>
-      <span style={{ color: "var(--color-text-soft)" }}>{label}</span>
-      <span className="font-medium" style={{ color: "var(--color-text)" }}>{value}</span>
-    </div>
-  );
-}
-
-function FormField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="space-y-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
+    <label className="flex flex-col gap-2">
+      <span
+        className="text-[11px] font-semibold uppercase tracking-[0.16em]"
+        style={{ color: "var(--color-text-soft)" }}
+      >
         {label}
+        {required ? (
+          <span className="ml-1" style={{ color: "var(--color-danger)" }}>
+            *
+          </span>
+        ) : null}
       </span>
       {children}
     </label>

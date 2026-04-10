@@ -6,16 +6,16 @@ import {
   getScanStatusMessage
 } from "@drive-project-catalog/data";
 import { Link } from "react-router-dom";
-import { PageHeader, StatCard } from "@drive-project-catalog/ui";
 import { useCatalogStore } from "../app/providers";
 import {
   formatBytes,
   formatDate,
+  formatParsedDate,
   getDriveName,
   getProjectName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { EmptyState, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
+import { CapacityBar, EmptyState, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
 
 export function DashboardPage() {
   const { dashboard, drives, isLoading, scanSessions } = useCatalogStore();
@@ -29,26 +29,23 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Overview"
-        title="Project-first dashboard"
-        description="Recent scans, recent projects, move reminders, and status alerts now update from the same local catalog state used by the functional project and drive workflows."
-      />
-
-      <section className="grid gap-4 xl:grid-cols-4">
-        <StatCard label="Recent scans" value={String(dashboard.recentScans.length)} detail="Last two scanned drives" />
-        <StatCard label="Recent projects" value={String(dashboard.recentProjects.length)} detail="Newest catalog entries" />
-        <StatCard label="Move reminders" value={String(dashboard.moveReminders.length)} detail="Pending move confirmations" />
-        <StatCard label="Status alerts" value={String(dashboard.statusAlerts.length)} detail="Missing, duplicate, and unassigned" />
-      </section>
+      {/* Stats strip */}
+      <div className="flex items-center gap-8 border-b pb-4" style={{ borderColor: "var(--color-border)" }}>
+        <MetricCard label="Recent scans" value={String(dashboard.recentScans.length)} />
+        <MetricCard label="Recent projects" value={String(dashboard.recentProjects.length)} />
+        <MetricCard label="Move reminders" value={String(dashboard.moveReminders.length)} />
+        <MetricCard label="Status alerts" value={String(dashboard.statusAlerts.length)} />
+      </div>
 
       {activeScan ? (
-        <SectionCard title="Active scan" description="Live desktop scan session progress is persisted and ingested into the catalog while the scan runs.">
-          <div className="grid gap-3 md:grid-cols-4">
-            <Metric label="Drive" value={activeScan.driveName} />
-            <Metric label="Folders scanned" value={String(activeScan.foldersScanned)} />
-            <Metric label="Matches found" value={String(activeScan.matchesFound)} />
-            <Metric label="Status" value={activeScan.status} />
+        <SectionCard title="Active scan">
+          <div className="flex items-center gap-6 text-[13px]">
+            <span style={{ color: "var(--color-text-muted)" }}>
+              <span className="font-medium" style={{ color: "var(--color-text)" }}>{activeScan.driveName}</span>
+            </span>
+            <span style={{ color: "var(--color-text-muted)" }}>{activeScan.foldersScanned} folders</span>
+            <span style={{ color: "var(--color-text-muted)" }}>{activeScan.matchesFound} matches</span>
+            <StatusBadge label={activeScan.status} />
           </div>
         </SectionCard>
       ) : null}
@@ -56,74 +53,60 @@ export function DashboardPage() {
       {latestCompletedScan?.summary ? (
         <SectionCard
           title="Latest scan summary"
-          description="Most recent completed scan reconciliation summary from the desktop ingestion pipeline."
           action={<Link to={`/scans/${latestCompletedScan.scanId}`} className="button-secondary">Open session</Link>}
         >
-          <div className="grid gap-3 md:grid-cols-5">
-            <Metric label="New" value={String(latestCompletedScan.summary.newProjectsCount)} />
-            <Metric label="Updated" value={String(latestCompletedScan.summary.updatedProjectsCount)} />
-            <Metric label="Missing" value={String(latestCompletedScan.summary.missingProjectsCount)} />
-            <Metric label="Duplicates" value={String(latestCompletedScan.summary.duplicatesFlaggedCount)} />
-            <Metric
+          <div className="flex items-center gap-6">
+            <MetricCard label="New" value={String(latestCompletedScan.summary.newProjectsCount)} />
+            <MetricCard label="Updated" value={String(latestCompletedScan.summary.updatedProjectsCount)} />
+            <MetricCard label="Missing" value={String(latestCompletedScan.summary.missingProjectsCount)} />
+            <MetricCard label="Duplicates" value={String(latestCompletedScan.summary.duplicatesFlaggedCount)} />
+            <MetricCard
               label="Duration"
-              value={latestCompletedScan.summary.durationMs ? `${Math.round(latestCompletedScan.summary.durationMs / 1000)} sec` : "N/A"}
+              value={latestCompletedScan.summary.durationMs ? `${Math.round(latestCompletedScan.summary.durationMs / 1000)}s` : "N/A"}
             />
           </div>
         </SectionCard>
       ) : null}
 
       {latestTerminalScan && latestTerminalScan.status !== "completed" && latestTerminalScan.status !== "running" ? (
-        <SectionCard title="Latest scan outcome" description="The most recent non-running scan session state recovered from the desktop workflow.">
-          <div className="grid gap-3 md:grid-cols-[180px_1fr]">
-            <Metric label="Status" value={getScanStatusLabel(latestTerminalScan)} />
-            <div className="rounded-[16px] border bg-white px-4 py-3" style={{ borderColor: "var(--color-border)" }}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
-                Summary
-              </p>
-              <p className="mt-2 text-sm leading-6" style={{ color: "var(--color-text-muted)" }}>
-                {getScanStatusMessage(latestTerminalScan)}
-              </p>
-            </div>
+        <SectionCard title="Latest scan outcome">
+          <div className="flex items-center gap-4 text-[13px]">
+            <StatusBadge label={getScanStatusLabel(latestTerminalScan)} />
+            <span style={{ color: "var(--color-text-muted)" }}>{getScanStatusMessage(latestTerminalScan)}</span>
           </div>
         </SectionCard>
       ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <SectionCard title="Recent scans" description="The two most recently scanned drives with capacity and reservation context.">
+      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+        <SectionCard title="Recent scans">
           {dashboard.recentScans.length === 0 ? (
             <EmptyState title="No scans yet" description="Recent scan cards will appear here after the first drive scans are recorded." />
           ) : (
-            <div className="space-y-4">
+            <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
               {dashboard.recentScans.map((scan) => (
                 <Link
                   key={scan.id}
                   to={scan.driveId ? `/scans?drive=${scan.driveId}` : "/scans"}
-                  className="block rounded-[20px] border p-5 transition hover:opacity-95"
-                  style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+                  className="link-card block py-3 transition-colors first:pt-0 hover:bg-[color:var(--color-surface-subtle)]"
                 >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-[18px] font-semibold" style={{ color: "var(--color-text)" }}>{scan.driveName}</p>
-                      <p className="text-sm" style={{ color: "var(--color-text-soft)" }}>Last scanned {formatDate(scan.lastScannedAt)}</p>
-                    </div>
-                    <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>{scan.projectCount} projects indexed</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{scan.driveName}</p>
+                    <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>{scan.projectCount} projects</p>
                   </div>
-                  <div className="mt-5 overflow-hidden rounded-full" style={{ background: "#e6e1d9" }}>
-                    <div
-                      className="h-2.5 rounded-full"
-                      style={{
-                        width:
-                          scan.totalCapacityBytes && scan.freeBytes !== null
-                            ? `${Math.max(8, ((scan.totalCapacityBytes - scan.freeBytes) / scan.totalCapacityBytes) * 100)}%`
-                            : "28%",
-                        background: "var(--color-accent)"
-                      }}
+                  <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-soft)" }}>
+                    Last scanned {formatDate(scan.lastScannedAt)}
+                  </p>
+                  <div className="mt-2">
+                    <CapacityBar
+                      usedBytes={scan.totalCapacityBytes && scan.freeBytes !== null ? scan.totalCapacityBytes - scan.freeBytes : null}
+                      totalBytes={scan.totalCapacityBytes}
+                      height="sm"
                     />
                   </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <Metric label="Capacity" value={formatBytes(scan.totalCapacityBytes)} />
-                    <Metric label="Free" value={formatBytes(scan.freeBytes)} />
-                    <Metric label="Reserved" value={formatBytes(scan.reservedIncomingBytes)} />
+                  <div className="mt-1.5 flex gap-4 text-[11px]" style={{ color: "var(--color-text-soft)" }}>
+                    <span>{formatBytes(scan.totalCapacityBytes)} total</span>
+                    <span>{formatBytes(scan.freeBytes)} free</span>
+                    <span>{formatBytes(scan.reservedIncomingBytes)} reserved</span>
                   </div>
                 </Link>
               ))}
@@ -131,120 +114,102 @@ export function DashboardPage() {
           )}
         </SectionCard>
 
-        <SectionCard title="Move reminders" description="Projects already planned for physical moves outside the app.">
+        <SectionCard title="Move reminders">
           {dashboard.moveReminders.length === 0 ? (
             <EmptyState title="No pending moves" description="Move reminders appear here when a project gets a target drive." />
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
               {dashboard.moveReminders.map((reminder) => (
                 <Link
                   key={reminder.projectId}
                   to={`/projects/${reminder.projectId}`}
-                  className="block rounded-[18px] border px-4 py-4 transition"
-                  style={{ borderColor: "#ddcfb8", background: "var(--color-warning-soft)" }}
+                  className="link-card block py-3 first:pt-0"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <p className="font-medium" style={{ color: "var(--color-text)" }}>{reminder.projectName}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{reminder.projectName}</p>
                     <StatusBadge label="Move pending" />
                   </div>
-                  <p className="mt-2 text-sm" style={{ color: "var(--color-text-muted)" }}>
-                    {reminder.currentDriveName} to {reminder.targetDriveName}
+                  <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+                    {reminder.currentDriveName} → {reminder.targetDriveName}
                   </p>
-                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-warning)" }}>
-                    {formatBytes(reminder.sizeBytes)} planned impact
+                  <p className="mt-1 text-[11px] font-medium" style={{ color: "var(--color-warning)" }}>
+                    {formatBytes(reminder.sizeBytes)}
                   </p>
                 </Link>
               ))}
             </div>
           )}
         </SectionCard>
-      </section>
+      </div>
 
-      <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <SectionCard title="Recent projects" description="Newest project records with direct links into the detail view.">
+      <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+        <SectionCard title="Recent projects">
           {dashboard.recentProjects.length === 0 ? (
             <EmptyState title="No projects yet" description="Create a manual project or import one from a scan to populate this table." />
           ) : (
-            <div className="overflow-hidden rounded-[20px] border" style={{ borderColor: "var(--color-border)" }}>
-              <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                <thead style={{ background: "var(--color-surface-subtle)", color: "var(--color-text-soft)" }}>
-                  <tr>
-                    <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-[0.16em]">Date</th>
-                    <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-[0.16em]">Project</th>
-                    <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-[0.16em]">Drive</th>
-                    <th className="px-4 py-3.5 text-[11px] font-semibold uppercase tracking-[0.16em]">Size</th>
+            <table className="min-w-full text-left text-[13px]">
+              <thead>
+                <tr className="border-b text-[11px] font-medium" style={{ borderColor: "var(--color-border)", color: "var(--color-text-soft)" }}>
+                  <th className="pb-2 pr-4 font-medium">Date</th>
+                  <th className="pb-2 pr-4 font-medium">Project</th>
+                  <th className="pb-2 pr-4 font-medium">Drive</th>
+                  <th className="pb-2 font-medium">Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboard.recentProjects.map((project) => (
+                  <tr key={project.id} className="border-b last:border-b-0" style={{ borderColor: "var(--color-border)" }}>
+                    <td className="py-2 pr-4" style={{ color: "var(--color-text-muted)" }}>{formatParsedDate(project.correctedDate ?? project.parsedDate)}</td>
+                    <td className="py-2 pr-4">
+                      <Link to={`/projects/${project.id}`} className="font-medium hover:text-[color:var(--color-accent)]" style={{ color: "var(--color-text)" }}>
+                        {getProjectName(project)}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-4" style={{ color: "var(--color-text-muted)" }}>{getDriveName(drives, project.currentDriveId)}</td>
+                    <td className="py-2 tabular-nums" style={{ color: "var(--color-text-muted)" }}>{formatBytes(project.sizeBytes)}</td>
                   </tr>
-                </thead>
-                <tbody className="bg-white" style={{ borderColor: "var(--color-border)" }}>
-                  {dashboard.recentProjects.map((project) => (
-                    <tr key={project.id} className="border-t" style={{ borderColor: "var(--color-border)" }}>
-                      <td className="px-4 py-4 font-medium" style={{ color: "var(--color-text-muted)" }}>{project.parsedDate}</td>
-                      <td className="px-4 py-4" style={{ color: "var(--color-text)" }}>
-                        <Link to={`/projects/${project.id}`} className="font-medium transition hover:opacity-75" style={{ color: "var(--color-text)" }}>
-                          {getProjectName(project)}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-4" style={{ color: "var(--color-text-muted)" }}>{getDriveName(drives, project.currentDriveId)}</td>
-                      <td className="px-4 py-4 font-medium" style={{ color: "var(--color-text-muted)" }}>{formatBytes(project.sizeBytes)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           )}
         </SectionCard>
 
-        <SectionCard title="Status alerts" description="Missing, duplicate, and unassigned project states surfaced from the local repository.">
+        <SectionCard title="Status alerts">
           {dashboard.statusAlerts.length === 0 ? (
             <EmptyState title="No alerts" description="The catalog currently has no missing, duplicate, or unassigned projects." />
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
               {dashboard.statusAlerts.map((alert) => (
                 <Link
                   key={`${alert.kind}-${alert.projectId}`}
                   to={`/projects/${alert.projectId}`}
-                  className="block rounded-[18px] border px-4 py-4 transition"
-                  style={{
-                    borderColor:
-                      alert.kind === "missing"
-                        ? "#dcc6c0"
-                        : alert.kind === "duplicate"
-                          ? "#ddcfb8"
-                          : "#c9d5df",
-                    background:
-                      alert.kind === "missing"
-                        ? "var(--color-danger-soft)"
-                        : alert.kind === "duplicate"
-                          ? "var(--color-warning-soft)"
-                          : "var(--color-info-soft)"
-                  }}
+                  className="link-card block py-3 first:pt-0"
                 >
                   <div className="flex items-center gap-2">
                     <StatusBadge label={alert.kind[0]!.toUpperCase() + alert.kind.slice(1)} />
+                    <span className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{alert.projectName}</span>
                   </div>
-                  <p className="mt-3 font-medium" style={{ color: "var(--color-text)" }}>{alert.projectName}</p>
-                  <p className="mt-1 text-sm" style={{ color: "var(--color-text-muted)" }}>{alert.detail}</p>
+                  <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>{alert.detail}</p>
                 </Link>
               ))}
             </div>
           )}
         </SectionCard>
-      </section>
+      </div>
 
-      <SectionCard title="Quick search targets" description="Direct entry points into the newest projects in the local catalog.">
+      <SectionCard title="Quick search targets">
         {dashboard.recentProjects.length === 0 ? (
           <EmptyState title="No quick targets yet" description="Quick project links appear here after the first catalog entries are created or scanned." />
         ) : (
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="divide-y" style={{ borderColor: "var(--color-border)" }}>
             {dashboard.recentProjects.slice(0, 3).map((project) => (
               <Link
                 key={project.id}
                 to={`/projects/${project.id}`}
-                className="rounded-[20px] border px-4 py-5 transition"
-                style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+                className="link-card flex items-center justify-between py-2.5 first:pt-0"
               >
-                <p className="font-medium" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <span className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</span>
+                <div className="flex gap-1.5">
                   {getProjectStatusBadges(project).map((badge) => (
                     <StatusBadge key={badge} label={badge} />
                   ))}
@@ -254,15 +219,6 @@ export function DashboardPage() {
           </div>
         )}
       </SectionCard>
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[16px] border bg-white px-4 py-3" style={{ borderColor: "var(--color-border)" }}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-2 text-base font-semibold tabular-nums" style={{ color: "var(--color-text)" }}>{value}</p>
     </div>
   );
 }

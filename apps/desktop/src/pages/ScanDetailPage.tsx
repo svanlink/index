@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom";
 import { buildScanSessionDetailView, findCatalogProjectForScanRecord, getScanStatusLabel, getScanStatusMessage } from "@drive-project-catalog/data";
-import { PageHeader } from "@drive-project-catalog/ui";
+
+
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate } from "./dashboardHelpers";
 import { EmptyState, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
@@ -27,16 +28,10 @@ export function ScanDetailPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Scan detail"
-        title={detail.driveName}
-        description="Review the persisted scan session lifecycle, timing, reconciliation summary, and observed project folders captured during the scan."
-        actions={
-          <Link to="/scans" className="button-secondary">
-            Back to scans
-          </Link>
-        }
-      />
+      <div className="flex items-center justify-between">
+        <div />
+        <Link to="/scans" className="button-secondary">Back</Link>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <StatusBadge label={getScanStatusLabel(detail)} />
@@ -109,44 +104,33 @@ function ObservedProjectCard({
   catalogProjectId: string | null;
 }) {
   return (
-    <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+    <div className="border-b py-3 last:border-b-0" style={{ borderColor: "var(--color-border)" }}>
+      <div className="flex items-start justify-between">
         <div>
-          <p className="font-medium" style={{ color: "var(--color-text)" }}>
-            {project.parsedDate}_{project.parsedClient}_{project.parsedProject}
-          </p>
-          <p className="mt-1 text-sm" style={{ color: "var(--color-text-muted)" }}>
-            {project.folderPath}
-          </p>
+          <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{project.folderName}</p>
+          <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>{project.folderPath}</p>
         </div>
         <StatusBadge label={project.sizeStatus === "failed" ? "Failed" : project.sizeStatus === "pending" ? "Pending size" : project.sizeStatus === "ready" ? "Size ready" : "Unknown size"} />
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
-        <DetailField label="Observed at" value={formatDate(project.scanTimestamp)} />
-        <DetailField label="Source drive" value={project.sourceDriveName} />
-        <DetailField label="Relative path" value={project.relativePath} />
-        <DetailField label="Size" value={formatBytes(project.sizeBytes)} />
+      <div className="mt-2 flex gap-4 text-[12px]" style={{ color: "var(--color-text-soft)" }}>
+        <span>{formatDate(project.scanTimestamp)}</span>
+        <span>{project.sourceDriveName}</span>
+        <span>{formatBytes(project.sizeBytes)}</span>
       </div>
-      <div className="mt-4">
-        {catalogProjectId ? (
-          <Link to={`/projects/${catalogProjectId}`} className="button-secondary">
-            Open catalog project
-          </Link>
-        ) : (
-          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-            No linked catalog project found for this observed folder.
-          </p>
-        )}
-      </div>
+      {catalogProjectId ? (
+        <Link to={`/projects/${catalogProjectId}`} className="mt-2 inline-block text-[13px] font-medium hover:underline" style={{ color: "var(--color-accent)" }}>
+          Open project
+        </Link>
+      ) : null}
     </div>
   );
 }
 
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-2 text-sm font-medium leading-6 break-words" style={{ color: "var(--color-text)" }}>{value}</p>
+    <div>
+      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
+      <p className="mt-0.5 text-[13px] font-medium break-words" style={{ color: "var(--color-text)" }}>{value}</p>
     </div>
   );
 }

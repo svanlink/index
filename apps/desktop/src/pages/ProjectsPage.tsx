@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { buildProjectSearchSuggestions, filterProjectCatalog } from "@drive-project-catalog/data";
+import { buildProjectSearchSuggestions, filterProjectCatalog, UNASSIGNED_DRIVE_FILTER_VALUE } from "@drive-project-catalog/data";
 import {
   categoryValues,
+  folderTypeValues,
   getDisplayClient,
   getDisplayProject,
   type Category,
   type Drive,
+  type FolderType,
   type Project
 } from "@drive-project-catalog/domain";
-import { PageHeader } from "@drive-project-catalog/ui";
 import { buildBatchActionPreview, validateManualProjectForm } from "../app/catalogValidation";
 import { useCatalogStore } from "../app/providers";
 import {
@@ -18,14 +19,28 @@ import {
   getDriveName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { EmptyState, FeedbackNotice, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
+import { EmptyState, FeedbackNotice, LoadingState, SearchField, SectionCard, StatusBadge } from "./pagePrimitives";
 
-const toggleFilters = [
-  { label: "Unassigned", key: "showUnassigned" },
-  { label: "Missing", key: "showMissing" },
-  { label: "Duplicates", key: "showDuplicate" },
-  { label: "Move pending", key: "showMovePending" }
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const STATUS_FILTERS = [
+  { label: "Unassigned", key: "showUnassigned", param: "unassigned" },
+  { label: "Missing", key: "showMissing", param: "missing" },
+  { label: "Duplicates", key: "showDuplicate", param: "duplicate" },
+  { label: "Move pending", key: "showMovePending", param: "movePending" }
 ] as const;
+
+const FOLDER_TYPE_LABELS: Record<FolderType, string> = {
+  client: "Client",
+  personal_project: "Personal project",
+  personal_folder: "Personal folder"
+};
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface ProjectFormState {
   parsedDate: string;
@@ -36,544 +51,419 @@ interface ProjectFormState {
   currentDriveId: string;
 }
 
-interface BatchActionState {
+interface BatchState {
   assignDriveId: string;
   category: Category | "";
   targetDriveId: string;
 }
 
 const initialProjectForm: ProjectFormState = {
-  parsedDate: "",
-  parsedClient: "",
-  parsedProject: "",
-  category: "",
-  sizeGigabytes: "",
-  currentDriveId: ""
+  parsedDate: "", parsedClient: "", parsedProject: "",
+  category: "", sizeGigabytes: "", currentDriveId: ""
 };
+const initialBatchState: BatchState = { assignDriveId: "", category: "", targetDriveId: "" };
 
-const initialBatchActionState: BatchActionState = {
-  assignDriveId: "",
-  category: "",
-  targetDriveId: ""
-};
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export function ProjectsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
-    projects,
-    drives,
-    isLoading,
-    isMutating,
-    createProject,
-    assignProjectsToDrive,
-    setProjectsCategory,
-    planProjectsMove
+    projects, drives, isLoading, isMutating,
+    createProject, assignProjectsToDrive, setProjectsCategory, planProjectsMove, deleteProjects
   } = useCatalogStore();
+
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(initialProjectForm);
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
-  const [batchState, setBatchState] = useState<BatchActionState>(initialBatchActionState);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchState, setBatchState] = useState<BatchState>(initialBatchState);
   const [feedback, setFeedback] = useState<{ tone: "success" | "warning" | "error" | "info"; title: string; messages: string[] } | null>(null);
   const [batchPreview, setBatchPreview] = useState<ReturnType<typeof buildBatchActionPreview> | null>(null);
 
+  // Read filter params
   const categoryFilter = (searchParams.get("category") as Category | null) ?? "";
+  const folderTypeFilter = (searchParams.get("folderType") as FolderType | null) ?? "";
   const driveFilter = searchParams.get("drive") ?? "";
   const targetDriveFilter = searchParams.get("targetDrive") ?? "";
   const showUnassigned = searchParams.get("unassigned") === "1";
   const showMissing = searchParams.get("missing") === "1";
   const showDuplicate = searchParams.get("duplicate") === "1";
   const showMovePending = searchParams.get("movePending") === "1";
+  const hasActiveFilters = !!(categoryFilter || folderTypeFilter || driveFilter || targetDriveFilter || showUnassigned || showMissing || showDuplicate || showMovePending);
 
   const filteredProjects = useMemo(
-    () =>
-      filterProjectCatalog(projects, drives, {
-        search,
-        category: categoryFilter || "",
-        currentDriveId: driveFilter || undefined,
-        targetDriveId: targetDriveFilter || undefined,
-        showUnassigned,
-        showMissing,
-        showDuplicate,
-        showMovePending
-      }),
-    [categoryFilter, driveFilter, drives, projects, search, showDuplicate, showMissing, showMovePending, showUnassigned, targetDriveFilter]
+    () => filterProjectCatalog(projects, drives, {
+      search, category: categoryFilter || "", folderType: folderTypeFilter || "",
+      currentDriveId: driveFilter || undefined, targetDriveId: targetDriveFilter || undefined,
+      showUnassigned, showMissing, showDuplicate, showMovePending
+    }),
+    [categoryFilter, folderTypeFilter, driveFilter, drives, projects, search, showDuplicate, showMissing, showMovePending, showUnassigned, targetDriveFilter]
   );
+
   const selectedProjects = useMemo(
-    () => projects.filter((project) => selectedProjectIds.includes(project.id)),
-    [projects, selectedProjectIds]
+    () => projects.filter((p) => selectedIds.includes(p.id)),
+    [projects, selectedIds]
   );
+
   const manualProjectValidation = useMemo(
     () => validateManualProjectForm(projectForm),
     [projectForm]
   );
+
   const searchSuggestions = useMemo(
-    () =>
-      buildProjectSearchSuggestions(projects, drives, search, {
-        category: categoryFilter || "",
-        currentDriveId: driveFilter || undefined,
-        targetDriveId: targetDriveFilter || undefined,
-        showUnassigned,
-        showMissing,
-        showDuplicate,
-        showMovePending
-      }),
+    () => buildProjectSearchSuggestions(projects, drives, search, {
+      category: categoryFilter || "", currentDriveId: driveFilter || undefined,
+      targetDriveId: targetDriveFilter || undefined,
+      showUnassigned, showMissing, showDuplicate, showMovePending
+    }),
     [categoryFilter, driveFilter, drives, projects, search, showDuplicate, showMissing, showMovePending, showUnassigned, targetDriveFilter]
   );
 
-  const allVisibleSelected = filteredProjects.length > 0 && filteredProjects.every((project) => selectedProjectIds.includes(project.id));
+  const allVisibleSelected =
+    filteredProjects.length > 0 && filteredProjects.every((p) => selectedIds.includes(p.id));
 
+  // Auto-dismiss feedback
   useEffect(() => {
-    if (!feedback) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => setFeedback(null), 2800);
-    return () => window.clearTimeout(timeoutId);
+    if (!feedback) return;
+    const id = window.setTimeout(() => setFeedback(null), 2800);
+    return () => window.clearTimeout(id);
   }, [feedback]);
 
-  useEffect(() => {
-    setBatchPreview(null);
-  }, [batchState, selectedProjectIds]);
+  useEffect(() => { setBatchPreview(null); }, [batchState, selectedIds]);
 
   useEffect(() => {
     const nextSearch = searchParams.get("q") ?? "";
     setSearch((current) => (current === nextSearch ? current : nextSearch));
   }, [searchParams]);
 
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
+
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const validation = validateManualProjectForm(projectForm);
-
     if (validation.errors.length > 0) {
-      setFeedback({
-        tone: "error",
-        title: "Project creation blocked",
-        messages: validation.errors
-      });
+      setFeedback({ tone: "error", title: "Project creation blocked", messages: validation.errors });
       return;
     }
-
-    const createdProject = await createProject({
-      parsedDate: projectForm.parsedDate.trim(),
-      parsedClient: projectForm.parsedClient.trim(),
-      parsedProject: projectForm.parsedProject.trim(),
-      category: projectForm.category as Category,
-      sizeBytes: projectForm.sizeGigabytes ? Math.round(Number(projectForm.sizeGigabytes) * 1_000_000_000) : null,
-      currentDriveId: projectForm.currentDriveId || null
-    });
-
-    setProjectForm(initialProjectForm);
-    setIsCreateOpen(false);
-    navigate(`/projects/${createdProject.id}`);
+    try {
+      const created = await createProject({
+        parsedDate: projectForm.parsedDate.trim(),
+        parsedClient: projectForm.parsedClient.trim(),
+        parsedProject: projectForm.parsedProject.trim(),
+        category: projectForm.category as Category,
+        sizeBytes: projectForm.sizeGigabytes ? Math.round(Number(projectForm.sizeGigabytes) * 1_000_000_000) : null,
+        currentDriveId: projectForm.currentDriveId || null
+      });
+      setProjectForm(initialProjectForm);
+      setIsCreateOpen(false);
+      navigate(`/projects/${created.id}`);
+    } catch (error) {
+      setFeedback({ tone: "error", title: "Project creation failed", messages: [error instanceof Error ? error.message : "Could not create the project."] });
+    }
   }
 
-  function openBatchPreview(kind: Parameters<typeof buildBatchActionPreview>[0]["kind"]) {
+  const openBatchPreview = useCallback((kind: Parameters<typeof buildBatchActionPreview>[0]["kind"]) => {
     const preview = buildBatchActionPreview({
-      kind,
-      selectedProjects,
-      drives,
+      kind, selectedProjects, drives,
       assignDriveId: batchState.assignDriveId || null,
       category: batchState.category,
       targetDriveId: batchState.targetDriveId || null
     });
-
     if (preview.errors.length > 0) {
-      setFeedback({
-        tone: "error",
-        title: preview.title,
-        messages: preview.errors
-      });
+      setFeedback({ tone: "error", title: preview.title, messages: preview.errors });
       setBatchPreview(null);
       return;
     }
-
     setBatchPreview(preview);
-  }
+  }, [batchState.assignDriveId, batchState.category, batchState.targetDriveId, drives, selectedProjects]);
 
-  async function confirmBatchPreview() {
-    if (!batchPreview) {
-      return;
-    }
-
+  const confirmBatchPreview = useCallback(async () => {
+    if (!batchPreview) return;
     try {
       if (batchPreview.kind === "assign-drive") {
-        await assignProjectsToDrive(selectedProjectIds, batchState.assignDriveId || null);
+        await assignProjectsToDrive(selectedIds, batchState.assignDriveId || null);
       } else if (batchPreview.kind === "set-category") {
-        await setProjectsCategory(selectedProjectIds, batchState.category as Category);
+        await setProjectsCategory(selectedIds, batchState.category as Category);
+      } else if (batchPreview.kind === "delete") {
+        await deleteProjects(selectedIds);
       } else {
-        await planProjectsMove(selectedProjectIds, batchState.targetDriveId);
+        await planProjectsMove(selectedIds, batchState.targetDriveId);
       }
-
       setFeedback({
         tone: batchPreview.warnings.length > 0 ? "warning" : "success",
-        title: batchPreview.kind === "assign-drive"
-          ? "Drive assignment applied"
-          : batchPreview.kind === "set-category"
-            ? "Category update applied"
-            : "Move plan applied",
+        title: batchPreview.kind === "assign-drive" ? "Drive assignment applied"
+          : batchPreview.kind === "set-category" ? "Category update applied"
+          : batchPreview.kind === "delete" ? "Projects deleted"
+          : "Move plan applied",
         messages: batchPreview.warnings.length > 0
           ? [...batchPreview.confirmations, ...batchPreview.warnings]
           : batchPreview.confirmations
       });
-      setSelectedProjectIds([]);
+      setSelectedIds([]);
       setBatchPreview(null);
     } catch (error) {
-      setFeedback({
-        tone: "error",
-        title: "Batch action failed",
-        messages: [error instanceof Error ? error.message : "The batch action could not be completed."]
-      });
+      setFeedback({ tone: "error", title: "Batch action failed", messages: [error instanceof Error ? error.message : "The batch action could not be completed."] });
     }
-  }
+  }, [assignProjectsToDrive, batchPreview, batchState.assignDriveId, batchState.category, batchState.targetDriveId, deleteProjects, planProjectsMove, selectedIds, setProjectsCategory]);
 
-  function toggleStatusFilter(key: "showUnassigned" | "showMissing" | "showDuplicate" | "showMovePending") {
+  function toggleStatusFilter(param: string) {
     const next = new URLSearchParams(searchParams);
-    if (next.get(keyToParam(key)) === "1") {
-      next.delete(keyToParam(key));
-    } else {
-      next.set(keyToParam(key), "1");
-    }
+    if (next.get(param) === "1") next.delete(param);
+    else next.set(param, "1");
     setSearchParams(next);
   }
 
   function updateQueryParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
-    if (value) {
-      next.set(key, value);
-    } else {
-      next.delete(key);
-    }
+    if (value) next.set(key, value); else next.delete(key);
     setSearchParams(next);
   }
 
   function updateSearchValue(value: string) {
     setSearch(value);
-
     const next = new URLSearchParams(searchParams);
-    if (value.trim()) {
-      next.set("q", value);
-    } else {
-      next.delete("q");
-    }
+    if (value.trim()) next.set("q", value); else next.delete("q");
     setSearchParams(next, { replace: true });
   }
 
-  function clearSearch() {
-    updateSearchValue("");
-  }
-
-  function toggleProjectSelection(projectId: string) {
-    setSelectedProjectIds((current) =>
-      current.includes(projectId)
-        ? current.filter((id) => id !== projectId)
-        : [...current, projectId]
+  function toggleSelection(id: string) {
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
     );
   }
 
   function toggleAllVisible() {
     if (allVisibleSelected) {
-      setSelectedProjectIds((current) => current.filter((id) => !filteredProjects.some((project) => project.id === id)));
-      return;
+      setSelectedIds((current) => current.filter((id) => !filteredProjects.some((p) => p.id === id)));
+    } else {
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        filteredProjects.forEach((p) => next.add(p.id));
+        return [...next];
+      });
     }
-
-    setSelectedProjectIds((current) => {
-      const next = new Set(current);
-      filteredProjects.forEach((project) => next.add(project.id));
-      return [...next];
-    });
   }
 
+  function clearAllFilters() {
+    const next = new URLSearchParams();
+    if (search) next.set("q", search);
+    setSearchParams(next);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Projects"
-        title="Project catalog"
-        description="Browse real local project records, combine practical filters, then apply lightweight batch actions for everyday drive and metadata management."
-        actions={
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setIsCreateOpen((current) => !current)}
-          >
-            {isCreateOpen ? "Close form" : "New project"}
-          </button>
-        }
-      />
+    <div className="space-y-5">
+      {/* ── Page header ── */}
+      <div className="flex items-center justify-between">
+        <div />
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={() => setIsCreateOpen((c) => !c)}
+        >
+          {isCreateOpen ? "Discard" : "New project"}
+        </button>
+      </div>
 
       {feedback ? (
         <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
       ) : null}
 
       {isCreateOpen ? (
-        <SectionCard
-          title="Create manual project"
-          description="Manual projects become part of the same local catalog and can remain unassigned until you know the destination drive."
-        >
-          {manualProjectValidation.errors.length > 0 ? (
-            <div className="mb-4">
-              <FeedbackNotice tone="error" title="Creation requirements" messages={manualProjectValidation.errors} />
-            </div>
-          ) : null}
-          {manualProjectValidation.warnings.length > 0 ? (
-            <div className="mb-4">
-              <FeedbackNotice tone="info" title="Creation outcome" messages={manualProjectValidation.warnings} />
-            </div>
-          ) : null}
-          <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={handleCreateProject}>
-            <FormField label="Date (YYMMDD)">
-              <input required maxLength={6} value={projectForm.parsedDate} onChange={(event) => setProjectForm((current) => ({ ...current, parsedDate: event.target.value }))} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="240401" />
-            </FormField>
-            <FormField label="Client">
-              <input required value={projectForm.parsedClient} onChange={(event) => setProjectForm((current) => ({ ...current, parsedClient: event.target.value }))} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="Apple" />
-            </FormField>
-            <FormField label="Project">
-              <input required value={projectForm.parsedProject} onChange={(event) => setProjectForm((current) => ({ ...current, parsedProject: event.target.value }))} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="ProductShoot" />
-            </FormField>
-            <FormField label="Category">
-              <select value={projectForm.category} onChange={(event) => setProjectForm((current) => ({ ...current, category: event.target.value as Category | "" }))} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
-                <option value="">Choose category</option>
-                {categoryValues.map((category) => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Size (GB, optional)">
-              <input type="number" min="0" step="0.1" value={projectForm.sizeGigabytes} onChange={(event) => setProjectForm((current) => ({ ...current, sizeGigabytes: event.target.value }))} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="120" />
-            </FormField>
-            <FormField label="Drive (optional)">
-              <select value={projectForm.currentDriveId} onChange={(event) => setProjectForm((current) => ({ ...current, currentDriveId: event.target.value }))} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
-                <option value="">Unassigned</option>
-                {drives.map((drive) => (
-                  <option key={drive.id} value={drive.id}>{drive.displayName}</option>
-                ))}
-              </select>
-            </FormField>
-            <div className="md:col-span-2 xl:col-span-3 flex items-center justify-end gap-3">
-              <button type="button" className="button-secondary" onClick={() => setIsCreateOpen(false)}>Cancel</button>
-              <button type="submit" className="button-success" disabled={isMutating}>{isMutating ? "Saving..." : "Create project"}</button>
-            </div>
-          </form>
-        </SectionCard>
+        <CreateProjectForm
+          form={projectForm}
+          drives={drives}
+          validation={manualProjectValidation}
+          isMutating={isMutating}
+          onChange={setProjectForm}
+          onSubmit={handleCreateProject}
+          onCancel={() => setIsCreateOpen(false)}
+        />
       ) : null}
 
-      <SectionCard title="Project controls" description="Combine status, category, drive, and search filters to narrow the catalog without changing the underlying sort order.">
-        <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr_1fr]">
-          <div className="relative">
-            <label className="field-shell flex items-center gap-3 text-sm" style={{ color: "var(--color-text-soft)" }}>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Search</span>
-              <input
-                type="text"
-                value={search}
-                onChange={(event) => updateSearchValue(event.target.value)}
-                placeholder="Client, project, date, drive, category"
-                className="w-full bg-transparent outline-none placeholder:text-[color:var(--color-text-soft)]"
-                style={{ color: "var(--color-text)" }}
-              />
-              {search ? (
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  className="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
-                  style={{ borderColor: "var(--color-border-strong)", color: "var(--color-text-muted)" }}
-                >
-                  Clear
-                </button>
-              ) : null}
-            </label>
-            {search.trim() && searchSuggestions.length > 0 ? (
-              <div
-                className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-10 overflow-hidden rounded-[18px] border bg-white shadow-[0_18px_50px_rgba(15,23,42,0.14)]"
-                style={{ borderColor: "var(--color-border)" }}
-              >
-                {searchSuggestions.map((group) => (
-                  <div key={group.key} className="border-b last:border-b-0" style={{ borderColor: "var(--color-border)" }}>
-                    <p className="px-4 pt-3 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
-                      {group.label}
-                    </p>
-                    <ul className="px-2 pb-2 pt-1">
-                      {group.suggestions.map((suggestion) => (
-                        <li key={suggestion.key}>
-                          <button
-                            type="button"
-                            onClick={() => updateSearchValue(suggestion.value)}
-                            className="flex w-full items-center justify-between rounded-[12px] px-3 py-2 text-left transition hover:bg-[color:var(--color-surface-subtle)]"
-                          >
-                            <span style={{ color: "var(--color-text)" }}>{suggestion.label}</span>
-                            <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-soft)" }}>
-                              {suggestion.matchType === "prefix" ? "Starts with" : "Contains"}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+      {/* ── Toolbar: search, dropdowns, status pills — single visual unit ── */}
+      <div className="border-b pb-3" style={{ borderColor: "var(--color-border)" }}>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search — takes available space */}
+          <div className="min-w-[200px] flex-1">
+            <SearchField
+              value={search}
+              onChange={updateSearchValue}
+              placeholder="Search by name, client, date, drive…"
+              suggestions={searchSuggestions}
+              onSelectSuggestion={updateSearchValue}
+              resultCount={search.trim() ? filteredProjects.length : undefined}
+            />
           </div>
-          <FormField label="Category filter">
-            <select value={categoryFilter} onChange={(event) => updateQueryParam("category", event.target.value)} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
-              <option value="">All categories</option>
-              {categoryValues.map((category) => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Drive filter">
-            <select value={driveFilter} onChange={(event) => updateQueryParam("drive", event.target.value)} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
-              <option value="">All drives</option>
-              <option value="__unassigned__">Unassigned</option>
-              {drives.map((drive) => (
-                <option key={drive.id} value={drive.id}>{drive.displayName}</option>
-              ))}
-            </select>
-          </FormField>
-        </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
-          {toggleFilters.map((filter) => {
-            const active = filter.key === "showUnassigned"
-              ? showUnassigned
-              : filter.key === "showMissing"
-                ? showMissing
-                : filter.key === "showDuplicate"
-                  ? showDuplicate
-                  : showMovePending;
+          {/* Divider */}
+          <div className="hidden h-7 w-px xl:block" style={{ background: "var(--color-border)" }} />
 
+          {/* Dropdowns — compact inline */}
+          <CompactSelect
+            value={folderTypeFilter}
+            onChange={(v) => updateQueryParam("folderType", v)}
+            placeholder="All types"
+          >
+            <option value="">All types</option>
+            {folderTypeValues.map((t) => (
+              <option key={t} value={t}>{FOLDER_TYPE_LABELS[t]}</option>
+            ))}
+          </CompactSelect>
+
+          <CompactSelect
+            value={categoryFilter}
+            onChange={(v) => updateQueryParam("category", v)}
+            placeholder="All categories"
+          >
+            <option value="">All categories</option>
+            {categoryValues.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </CompactSelect>
+
+          <CompactSelect
+            value={driveFilter}
+            onChange={(v) => updateQueryParam("drive", v)}
+            placeholder="All drives"
+          >
+            <option value="">All drives</option>
+            <option value={UNASSIGNED_DRIVE_FILTER_VALUE}>Unassigned</option>
+            {drives.map((d) => (
+              <option key={d.id} value={d.id}>{d.displayName}</option>
+            ))}
+          </CompactSelect>
+
+          {/* Divider */}
+          <div className="hidden h-7 w-px xl:block" style={{ background: "var(--color-border)" }} />
+
+          {/* Status pills — inline with everything else */}
+          {STATUS_FILTERS.map((f) => {
+            const active =
+              f.param === "unassigned" ? showUnassigned
+              : f.param === "missing" ? showMissing
+              : f.param === "duplicate" ? showDuplicate
+              : showMovePending;
             return (
               <button
-                key={filter.key}
+                key={f.key}
                 type="button"
-                onClick={() => toggleStatusFilter(filter.key)}
-                className={[
-                  "rounded-full border px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition",
-                  active ? "text-white" : "bg-white"
-                ].join(" ")}
+                onClick={() => toggleStatusFilter(f.param)}
+                className={`rounded border px-1.5 py-0.5 text-[11px] font-medium transition-colors ${active ? "" : "hover:bg-[color:var(--color-surface-subtle)]"}`}
                 style={
                   active
-                    ? { borderColor: "var(--color-accent)", background: "var(--color-accent)" }
-                    : { borderColor: "var(--color-border-strong)", color: "var(--color-text-muted)" }
+                    ? { borderColor: "var(--color-accent)", background: "var(--color-accent)", color: "#f7f8fa" }
+                    : { borderColor: "var(--color-border)", background: "var(--color-surface-subtle)", color: "var(--color-text-muted)" }
                 }
               >
-                {filter.label}
+                {f.label}
               </button>
             );
           })}
-        </div>
-      </SectionCard>
 
-      <SectionCard title="Batch actions" description="Select multiple projects and apply a lightweight operational update without leaving the catalog list.">
-        {batchPreview ? (
-          <div className="mb-5 space-y-3">
-            <FeedbackNotice tone="info" title={batchPreview.title} messages={[batchPreview.summary, ...batchPreview.confirmations]} />
-            {batchPreview.warnings.length > 0 ? (
-              <FeedbackNotice tone="warning" title="Review warnings" messages={batchPreview.warnings} />
-            ) : null}
-            <div className="flex flex-wrap gap-3">
-              <button type="button" className="button-success" disabled={isMutating} onClick={() => void confirmBatchPreview()}>
-                {isMutating ? "Applying..." : "Confirm batch action"}
-              </button>
-              <button type="button" className="button-secondary" onClick={() => setBatchPreview(null)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : null}
-        <div className="grid gap-4 xl:grid-cols-3">
-          <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>Assign drive</p>
-            <select value={batchState.assignDriveId} onChange={(event) => setBatchState((current) => ({ ...current, assignDriveId: event.target.value }))} className="field-shell mt-3 w-full bg-transparent px-4 py-3 outline-none">
-              <option value="">Unassigned</option>
-              {drives.map((drive) => (
-                <option key={drive.id} value={drive.id}>{drive.displayName}</option>
-              ))}
-            </select>
-            <button type="button" className="button-secondary mt-3 w-full" disabled={selectedProjectIds.length === 0 || isMutating} onClick={() => openBatchPreview("assign-drive")}>
-              Review action
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="ml-auto text-[12px] font-medium transition-colors hover:text-[color:var(--color-text)]"
+              style={{ color: "var(--color-text-soft)" }}
+            >
+              Clear filters
             </button>
-          </div>
-          <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>Set category</p>
-            <select value={batchState.category} onChange={(event) => setBatchState((current) => ({ ...current, category: event.target.value as Category | "" }))} className="field-shell mt-3 w-full bg-transparent px-4 py-3 outline-none">
-              <option value="">Choose category</option>
-              {categoryValues.map((category) => (
-                <option key={category} value={category}>{category}</option>
-              ))}
-            </select>
-            <button type="button" className="button-secondary mt-3 w-full" disabled={selectedProjectIds.length === 0 || isMutating} onClick={() => openBatchPreview("set-category")}>
-              Review action
-            </button>
-          </div>
-          <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>Plan move</p>
-            <select value={batchState.targetDriveId} onChange={(event) => setBatchState((current) => ({ ...current, targetDriveId: event.target.value }))} className="field-shell mt-3 w-full bg-transparent px-4 py-3 outline-none">
-              <option value="">Choose target drive</option>
-              {drives.map((drive) => (
-                <option key={drive.id} value={drive.id}>{drive.displayName}</option>
-              ))}
-            </select>
-            <button type="button" className="button-secondary mt-3 w-full" disabled={selectedProjectIds.length === 0 || isMutating} onClick={() => openBatchPreview("plan-move")}>
-              Review action
-            </button>
-          </div>
+          ) : null}
         </div>
-        <div className="mt-4 flex items-center justify-between gap-4">
-          <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-            {selectedProjectIds.length} selected · {filteredProjects.length} visible
-          </p>
-        </div>
-      </SectionCard>
+      </div>
 
-      <SectionCard title="Projects list" description="Newest records first, with combined filters and batch-friendly selection controls.">
+      {/* ── Batch action bar ── */}
+      {selectedIds.length > 0 ? (
+        <BatchActionBar
+          selectedCount={selectedIds.length}
+          drives={drives}
+          state={batchState}
+          preview={batchPreview}
+          isMutating={isMutating}
+          onChange={setBatchState}
+          onPreview={openBatchPreview}
+          onConfirm={() => void confirmBatchPreview()}
+          onCancelPreview={() => setBatchPreview(null)}
+          onClearSelection={() => setSelectedIds([])}
+        />
+      ) : null}
+
+      {/* ── Project list ── */}
+      <div className="overflow-hidden">
         {isLoading ? (
-          <LoadingState label="Loading projects" />
+          <div className="py-4">
+            <LoadingState label="Loading projects…" />
+          </div>
         ) : filteredProjects.length === 0 ? (
-          <EmptyState
-            title={projects.length === 0 ? "No projects yet" : "No projects match these filters"}
-            description={
-              projects.length === 0
-                ? "Create a manual project or finish a scan ingestion cycle to start building the catalog."
-                : "Try a broader search or remove one of the active filters."
-            }
-          />
+          <div className="py-4">
+            <EmptyState
+              title={projects.length === 0 ? "No projects yet" : "No results"}
+              description={
+                projects.length === 0
+                  ? "Run a scan to index a drive, or create a manual project to start building the catalog."
+                  : "Try a broader search or remove an active filter."
+              }
+            />
+          </div>
         ) : (
-          <div className="overflow-hidden rounded-[20px] border" style={{ borderColor: "var(--color-border)" }}>
-            <table className="min-w-full text-left text-sm">
-              <thead style={{ background: "var(--color-surface-subtle)", color: "var(--color-text-soft)" }}>
-                <tr>
-                  <th className="px-4 py-4">
-                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} aria-label="Select all visible projects" />
-                  </th>
-                  <th className="px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.16em]">Date</th>
-                  <th className="px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.16em]">Client</th>
-                  <th className="px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.16em]">Project</th>
-                  <th className="px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.16em]">Size</th>
-                  <th className="px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.16em]">Category</th>
-                  <th className="px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.16em]">Current drive</th>
-                  <th className="px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.16em]">Status</th>
-                  <th className="px-4 py-4 text-[11px] font-semibold uppercase tracking-[0.16em]">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white">
+          <>
+            {/* Table controls strip */}
+            <div
+              className="flex items-center justify-between gap-4 border-b px-4 py-1.5"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleAllVisible}
+                  aria-label="Select all visible"
+                  className="accent-[color:var(--color-accent)]"
+                />
+                {allVisibleSelected ? "Deselect all" : "Select all"}
+              </label>
+              <p className="text-[11px] tabular-nums" style={{ color: "var(--color-text-soft)" }}>
+                <span className="font-semibold" style={{ color: "var(--color-text-muted)" }}>{filteredProjects.length}</span>
+                {" "}
+                {filteredProjects.length === 1 ? "entry" : "entries"}
+                {hasActiveFilters ? " (filtered)" : ""}
+              </p>
+            </div>
+
+            {/* Headerless table — rows are self-describing */}
+            <table className="min-w-full text-left text-sm" role="grid">
+              <tbody>
                 {filteredProjects.map((project) => (
                   <ProjectRow
                     key={project.id}
                     project={project}
                     drives={drives}
-                    isSelected={selectedProjectIds.includes(project.id)}
-                    onToggleSelected={toggleProjectSelection}
+                    isSelected={selectedIds.includes(project.id)}
+                    onToggleSelected={toggleSelection}
                   />
                 ))}
               </tbody>
             </table>
-          </div>
+          </>
         )}
-      </SectionCard>
+      </div>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Project row
+// ---------------------------------------------------------------------------
 
 function ProjectRow({
   project,
@@ -584,50 +474,414 @@ function ProjectRow({
   project: Project;
   drives: Drive[];
   isSelected: boolean;
-  onToggleSelected(projectId: string): void;
+  onToggleSelected(id: string): void;
 }) {
+  const displayName = getDisplayProject(project);
+  const displayClient = getDisplayClient(project);
+  const displayDate = formatParsedDate(project.correctedDate ?? project.parsedDate);
+  const isPersonalFolder = project.folderType === "personal_folder";
+  const statusBadges = getProjectStatusBadges(project).filter((b) => b !== "Normal");
+  const driveName = getDriveName(drives, project.currentDriveId);
+
   return (
-    <tr className="align-top transition hover:bg-[#f7f5f0]" style={{ borderTop: "1px solid var(--color-border)" }}>
-      <td className="px-4 py-5">
-        <input type="checkbox" checked={isSelected} onChange={() => onToggleSelected(project.id)} aria-label={`Select ${getDisplayProject(project)}`} />
+    <tr
+      className={`group border-b transition-colors duration-75 ${isSelected ? "bg-[color:var(--color-accent-soft)] hover:bg-[#dbe3ec]" : "hover:bg-[#f7f5f0]"}`}
+      style={{ borderColor: "var(--color-border)" }}
+      aria-selected={isSelected}
+    >
+      {/* Checkbox */}
+      <td className="w-10 py-2.5 pl-4 pr-1 align-middle">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelected(project.id)}
+          aria-label={`Select ${project.folderName}`}
+          className="accent-[color:var(--color-accent)]"
+        />
       </td>
-      <td className="px-4 py-5 font-medium" style={{ color: "var(--color-text-muted)" }}>{formatParsedDate(project.parsedDate)}</td>
-      <td className="px-4 py-5" style={{ color: "var(--color-text-muted)" }}>{getDisplayClient(project)}</td>
-      <td className="px-4 py-4">
-        <Link to={`/projects/${project.id}`} className="font-medium transition hover:opacity-75" style={{ color: "var(--color-text)" }}>
-          {getDisplayProject(project)}
-        </Link>
-        <p className="mt-1 text-[11px] uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
-          {project.isManual ? "Manual" : "Scanned"}
+
+      {/* Identity — name + type pill + secondary context */}
+      <td className="max-w-[320px] py-2.5 pl-2 pr-4 align-middle">
+        <div className="flex min-w-0 items-center gap-2">
+          <FolderTypePill folderType={project.folderType} />
+          <div className="min-w-0 flex-1">
+            <p className="min-w-0 truncate text-[13px] font-medium leading-snug" style={{ color: "var(--color-text)" }}>
+              {displayName}
+            </p>
+            {/* Secondary line: folder name if different, or folder path for personal_folder */}
+            {isPersonalFolder && project.folderPath ? (
+              <p className="mt-px truncate text-[11px] italic" style={{ color: "var(--color-text-soft)" }}>
+                {project.folderPath}
+              </p>
+            ) : displayName !== project.folderName ? (
+              <p className="mt-px truncate text-[11px]" style={{ color: "var(--color-text-soft)" }}>
+                {project.folderName}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </td>
+
+      {/* Client — only meaningful for structured entries */}
+      <td className="w-[150px] px-3 py-2.5 align-middle">
+        {!isPersonalFolder && displayClient !== "—" ? (
+          <p className="truncate text-[13px]" style={{ color: "var(--color-text-muted)" }}>
+            {displayClient}
+          </p>
+        ) : null}
+      </td>
+
+      {/* Date */}
+      <td className="w-[90px] px-3 py-2.5 align-middle">
+        {displayDate !== "—" ? (
+          <p className="text-[12px] tabular-nums" style={{ color: "var(--color-text-soft)" }}>
+            {displayDate}
+          </p>
+        ) : null}
+      </td>
+
+      {/* Drive */}
+      <td className="w-[130px] px-3 py-2.5 align-middle">
+        <p className="truncate text-[12px]" style={{ color: project.currentDriveId ? "var(--color-text-muted)" : "var(--color-text-soft)" }}>
+          {driveName}
         </p>
+        {project.targetDriveId && project.moveStatus === "pending" ? (
+          <p className="mt-px text-[11px]" style={{ color: "var(--color-warning)" }}>
+            → {getDriveName(drives, project.targetDriveId)}
+          </p>
+        ) : null}
       </td>
-      <td className="px-4 py-5 font-medium tabular-nums" style={{ color: "var(--color-text-muted)" }}>{formatBytes(project.sizeBytes)}</td>
-      <td className="px-4 py-5 capitalize" style={{ color: "var(--color-text-muted)" }}>{project.category ?? "Uncategorized"}</td>
-      <td className="px-4 py-5" style={{ color: "var(--color-text-muted)" }}>{getDriveName(drives, project.currentDriveId)}</td>
-      <td className="px-4 py-4">
-        <div className="flex flex-wrap gap-2">
-          {getProjectStatusBadges(project).map((token) => (
-            <StatusBadge key={token} label={token} />
-          ))}
-        </div>
+
+      {/* Size */}
+      <td className="w-[80px] px-3 py-2.5 align-middle text-right tabular-nums text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+        {formatBytes(project.sizeBytes)}
       </td>
-      <td className="px-4 py-4">
-        <div className="flex flex-col gap-2">
-          <Link to={`/projects/${project.id}`} className="button-secondary text-center text-xs">
-            Open detail
-          </Link>
-          <Link to={`/projects/${project.id}`} className="button-secondary text-center text-xs">
-            Plan move
-          </Link>
-        </div>
+
+      {/* Status badges */}
+      <td className="w-[140px] px-3 py-2.5 align-middle">
+        {statusBadges.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {statusBadges.map((b) => (
+              <StatusBadge key={b} label={b} />
+            ))}
+          </div>
+        ) : null}
+      </td>
+
+      {/* Open detail */}
+      {/* S6/M8 — reveal is driven by CSS `focus-visible:` and `group-hover:`
+          utilities instead of imperative `.style.opacity` mutations inside
+          onFocus/onBlur. Keyboard focus reveal is preserved via
+          `focus-visible:opacity-100`; hover reveal via `group-hover:`. */}
+      <td className="w-10 py-2.5 pl-1 pr-4 align-middle">
+        <Link
+          to={`/projects/${project.id}`}
+          className="link-card flex h-6 w-6 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-[color:var(--color-accent)]"
+          style={{ color: "var(--color-text-soft)" }}
+          aria-label={`Open ${project.folderName}`}
+        >
+          <ChevronRightIcon />
+        </Link>
       </td>
     </tr>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Folder type pill
+// ---------------------------------------------------------------------------
+
+function FolderTypePill({ folderType }: { folderType: FolderType }) {
+  const styles: Record<FolderType, { border: string; bg: string; color: string }> = {
+    client: {
+      border: "var(--color-border-success)",
+      bg: "var(--color-success-soft)",
+      color: "var(--color-success-deep)"
+    },
+    personal_project: {
+      border: "var(--color-border-info)",
+      bg: "var(--color-accent-soft)",
+      color: "var(--color-accent)"
+    },
+    personal_folder: {
+      border: "var(--color-border)",
+      bg: "var(--color-surface-subtle)",
+      color: "var(--color-text-soft)"
+    }
+  };
+  const s = styles[folderType];
+  return (
+    <span
+      className="shrink-0 rounded border px-1.5 py-px text-[10px] font-medium"
+      style={{ borderColor: s.border, background: s.bg, color: s.color }}
+    >
+      {FOLDER_TYPE_LABELS[folderType]}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Batch action bar
+// ---------------------------------------------------------------------------
+
+function BatchActionBar({
+  selectedCount,
+  drives,
+  state,
+  preview,
+  isMutating,
+  onChange,
+  onPreview,
+  onConfirm,
+  onCancelPreview,
+  onClearSelection
+}: {
+  selectedCount: number;
+  drives: Drive[];
+  state: BatchState;
+  preview: ReturnType<typeof buildBatchActionPreview> | null;
+  isMutating: boolean;
+  onChange(s: BatchState): void;
+  onPreview(kind: Parameters<typeof buildBatchActionPreview>[0]["kind"]): void;
+  onConfirm(): void;
+  onCancelPreview(): void;
+  onClearSelection(): void;
+}) {
+  return (
+    <div
+      className="app-panel overflow-hidden px-5 py-4"
+      style={{ borderColor: "var(--color-accent)", borderWidth: 1 }}
+    >
+      {preview ? (
+        <div className="space-y-3">
+          <FeedbackNotice tone="info" title={preview.title} messages={[preview.summary, ...preview.confirmations]} />
+          {preview.warnings.length > 0 ? (
+            <FeedbackNotice tone="warning" title="Review warnings" messages={preview.warnings} />
+          ) : null}
+          <div className="flex flex-wrap gap-2.5">
+            <button type="button" className="button-success" disabled={isMutating} onClick={onConfirm}>
+              {isMutating ? "Applying…" : "Confirm action"}
+            </button>
+            <button type="button" className="button-secondary" onClick={onCancelPreview}>
+              Back
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-end gap-4">
+          {/* Selection count */}
+          <div className="flex items-center gap-2.5">
+            <span
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold text-white"
+              style={{ background: "var(--color-accent)" }}
+            >
+              {selectedCount}
+            </span>
+            <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+              selected
+            </span>
+            <button
+              type="button"
+              className="text-[11px] uppercase tracking-[0.1em] transition hover:opacity-75"
+              style={{ color: "var(--color-text-soft)" }}
+              onClick={onClearSelection}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="h-5 w-px" style={{ background: "var(--color-border)" }} />
+
+          {/* Assign drive */}
+          <BatchAction
+            label="Assign drive"
+            onReview={() => onPreview("assign-drive")}
+            disabled={isMutating}
+          >
+            <select
+              value={state.assignDriveId}
+              onChange={(e) => onChange({ ...state, assignDriveId: e.target.value })}
+              className="field-shell bg-transparent py-2 text-sm outline-none"
+              style={{ paddingLeft: "0.75rem", paddingRight: "0.75rem" }}
+            >
+              <option value="">Unassigned</option>
+              {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
+            </select>
+          </BatchAction>
+
+          <div className="h-5 w-px" style={{ background: "var(--color-border)" }} />
+
+          {/* Set category */}
+          <BatchAction
+            label="Set category"
+            onReview={() => onPreview("set-category")}
+            disabled={isMutating}
+          >
+            <select
+              value={state.category}
+              onChange={(e) => onChange({ ...state, category: e.target.value as Category | "" })}
+              className="field-shell bg-transparent py-2 text-sm outline-none"
+              style={{ paddingLeft: "0.75rem", paddingRight: "0.75rem" }}
+            >
+              <option value="">Choose category</option>
+              {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </BatchAction>
+
+          <div className="h-5 w-px" style={{ background: "var(--color-border)" }} />
+
+          {/* Plan move */}
+          <BatchAction
+            label="Plan move"
+            onReview={() => onPreview("plan-move")}
+            disabled={isMutating}
+          >
+            <select
+              value={state.targetDriveId}
+              onChange={(e) => onChange({ ...state, targetDriveId: e.target.value })}
+              className="field-shell bg-transparent py-2 text-sm outline-none"
+              style={{ paddingLeft: "0.75rem", paddingRight: "0.75rem" }}
+            >
+              <option value="">Target drive</option>
+              {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
+            </select>
+          </BatchAction>
+
+          <div className="h-5 w-px" style={{ background: "var(--color-border)" }} />
+
+          {/* Delete — destructive standalone action, no parameter needed */}
+          <div className="flex flex-col gap-1.5">
+            <span
+              className="text-[10px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: "var(--color-danger, #b91c1c)" }}
+            >
+              Delete
+            </span>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => onPreview("delete")}
+              disabled={isMutating}
+              style={{
+                borderColor: "var(--color-danger, #b91c1c)",
+                color: "var(--color-danger, #b91c1c)"
+              }}
+            >
+              Review deletion
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BatchAction({
+  label,
+  children,
+  onReview,
+  disabled
+}: {
+  label: string;
+  children: ReactNode;
+  onReview(): void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-soft)" }}>
+        {label}
+      </span>
+      {children}
+      <button
+        type="button"
+        className="button-secondary py-2 text-xs"
+        disabled={disabled}
+        onClick={onReview}
+      >
+        Review
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Create project form
+// ---------------------------------------------------------------------------
+
+function CreateProjectForm({
+  form,
+  drives,
+  validation,
+  isMutating,
+  onChange,
+  onSubmit,
+  onCancel
+}: {
+  form: ProjectFormState;
+  drives: Drive[];
+  validation: ReturnType<typeof validateManualProjectForm>;
+  isMutating: boolean;
+  onChange(next: ProjectFormState): void;
+  onSubmit(e: FormEvent<HTMLFormElement>): void;
+  onCancel(): void;
+}) {
+  return (
+    <SectionCard
+      title="New manual project"
+      description="Manual projects join the catalog immediately and can be assigned to a drive later."
+    >
+      {validation.errors.length > 0 ? (
+        <div className="mb-4">
+          <FeedbackNotice tone="error" title="Creation requirements" messages={validation.errors} />
+        </div>
+      ) : null}
+      {validation.warnings.length > 0 ? (
+        <div className="mb-4">
+          <FeedbackNotice tone="info" title="Note" messages={validation.warnings} />
+        </div>
+      ) : null}
+      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={onSubmit}>
+        <FormField label="Date (YYMMDD)">
+          <input required maxLength={6} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="240401" />
+        </FormField>
+        <FormField label="Client">
+          <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="Apple" />
+        </FormField>
+        <FormField label="Project">
+          <input required value={form.parsedProject} onChange={(e) => onChange({ ...form, parsedProject: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="ProductShoot" />
+        </FormField>
+        <FormField label="Category">
+          <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value as Category | "" })} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
+            <option value="">Choose category</option>
+            {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </FormField>
+        <FormField label="Size (GB)">
+          <input type="number" min="0" step="0.1" value={form.sizeGigabytes} onChange={(e) => onChange({ ...form, sizeGigabytes: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="120" />
+        </FormField>
+        <FormField label="Drive">
+          <select value={form.currentDriveId} onChange={(e) => onChange({ ...form, currentDriveId: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
+            <option value="">Unassigned</option>
+            {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
+          </select>
+        </FormField>
+        <div className="md:col-span-2 xl:col-span-3 flex items-center justify-end gap-3">
+          <button type="button" className="button-secondary" onClick={onCancel}>Discard</button>
+          <button type="submit" className="button-success" disabled={isMutating}>{isMutating ? "Saving…" : "Create project"}</button>
+        </div>
+      </form>
+    </SectionCard>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared primitives
+// ---------------------------------------------------------------------------
+
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="space-y-2">
+    <label className="flex flex-col gap-2">
       <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
         {label}
       </span>
@@ -636,12 +890,39 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-function keyToParam(key: (typeof toggleFilters)[number]["key"]) {
-  return key === "showUnassigned"
-    ? "unassigned"
-    : key === "showMissing"
-      ? "missing"
-      : key === "showDuplicate"
-        ? "duplicate"
-        : "movePending";
+function CompactSelect({
+  value,
+  onChange,
+  placeholder,
+  children
+}: {
+  value: string;
+  onChange(v: string): void;
+  placeholder: string;
+  children: ReactNode;
+}) {
+  const isActive = value !== "";
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`field-shell cursor-pointer bg-transparent py-2.5 text-sm outline-none${isActive ? " field-shell--active" : ""}`}
+      style={{
+        paddingLeft: "0.875rem",
+        paddingRight: "0.875rem",
+        color: isActive ? "var(--color-text)" : "var(--color-text-soft)"
+      }}
+      aria-label={placeholder}
+    >
+      {children}
+    </select>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }

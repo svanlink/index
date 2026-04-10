@@ -13,7 +13,7 @@ export function TopUtilityBar({
   title,
   action,
   searchValue = "",
-  searchPlaceholder = "Client, project, or date",
+  searchPlaceholder = "Search…",
   onSearchChange,
   onSearchSubmit
 }: TopUtilityBarProps) {
@@ -23,35 +23,48 @@ export function TopUtilityBar({
   }
 
   return (
-    <header className="sticky top-0 z-10 flex flex-col gap-4 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between" style={{ borderColor: "var(--color-border)", background: "rgba(251, 250, 248, 0.88)", backdropFilter: "blur(14px)" }}>
-      <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.26em]" style={{ color: "var(--color-text-soft)" }}>
-          Desktop-first workspace
-        </p>
-        <h2 className="mt-1 text-[28px] font-semibold leading-none" style={{ color: "var(--color-text)" }}>{title}</h2>
-      </div>
+    <header
+      className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b px-6 py-3"
+      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+    >
+      <h2
+        className="text-[20px] font-semibold leading-none tracking-[-0.01em]"
+        style={{ color: "var(--color-text)" }}
+      >
+        {title}
+      </h2>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <form onSubmit={handleSubmit} className="min-w-0 flex-1">
-          <label className="field-shell flex min-w-[320px] items-center gap-3 text-sm" style={{ color: "var(--color-text-soft)" }}>
-            <span className="flex h-8 w-8 items-center justify-center rounded-full" style={{ background: "var(--color-surface-subtle)", color: "var(--color-accent)" }}>
-              <span className="h-2.5 w-2.5 rounded-full border-2 border-current border-r-0 border-t-0 rotate-45" />
-            </span>
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>Search</span>
-            <input
-              type="text"
-              value={searchValue}
-              onChange={(event) => onSearchChange?.(event.target.value)}
-              placeholder={searchPlaceholder}
-              className="w-full bg-transparent text-[color:var(--color-text)] outline-none placeholder:text-[color:var(--color-text-soft)]"
-            />
-          </label>
-        </form>
-        {action ?? (
-          <button type="button" className="button-secondary min-w-[116px]">
-            Scan drive
-          </button>
-        )}
+      <div className="flex items-center gap-2">
+        {onSearchChange ? (
+          <form onSubmit={handleSubmit} className="min-w-0">
+            <label
+              className="field-shell flex w-[240px] items-center gap-2 text-[13px]"
+              style={{ color: "var(--color-text-soft)" }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                aria-hidden="true"
+                style={{ flexShrink: 0, color: "var(--color-text-soft)" }}
+              >
+                <circle cx="6.5" cy="6.5" r="4.75" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <span className="sr-only">Search the catalog from anywhere</span>
+              <input
+                type="text"
+                value={searchValue}
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                className="w-full bg-transparent text-[13px] text-[color:var(--color-text)] outline-none placeholder:text-[color:var(--color-text-soft)]"
+              />
+            </label>
+          </form>
+        ) : null}
+        {action}
       </div>
     </header>
   );

@@ -1,9 +1,18 @@
-import { getDisplayClient, getDisplayProject, getProjectStatusState, type Category, type Drive, type Project } from "@drive-project-catalog/domain";
-import { getDriveNameById, sortProjects } from "./catalogSelectors";
+import { getDisplayClient, getDisplayProject, getProjectStatusState, type Category, type Drive, type FolderType, type Project } from "@drive-project-catalog/domain";
+import { buildDriveNameMap, getDriveNameFromMap, sortProjects } from "./catalogSelectors";
+
+/**
+ * Sentinel value used in `ProjectCatalogFilters.currentDriveId` to represent
+ * "projects with no current drive assignment". Exported so UI code can compare
+ * against a single source of truth instead of rebuilding the magic string.
+ */
+export const UNASSIGNED_DRIVE_FILTER_VALUE = "__unassigned__" as const;
+export type UnassignedDriveFilterValue = typeof UNASSIGNED_DRIVE_FILTER_VALUE;
 
 export interface ProjectCatalogFilters {
   search?: string;
   category?: Category | "";
+  folderType?: FolderType | "";
   currentDriveId?: string;
   targetDriveId?: string;
   showUnassigned?: boolean;
@@ -20,6 +29,10 @@ export function filterProjectCatalog(projects: Project[], drives: Drive[], filte
     Boolean(filters.showDuplicate) ||
     Boolean(filters.showMovePending);
 
+  // Build drive-name map once so the search haystack is O(projects) rather
+  // than O(projects × drives). Only needed when a search query is present.
+  const driveNameMap = query ? buildDriveNameMap(drives) : undefined;
+
   return sortProjects(projects).filter((project) => {
     const status = getProjectStatusState(project);
 
@@ -27,8 +40,12 @@ export function filterProjectCatalog(projects: Project[], drives: Drive[], filte
       return false;
     }
 
+    if (filters.folderType && project.folderType !== filters.folderType) {
+      return false;
+    }
+
     if (filters.currentDriveId) {
-      if (filters.currentDriveId === "__unassigned__") {
+      if (filters.currentDriveId === UNASSIGNED_DRIVE_FILTER_VALUE) {
         if (project.currentDriveId !== null) {
           return false;
         }
@@ -53,19 +70,22 @@ export function filterProjectCatalog(projects: Project[], drives: Drive[], filte
       }
     }
 
-    if (!query) {
+    if (!query || !driveNameMap) {
+      // When there's no search query we don't need the drive map and the
+      // project passes (all non-search filters already matched above).
       return true;
     }
 
     const haystack = [
+      project.folderName,
       project.parsedDate,
       project.parsedClient,
       project.parsedProject,
       getDisplayClient(project),
       getDisplayProject(project),
       project.category ?? "",
-      getDriveNameById(drives, project.currentDriveId),
-      getDriveNameById(drives, project.targetDriveId)
+      getDriveNameFromMap(driveNameMap, project.currentDriveId),
+      getDriveNameFromMap(driveNameMap, project.targetDriveId)
     ]
       .join(" ")
       .toLowerCase();
