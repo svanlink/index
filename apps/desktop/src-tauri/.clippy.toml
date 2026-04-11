@@ -1,0 +1,23 @@
+# Import Safety Contract
+#
+# The scan engine and all production code in this crate are READ-ONLY with respect
+# to the filesystem. Scanning classifies and stores metadata; it never renames,
+# writes, or deletes anything on disk. Folder corrections happen only through
+# explicit user edits in the UI, stored as database metadata only.
+#
+# The rules below are enforced by Clippy's disallowed_methods lint.
+# Any attempt to call these functions in production code will fail the build.
+# The test module is explicitly exempted via #[allow(clippy::disallowed_methods)].
+
+disallowed-methods = [
+    { path = "std::fs::write",          reason = "IMPORT SAFETY: scan path is read-only — use the edit flow for mutations" },
+    { path = "std::fs::rename",         reason = "IMPORT SAFETY: scan path is read-only — folder renames are never triggered by import" },
+    { path = "std::fs::copy",           reason = "IMPORT SAFETY: scan path is read-only — no file copies during import" },
+    { path = "std::fs::remove_file",    reason = "IMPORT SAFETY: scan path is read-only — no deletions during import" },
+    { path = "std::fs::remove_dir",     reason = "IMPORT SAFETY: scan path is read-only — no deletions during import" },
+    { path = "std::fs::remove_dir_all", reason = "IMPORT SAFETY: scan path is read-only — no deletions during import" },
+    { path = "std::fs::hard_link",      reason = "IMPORT SAFETY: scan path is read-only — no filesystem links during import" },
+    { path = "std::fs::soft_link",      reason = "IMPORT SAFETY: scan path is read-only — no filesystem links during import" },
+    { path = "std::fs::set_permissions",reason = "IMPORT SAFETY: scan path is read-only — no permission changes during import" },
+    { path = "std::fs::OpenOptions::create", reason = "IMPORT SAFETY: scan path is read-only — no file creation during import" },
+]
