@@ -14,6 +14,7 @@ import {
   type CreateDriveInput,
   type CreateProjectInput,
   type DashboardSnapshot,
+  type ReclassifyLegacyFolderTypesResult,
   type StartupSyncResult,
   type SyncCycleResult,
   type SyncState,
@@ -23,6 +24,7 @@ import type { Category, Drive, Project, ProjectScanEvent, ScanRecord, ScanSessio
 import { repository } from "./catalogRepository";
 import {
   assignProjectsToDrive as assignProjectsToDriveAction,
+  deleteProjects as deleteProjectsAction,
   planProjectsMove as planProjectsMoveAction,
   setProjectsCategory as setProjectsCategoryAction
 } from "./batchProjectActions";
@@ -58,12 +60,16 @@ interface CatalogStoreContextValue {
   updateProjectMetadata(input: UpdateProjectMetadataInput): Promise<Project>;
   createProject(input: CreateProjectInput): Promise<Project>;
   createDrive(input: CreateDriveInput): Promise<Drive>;
+  reclassifyLegacyFolderTypes(): Promise<ReclassifyLegacyFolderTypesResult>;
+  deleteProject(projectId: string): Promise<void>;
+  deleteDrive(driveId: string): Promise<void>;
   planProjectMove(projectId: string, targetDriveId: string): Promise<Project>;
   confirmProjectMove(projectId: string): Promise<Project>;
   cancelProjectMove(projectId: string): Promise<Project>;
   assignProjectsToDrive(projectIds: string[], driveId: string | null): Promise<void>;
   setProjectsCategory(projectIds: string[], category: Category | null): Promise<void>;
   planProjectsMove(projectIds: string[], targetDriveId: string): Promise<void>;
+  deleteProjects(projectIds: string[]): Promise<void>;
   syncNow(): Promise<SyncCycleResult>;
 }
 
@@ -182,7 +188,7 @@ export function AppProviders({ children }: AppProvidersProps) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refresh]);
 
   const runMutation = useCallback(async <T,>(operation: () => Promise<T>) => {
     setIsMutating(true);
@@ -254,12 +260,16 @@ export function AppProviders({ children }: AppProvidersProps) {
     updateProjectMetadata: (input) => runMutation(() => repository.updateProjectMetadata(input)),
     createProject: (input) => runMutation(() => repository.createProject(input)),
     createDrive: (input) => runMutation(() => repository.createDrive(input)),
+    reclassifyLegacyFolderTypes: () => runMutation(() => repository.reclassifyLegacyFolderTypes()),
+    deleteProject: (projectId) => runMutation(() => repository.deleteProject(projectId)),
+    deleteDrive: (driveId) => runMutation(() => repository.deleteDrive(driveId)),
     planProjectMove: (projectId, targetDriveId) => runMutation(() => repository.planProjectMove(projectId, targetDriveId)),
     confirmProjectMove: (projectId) => runMutation(() => repository.confirmProjectMove(projectId)),
     cancelProjectMove: (projectId) => runMutation(() => repository.cancelProjectMove(projectId)),
     assignProjectsToDrive: (projectIds, driveId) => runMutation(() => assignProjectsToDriveAction(repository, projectIds, driveId)),
     setProjectsCategory: (projectIds, category) => runMutation(() => setProjectsCategoryAction(repository, projectIds, category)),
     planProjectsMove: (projectIds, targetDriveId) => runMutation(() => planProjectsMoveAction(repository, projectIds, targetDriveId)),
+    deleteProjects: (projectIds) => runMutation(() => deleteProjectsAction(repository, projectIds)),
     syncNow
   }), [
     dashboard,
@@ -296,6 +306,3 @@ export function useCatalogStore() {
   return context;
 }
 
-export function useCatalogRepository() {
-  return useCatalogStore().repository;
-}

@@ -22,9 +22,14 @@ function makeDrive(overrides: Partial<Drive>): Drive {
 function makeProject(overrides: Partial<Project>): Project {
   return {
     id: "project-default",
+    folderType: "client",
+    isStandardized: true,
+    folderName: "260406_Client_Project",
+    folderPath: null,
     parsedDate: "260406",
     parsedClient: "Client",
     parsedProject: "Project",
+    correctedDate: null,
     correctedClient: null,
     correctedProject: null,
     category: "photo",

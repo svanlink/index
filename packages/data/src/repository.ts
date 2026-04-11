@@ -1,6 +1,7 @@
 import type {
   Category,
   Drive,
+  FolderType,
   Project,
   ProjectScanEvent,
   ScanRecord,
@@ -34,6 +35,7 @@ export interface DashboardSnapshot {
 
 export interface ProjectListFilters {
   status?: "unassigned" | "missing" | "duplicate";
+  folderType?: FolderType | "";
   currentDriveId?: string;
   search?: string;
 }
@@ -43,9 +45,17 @@ export type DriveUpsert = Drive;
 
 export interface UpdateProjectMetadataInput {
   projectId: string;
+  /** Override the displayed date (YYMMDD). Does not rename any folder on disk. */
+  correctedDate: string | null;
   correctedClient: string | null;
   correctedProject: string | null;
   category: Category | null;
+  /**
+   * Reclassify the project type. Only used to upgrade personal_folder entries.
+   * Setting this to a structured type also marks isStandardized = true.
+   * Import never sets this — it can only be changed through the edit flow.
+   */
+  folderType: FolderType | null;
 }
 
 export interface CreateProjectInput {
@@ -61,6 +71,29 @@ export interface CreateDriveInput {
   volumeName: string;
   displayName?: string | null;
   totalCapacityBytes?: number | null;
+}
+
+/**
+ * Result of the one-shot "reclassify legacy folder types" maintenance action
+ * (S9 / H12). The action walks non-manual projects whose `folderType` is
+ * `personal_folder` and promotes them to `client` or `personal_project` when
+ * the current classifier disagrees with the stored value. This exists to
+ * recover from the blanket assignment migration 3 applied to legacy rows.
+ *
+ * The action is intentionally conservative: it only **upgrades**
+ * personal_folder rows, never downgrades structured ones, and never touches
+ * rows a user has manually created or edited (those carry `isManual: true`
+ * or `isStandardized: true` intent that the classifier must respect).
+ */
+export interface ReclassifyLegacyFolderTypesResult {
+  /** Rows considered (non-manual projects whose current type is personal_folder). */
+  examinedCount: number;
+  /** Rows that were upgraded to `client`. */
+  clientReclassifiedCount: number;
+  /** Rows that were upgraded to `personal_project`. */
+  personalProjectReclassifiedCount: number;
+  /** Rows the classifier agreed should stay `personal_folder`. */
+  unchangedCount: number;
 }
 
 export interface CatalogRepository {
@@ -86,6 +119,9 @@ export interface CatalogRepository {
   confirmProjectMove(projectId: string): Promise<Project>;
   cancelProjectMove(projectId: string): Promise<Project>;
   ingestScanSnapshot(session: ScanSessionSnapshot): Promise<ScanRecord>;
+  reclassifyLegacyFolderTypes(): Promise<ReclassifyLegacyFolderTypesResult>;
+  deleteProject(projectId: string): Promise<void>;
+  deleteDrive(driveId: string): Promise<void>;
   listPendingSyncOperations(): Promise<SyncOperation[]>;
   flushSync(): Promise<SyncResult>;
   getSyncState(): Promise<SyncState>;

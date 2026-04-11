@@ -14,6 +14,7 @@ import {
   listDispatchableSyncOperations,
   markSyncOperationsInFlight,
   normalizeSyncOperation,
+  reconcileInFlightSyncOperations,
   settleSyncQueue
 } from "./syncQueue";
 
@@ -33,6 +34,8 @@ interface StorageSyncAdapterOptions {
 
 const STORAGE_VERSION = 1;
 const interruptedSyncMessage = "A previous sync attempt was interrupted before completion. Retry sync to continue.";
+const strandedFlushMessage =
+  "A previous sync attempt left operations in-flight. They have been rescheduled for retry.";
 
 export class StorageSyncAdapter implements SyncAdapter {
   readonly #storage: StorageLike;
@@ -66,6 +69,28 @@ export class StorageSyncAdapter implements SyncAdapter {
 
   async flush(): Promise<SyncResult> {
     const envelope = this.#readEnvelope();
+
+    // H4 — mid-run recovery. Any in-flight rows visible on flush entry must be
+    // orphans from a prior interrupted push cycle (the repository serializes
+    // flush() via #activeSyncPromise, so no other flush is in progress here).
+    // Reconcile them to `failed` before starting a new push so they become
+    // dispatchable and get retried in this very cycle.
+    const reconciled = reconcileInFlightSyncOperations(envelope.queue, strandedFlushMessage);
+    if (reconciled.recoveredCount > 0) {
+      envelope.queue = reconciled.queue;
+      envelope.state = getSyncStateForQueue({
+        queue: envelope.queue,
+        remoteEnabled: Boolean(this.#remote),
+        mode: this.#remote ? "remote-ready" : "local-only",
+        previous: {
+          ...envelope.state,
+          lastError: strandedFlushMessage,
+          lastSyncError: strandedFlushMessage
+        }
+      });
+      this.#writeEnvelope(envelope);
+    }
+
     const dispatchable = listDispatchableSyncOperations(envelope.queue);
 
     if (!this.#remote || dispatchable.length === 0) {

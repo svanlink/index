@@ -16,6 +16,7 @@ export async function assignProjectsToDrive(
         currentDriveId: driveId,
         targetDriveId: null,
         moveStatus: "none",
+        missingStatus: "normal",
         updatedAt: now
       })
     )
@@ -49,7 +50,26 @@ export async function planProjectsMove(
   await Promise.all(projectIds.map((projectId) => repository.planProjectMove(projectId, targetDriveId)));
 }
 
+export async function deleteProjects(
+  repository: CatalogRepository,
+  projectIds: string[]
+) {
+  // Sequential rather than Promise.all: deleteProject touches joined tables
+  // (scans, events, linking metadata), and the SQLite connection is a single
+  // writer with a busy-timeout. Parallel deletes just queue up inside the DB
+  // and risk tripping the busy handler on large selections.
+  for (const projectId of projectIds) {
+    await repository.deleteProject(projectId);
+  }
+}
+
 async function loadProjects(repository: CatalogRepository, projectIds: string[]) {
   const projects = await Promise.all(projectIds.map((projectId) => repository.getProjectById(projectId)));
-  return projects.filter((project): project is NonNullable<typeof project> => project !== null);
+  const found = projects.filter((project): project is NonNullable<typeof project> => project !== null);
+  if (found.length < projectIds.length) {
+    console.warn(
+      `[batchProjectActions] loadProjects: ${projectIds.length - found.length} of ${projectIds.length} requested project(s) were not found and will be skipped.`
+    );
+  }
+  return found;
 }

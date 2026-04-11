@@ -12,6 +12,7 @@ export * from "./repository";
 export * from "./scanIngestionService";
 export * from "./scanHistorySelectors";
 export * from "./scanSelectors";
+export * from "./scanSnapshotSchema";
 export * from "./searchSuggestionSelectors";
 export * from "./sqliteLocalPersistence";
 export * from "./sqliteSyncAdapter";

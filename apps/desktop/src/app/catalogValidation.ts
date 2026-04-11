@@ -14,7 +14,7 @@ export interface ValidationResult {
   warnings: string[];
 }
 
-export type BatchActionKind = "assign-drive" | "set-category" | "plan-move";
+export type BatchActionKind = "assign-drive" | "set-category" | "plan-move" | "delete";
 
 export interface BatchActionPreview extends ValidationResult {
   kind: BatchActionKind;
@@ -103,6 +103,47 @@ export function buildBatchActionPreview(params: {
       summary: nextDrive
         ? `Assign ${selectedProjects.length} selected project${pluralize(selectedProjects.length)} directly to ${nextDrive.displayName}.`
         : `Clear the current drive assignment for ${selectedProjects.length} selected project${pluralize(selectedProjects.length)}.`,
+      errors,
+      warnings,
+      confirmations
+    };
+  }
+
+  if (kind === "delete") {
+    // Destructive: build an explicit preview so the Review → Confirm flow
+    // surfaces which projects are about to disappear. Warnings call out state
+    // that the user might still care about (pending moves, assigned drives).
+    const assignedCount = selectedProjects.filter((project) => project.currentDriveId !== null).length;
+    const movePendingCount = selectedProjects.filter((project) => project.moveStatus === "pending").length;
+    const manualCount = selectedProjects.filter((project) => project.isManual).length;
+
+    confirmations.push(
+      `${selectedProjects.length} project${pluralize(selectedProjects.length)} will be permanently removed from the catalog.`
+    );
+    if (assignedCount > 0) {
+      warnings.push(
+        `${assignedCount} selected project${pluralize(assignedCount)} ${assignedCount === 1 ? "is" : "are"} currently assigned to a drive — the on-disk folders are not touched, only the catalog entries.`
+      );
+    }
+    if (movePendingCount > 0) {
+      warnings.push(
+        `${movePendingCount} selected project${pluralize(movePendingCount)} ${movePendingCount === 1 ? "has" : "have"} a pending move — the plan will be discarded.`
+      );
+    }
+    if (manualCount > 0 && manualCount < selectedProjects.length) {
+      warnings.push(
+        `${manualCount} manual project${pluralize(manualCount)} included; the rest came from scans and will reappear on the next scan of their source drive.`
+      );
+    } else if (manualCount === 0 && selectedProjects.length > 0) {
+      warnings.push(
+        `All selected projects came from scans and will be re-indexed on the next scan of their source drive.`
+      );
+    }
+
+    return {
+      kind,
+      title: "Confirm deletion",
+      summary: `Delete ${selectedProjects.length} selected project${pluralize(selectedProjects.length)} from the catalog.`,
       errors,
       warnings,
       confirmations

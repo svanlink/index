@@ -14,6 +14,7 @@ import {
   listDispatchableSyncOperations,
   markSyncOperationsInFlight,
   normalizeSyncOperation,
+  reconcileInFlightSyncOperations,
   settleSyncQueue
 } from "./syncQueue";
 
@@ -22,6 +23,8 @@ interface SqliteSyncAdapterOptions {
   remote?: RemoteSyncAdapter | null;
 }
 const interruptedSyncMessage = "A previous sync attempt was interrupted before completion. Retry sync to continue.";
+const strandedFlushMessage =
+  "A previous sync attempt left operations in-flight. They have been rescheduled for retry.";
 
 type SyncQueueRow = {
   id: string;
@@ -92,7 +95,29 @@ export class SqliteSyncAdapter implements SyncAdapter {
 
   async flush(): Promise<SyncResult> {
     const database = await this.#ensureReady();
-    const queue = await this.#listQueue(database);
+    let queue = await this.#listQueue(database);
+
+    // H4 — mid-run recovery. Any in-flight rows visible on flush entry must be
+    // orphans from a prior interrupted push cycle (the repository serializes
+    // flush() via #activeSyncPromise, so no other flush is in progress here).
+    // Reconcile them to `failed` before starting a new push so they become
+    // dispatchable and get retried in this very cycle.
+    const reconciled = reconcileInFlightSyncOperations(queue, strandedFlushMessage);
+    if (reconciled.recoveredCount > 0) {
+      queue = reconciled.queue;
+      await this.#writeQueue(database, queue);
+      await this.#writeState(database, async (current) => ({
+        ...getSyncStateForQueue({
+          queue,
+          remoteEnabled: Boolean(this.#remote),
+          mode: this.#remote ? "remote-ready" : "local-only",
+          previous: current
+        }),
+        lastError: strandedFlushMessage,
+        lastSyncError: strandedFlushMessage
+      }));
+    }
+
     const dispatchable = listDispatchableSyncOperations(queue);
     if (!this.#remote || dispatchable.length === 0) {
       await this.#writeState(database, async (current) =>

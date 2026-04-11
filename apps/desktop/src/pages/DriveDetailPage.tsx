@@ -1,14 +1,26 @@
-import { useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Project } from "@drive-project-catalog/domain";
-import { PageHeader } from "@drive-project-catalog/ui";
+
+import { useVolumeInfo } from "../app/scanCommands";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate, formatParsedDate, getProjectName, getProjectStatusBadges } from "./dashboardHelpers";
-import { CapacityLegend, EmptyState, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
+import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
 
 export function DriveDetailPage() {
   const { driveId = "" } = useParams();
-  const { isLoading, getDriveDetailView, selectDrive } = useCatalogStore();
+  const navigate = useNavigate();
+  const { isLoading, isMutating, getDriveDetailView, selectDrive, deleteDrive, scanSessions } = useCatalogStore();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const driveRootPath = scanSessions
+    .filter((s) => s.requestedDriveId === driveId)
+    .sort((a, b) =>
+      (b.finishedAt ?? b.updatedAt ?? b.startedAt).localeCompare(
+        a.finishedAt ?? a.updatedAt ?? a.startedAt
+      )
+    )[0]?.rootPath ?? null;
+  const volumeInfo = useVolumeInfo(driveRootPath);
 
   useEffect(() => {
     selectDrive(driveId || null);
@@ -30,58 +42,62 @@ export function DriveDetailPage() {
 
   const { drive, projects, incomingProjects, missingProjects } = detail;
 
+  async function handleDeleteDrive() {
+    try {
+      await deleteDrive(driveId);
+      navigate("/drives");
+    } catch {
+      setShowDeleteConfirm(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Drive detail"
-        title={drive.displayName}
-        description="Review capacity, current projects, incoming move plans, and missing records still associated with this drive."
-        actions={
-          <Link to="/drives" className="button-secondary">
-            Back to drives
-          </Link>
-        }
-      />
+      {showDeleteConfirm ? (
+        <ConfirmModal
+          title="Delete drive?"
+          description={`"${drive.displayName}" will be permanently removed from the catalog. Projects assigned to this drive will become unassigned. This cannot be undone.`}
+          confirmLabel="Delete drive"
+          onConfirm={() => void handleDeleteDrive()}
+          onCancel={() => setShowDeleteConfirm(false)}
+          isLoading={isMutating}
+        />
+      ) : null}
+
+      <div className="flex items-center justify-between">
+        <div />
+        <Link to="/drives" className="button-secondary">Back</Link>
+      </div>
 
       <SectionCard title="Drive summary" description="Capacity and reservation data stays local-first and updates as move plans change.">
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <div>
-            <div className="overflow-hidden rounded-full" style={{ background: "#e5dfd5" }}>
-              <div
-                className="relative h-3 rounded-full"
-                style={{
-                  width:
-                    drive.totalCapacityBytes && drive.usedBytes !== null
-                      ? `${Math.max(8, (drive.usedBytes / drive.totalCapacityBytes) * 100)}%`
-                      : "30%",
-                  background: "var(--color-accent)"
-                }}
-              >
-                {drive.totalCapacityBytes && drive.reservedIncomingBytes > 0 ? (
-                  <div
-                    className="absolute right-0 top-0 h-full rounded-full"
-                    style={{
-                      width: `${Math.max(6, (drive.reservedIncomingBytes / drive.totalCapacityBytes) * 100)}%`,
-                      background: "#b18f63"
-                    }}
-                  />
-                ) : null}
-              </div>
-            </div>
+            <CapacityBar
+              usedBytes={drive.usedBytes}
+              totalBytes={drive.totalCapacityBytes}
+              reservedBytes={drive.reservedIncomingBytes}
+            />
             <CapacityLegend usedLabel="Used" reservedLabel="Reserved" freeLabel="Free" />
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <Metric label="Used" value={formatBytes(drive.usedBytes)} />
-              <Metric label="Reserved incoming" value={formatBytes(drive.reservedIncomingBytes)} />
-              <Metric label="Remaining after reserve" value={formatBytes(drive.freeBytes === null ? null : Math.max(drive.freeBytes - drive.reservedIncomingBytes, 0))} />
+              <MetricCard label="Used" value={formatBytes(drive.usedBytes)} />
+              <MetricCard label="Reserved incoming" value={formatBytes(drive.reservedIncomingBytes)} />
+              <MetricCard label="Remaining after reserve" value={formatBytes(drive.freeBytes === null ? null : Math.max(drive.freeBytes - drive.reservedIncomingBytes, 0))} />
             </div>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <Metric label="Capacity" value={formatBytes(drive.totalCapacityBytes)} />
-            <Metric label="Free" value={formatBytes(drive.freeBytes)} />
-            <Metric label="Projects" value={String(projects.length)} />
-            <Metric label="Incoming plans" value={String(incomingProjects.length)} />
-            <Metric label="Missing records" value={String(missingProjects.length)} />
-            <Metric label="Last scan" value={formatDate(drive.lastScannedAt)} />
+            <MetricCard label="Capacity" value={formatBytes(drive.totalCapacityBytes)} />
+            <MetricCard label="Free" value={formatBytes(drive.freeBytes)} />
+            <MetricCard label="Projects" value={String(projects.length)} />
+            <MetricCard label="Incoming plans" value={String(incomingProjects.length)} />
+            <MetricCard label="Missing records" value={String(missingProjects.length)} />
+            <MetricCard label="Last scan" value={formatDate(drive.lastScannedAt)} />
+            {volumeInfo ? (
+              <>
+                <MetricCard label="Filesystem" value={volumeInfo.filesystemType} />
+                <MetricCard label="Volume total" value={formatBytes(volumeInfo.totalBytes)} />
+                <MetricCard label="Volume free" value={formatBytes(volumeInfo.freeBytes)} />
+              </>
+            ) : null}
           </div>
         </div>
       </SectionCard>
@@ -105,6 +121,22 @@ export function DriveDetailPage() {
           accentLabel="Missing"
         />
       </section>
+
+      {/* Danger zone — separated from primary actions */}
+      <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--color-border)" }}>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-soft)" }}>Danger zone</p>
+        <div className="mt-3 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>Delete drive</p>
+            <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+              Permanently removes this drive from the catalog. Projects assigned to it will become unassigned.
+            </p>
+          </div>
+          <button type="button" className="button-danger shrink-0" onClick={() => setShowDeleteConfirm(true)}>
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -130,19 +162,17 @@ function ProjectCollection({
             <Link
               key={project.id}
               to={`/projects/${project.id}`}
-              className="block rounded-[18px] border px-4 py-4 transition hover:bg-[#f7f5f0]"
-              style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+              className="link-card flex items-center justify-between border-b py-2.5 last:border-b-0"
+              style={{ borderColor: "var(--color-border)" }}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</p>
-                  <p className="mt-1 text-sm" style={{ color: "var(--color-text-muted)" }}>
-                    {formatParsedDate(project.parsedDate)} · {formatBytes(project.sizeBytes)}
-                  </p>
-                </div>
-                {accentLabel ? <StatusBadge label={accentLabel} /> : null}
+              <div>
+                <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</p>
+                <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+                  {formatParsedDate(project.parsedDate)} · {formatBytes(project.sizeBytes)}
+                </p>
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="flex gap-1">
+                {accentLabel ? <StatusBadge label={accentLabel} /> : null}
                 {getProjectStatusBadges(project).map((badge) => (
                   <StatusBadge key={badge} label={badge} />
                 ))}
@@ -155,11 +185,3 @@ function ProjectCollection({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[16px] border bg-white px-4 py-3" style={{ borderColor: "var(--color-border)" }}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-2 text-base font-semibold tabular-nums" style={{ color: "var(--color-text)" }}>{value}</p>
-    </div>
-  );
-}

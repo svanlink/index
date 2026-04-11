@@ -10,7 +10,7 @@ import { SettingsPage } from "../pages/SettingsPage";
 import { StoragePlanningPage } from "../pages/StoragePlanningPage";
 import { RootLayout } from "./RootLayout";
 
-export const appRoutes = [
+const appRoutes = [
   {
     path: "/",
     element: <RootLayout />,

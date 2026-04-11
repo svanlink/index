@@ -65,7 +65,7 @@ export function DesktopSyncPanel() {
 
       {isPanelOpen ? (
         <div className="fixed inset-0 z-40 flex items-start justify-end bg-[rgba(22,22,20,0.16)] px-4 py-4">
-          <aside className="w-full max-w-[420px] rounded-[24px] border p-6 shadow-xl" style={{ borderColor: "var(--color-border)", background: "var(--color-surface-elevated)" }}>
+          <aside className="w-full max-w-[420px] rounded-lg border p-6 " style={{ borderColor: "var(--color-border)", background: "var(--color-surface-elevated)" }}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
@@ -152,7 +152,7 @@ export function DesktopSyncPanel() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[16px] border bg-white px-4 py-3" style={{ borderColor: "var(--color-border)" }}>
+    <div className="rounded-md border bg-white px-4 py-3" style={{ borderColor: "var(--color-border)" }}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
         {label}
       </p>

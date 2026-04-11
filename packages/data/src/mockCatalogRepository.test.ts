@@ -1,5 +1,7 @@
+import { getDisplayDate } from "@drive-project-catalog/domain";
 import { describe, expect, it } from "vitest";
 import { MockCatalogRepository } from "./mockCatalogRepository";
+import { mockProjects } from "./mockData";
 
 describe("MockCatalogRepository", () => {
   it("returns stable dashboard data", async () => {
@@ -38,13 +40,30 @@ describe("MockCatalogRepository", () => {
     expect(pending[0]?.type).toBe("project.upsert");
   });
 
+  it("mock fixture exercises the correctedDate fallback branch (M3)", () => {
+    // M3 invariant: at least one project in the mock snapshot must carry a
+    // non-null correctedDate so mock-driven test runs exercise
+    // getDisplayDate's `correctedDate ?? parsedDate` left branch. Without
+    // this, the override semantics can regress silently in any test that
+    // relies on mockCatalogSnapshot.
+    const withCorrected = mockProjects.filter((project) => project.correctedDate !== null);
+    expect(withCorrected.length).toBeGreaterThanOrEqual(1);
+
+    const sample = withCorrected[0]!;
+    expect(sample.parsedDate).not.toBeNull();
+    expect(sample.correctedDate).not.toBe(sample.parsedDate);
+    expect(getDisplayDate(sample)).toBe(sample.correctedDate);
+  });
+
   it("supports metadata edits and search over drive/category fields", async () => {
     const repository = new MockCatalogRepository();
     await repository.updateProjectMetadata({
       projectId: "project-240401-apple-shoot",
+      correctedDate: null,
       correctedClient: "Apple Studios",
       correctedProject: "Hero Shoot",
-      category: "video"
+      category: "video",
+      folderType: null
     });
 
     const [driveMatches, categoryMatches] = await Promise.all([

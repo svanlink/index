@@ -138,6 +138,88 @@ describe("StorageSyncAdapter", () => {
     expect(state.inFlightCount).toBe(0);
   });
 
+  it("S4/H4 — reconciles stranded in-flight items at flush entry and retries them in the same cycle", async () => {
+    const storage = new MemoryStorage();
+    const pushes: string[][] = [];
+    const remote: RemoteSyncAdapter = {
+      mode: "remote-ready",
+      async pushChanges(request) {
+        pushes.push(request.operations.map((operation) => operation.id));
+        return {
+          acceptedOperationIds: request.operations.map((operation) => operation.id),
+          rejected: [],
+          remoteCursor: "cursor-recovered"
+        };
+      },
+      async pullChanges() {
+        return { changes: [], remoteCursor: "cursor-recovered" };
+      }
+    };
+    const adapter = new StorageSyncAdapter({
+      storage,
+      storageKey: "sync",
+      remote
+    });
+
+    // Seed an envelope with a stranded in-flight op but with state showing
+    // remote-ready + sync_in_progress=false. This is the scenario the boot-time
+    // `recoverInterruptedState` guard would miss — it requires mid-run recovery.
+    storage.setItem(
+      "sync",
+      JSON.stringify({
+        version: 1,
+        queue: [
+          {
+            id: "op-stranded",
+            type: "project.upsert",
+            entity: "project",
+            recordId: "project-stranded",
+            change: "upsert",
+            occurredAt: "2026-04-06T12:00:00.000Z",
+            recordUpdatedAt: "2026-04-06T12:00:00.000Z",
+            payload: { id: "project-stranded" },
+            source: "manual",
+            status: "in-flight",
+            attempts: 1,
+            lastAttemptAt: "2026-04-06T12:05:00.000Z",
+            lastError: null
+          }
+        ],
+        state: {
+          mode: "remote-ready",
+          pendingCount: 0,
+          queuedCount: 1,
+          failedCount: 0,
+          inFlightCount: 1,
+          syncInProgress: false,
+          lastPushAt: null,
+          lastPullAt: null,
+          lastError: null,
+          lastSyncError: null,
+          remoteCursor: null,
+          conflictPolicy: "updated-at-last-write-wins-local-tie-break"
+        }
+      })
+    );
+
+    // flush() on the existing adapter instance (no restart) must reconcile and retry.
+    const result = await adapter.flush();
+
+    expect(result.pushed).toBe(1);
+    expect(result.pending).toBe(0);
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0]).toEqual(["op-stranded"]);
+
+    const queue = await adapter.listQueue();
+    expect(queue).toHaveLength(0);
+
+    const state = await adapter.getState();
+    expect(state.inFlightCount).toBe(0);
+    expect(state.pendingCount).toBe(0);
+    expect(state.failedCount).toBe(0);
+    expect(state.remoteCursor).toBe("cursor-recovered");
+  });
+
   it("recovers stale in-flight items after restart", async () => {
     const storage = new MemoryStorage();
     const first = new StorageSyncAdapter({

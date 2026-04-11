@@ -97,7 +97,7 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (isTerminalScanStatus(session.status)) {
+      if (isTerminalScanStatus(session.status) && session.sizeJobsPending === 0) {
         setActiveScanId(null);
         setLastError(
           session.status === "failed" || session.status === "interrupted"
@@ -165,7 +165,7 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
       await refresh();
       await pollScan(response.scanId, requestedDriveId);
     } catch (error) {
-      setLastError(error instanceof Error ? error.message : "Failed to start the desktop scan.");
+      setLastError(error instanceof Error ? error.message : String(error) || "Failed to start the desktop scan.");
     }
   }, [clearPollTimer, desktopAvailable, draftRootPath, drives, pollScan, refresh, repository, selectedDriveId]);
 
@@ -181,7 +181,7 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
       await refresh();
       setActiveScanId(null);
     } catch (error) {
-      setLastError(error instanceof Error ? error.message : "Failed to cancel the desktop scan.");
+      setLastError(error instanceof Error ? error.message : String(error) || "Failed to cancel the desktop scan.");
     }
   }, [activeScanId, clearPollTimer, refresh, repository]);
 

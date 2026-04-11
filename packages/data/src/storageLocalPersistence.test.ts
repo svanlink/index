@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { describeLocalPersistenceContract } from "./localPersistenceContract";
 import { mockCatalogSnapshot } from "./mockData";
 import { StorageLocalPersistence } from "./storageLocalPersistence";
 
@@ -74,5 +75,13 @@ describe("StorageLocalPersistence", () => {
 
     expect((await persisted.getProjectById(project.id))?.correctedProject).toBe("Granular Project Title");
     expect((await persisted.getScanSession(session.scanId))?.status).toBe("interrupted");
+  });
+});
+
+describeLocalPersistenceContract("StorageLocalPersistence", async (seed) => {
+  return new StorageLocalPersistence({
+    storage: new MemoryStorage(),
+    storageKey: "catalog",
+    seed
   });
 });
