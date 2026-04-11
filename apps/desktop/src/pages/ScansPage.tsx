@@ -8,7 +8,7 @@ import {
 } from "@drive-project-catalog/data";
 import { useCatalogStore } from "../app/providers";
 import { formatDate } from "./dashboardHelpers";
-import { EmptyState, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
+import { EmptyState, ScanRowSkeleton, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
 import { formatScanDuration } from "./scanPageHelpers";
 
 const statusFilters: Array<{ label: string; value: ScanHistoryStatusFilter }> = [
@@ -77,12 +77,14 @@ export function ScansPage() {
 
       <SectionCard title="Scan sessions">
         {isLoading ? (
-          <LoadingState label="Loading scan history" />
+          <div aria-busy="true" aria-label="Loading scan history">
+            {[0, 1, 2].map((i) => <ScanRowSkeleton key={i} />)}
+          </div>
         ) : sessions.length === 0 ? (
           <EmptyState
             title={scanSessions.length === 0 ? "No scan sessions yet" : "No matches"}
             description={scanSessions.length === 0
-              ? "Run the first desktop scan to populate history."
+              ? "Run a scan from any drive's detail page to start building history."
               : "Loosen the filters to see sessions."}
           />
         ) : (

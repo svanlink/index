@@ -97,7 +97,7 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (isTerminalScanStatus(session.status)) {
+      if (isTerminalScanStatus(session.status) && session.sizeJobsPending === 0) {
         setActiveScanId(null);
         setLastError(
           session.status === "failed" || session.status === "interrupted"

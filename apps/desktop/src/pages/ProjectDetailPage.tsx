@@ -6,6 +6,7 @@ import { categoryValues, type Category, type FolderType, type ProjectScanEvent }
 import { validateSingleProjectMove } from "../app/catalogValidation";
 import { useCatalogStore } from "../app/providers";
 import { useAsyncAction } from "../app/useAsyncAction";
+import { useOptimisticMutation } from "../app/useOptimisticMutation";
 import {
   formatBytes,
   formatDate,
@@ -164,6 +165,24 @@ export function ProjectDetailPage() {
     }
   );
 
+  const metadataMutation = useOptimisticMutation(
+    (payload: Parameters<typeof updateProjectMetadata>[0]) => updateProjectMetadata(payload),
+    {
+      onSuccess: () =>
+        setFeedback({
+          tone: "success",
+          title: "Metadata saved",
+          messages: ["Corrected fields were updated for this project."]
+        }),
+      onRollback: (error) =>
+        setFeedback({
+          tone: "error",
+          title: "Save failed",
+          messages: [error.message || "The metadata could not be saved."]
+        })
+    }
+  );
+
   const moveValidation = useMemo(
     () =>
       project
@@ -193,7 +212,7 @@ export function ProjectDetailPage() {
 
   const currentProject = project;
 
-  async function handleMetadataSave(event: FormEvent<HTMLFormElement>) {
+  function handleMetadataSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     // Only send folderType when the user is intentionally upgrading away from personal_folder.
@@ -204,23 +223,14 @@ export function ProjectDetailPage() {
         ? (metadataForm.folderType as FolderType)
         : null;
 
-    try {
-      await updateProjectMetadata({
-        projectId: currentProject.id,
-        correctedDate: metadataForm.correctedDate || null,
-        correctedClient: metadataForm.correctedClient || null,
-        correctedProject: metadataForm.correctedProject || null,
-        category: metadataForm.category || null,
-        folderType: reclassifyTarget
-      });
-      setFeedback({
-        tone: "success",
-        title: "Metadata saved",
-        messages: ["Corrected fields were updated for this project."]
-      });
-    } catch (error) {
-      setFeedback({ tone: "error", title: "Save failed", messages: [error instanceof Error ? error.message : "The metadata could not be saved."] });
-    }
+    metadataMutation.mutate({
+      projectId: currentProject.id,
+      correctedDate: metadataForm.correctedDate || null,
+      correctedClient: metadataForm.correctedClient || null,
+      correctedProject: metadataForm.correctedProject || null,
+      category: metadataForm.category || null,
+      folderType: reclassifyTarget
+    });
   }
 
   async function handlePlanMove(event: FormEvent<HTMLFormElement>) {
@@ -288,10 +298,7 @@ export function ProjectDetailPage() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-[15px] font-semibold" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</h2>
-        <div className="flex items-center gap-2">
-          <button type="button" className="button-danger" onClick={() => setShowDeleteConfirm(true)}>Delete</button>
-          <Link to="/projects" className="button-secondary">Back</Link>
-        </div>
+        <Link to="/projects" className="button-secondary">Back</Link>
       </div>
 
       {feedback ? (
@@ -393,8 +400,8 @@ export function ProjectDetailPage() {
                 </FormField>
               ) : null}
               <div className="flex justify-end">
-                <button type="submit" className="button-secondary" disabled={isMutating}>
-                  {isMutating ? "Saving..." : "Save corrections"}
+                <button type="submit" className="button-secondary" disabled={metadataMutation.isPending || isMutating}>
+                  {metadataMutation.isConfirmed ? "Saved ✓" : metadataMutation.isPending ? "Saving…" : "Save corrections"}
                 </button>
               </div>
             </form>
@@ -459,7 +466,7 @@ export function ProjectDetailPage() {
             </form>
           </SectionCard>
 
-          <SectionCard title="Scan observations" description="Observed folders and timestamps already stored in the local catalog model.">
+          <SectionCard title="Scan observations" description="Observed folder classifications and timestamps stored in the local catalog.">
             {!isEventsLoading && events.length > 0 && events[0]?.observedFolderType != null && events[0].observedFolderType !== project.folderType ? (
               <FeedbackNotice
                 tone="info"
@@ -491,6 +498,22 @@ export function ProjectDetailPage() {
           </SectionCard>
         </div>
       </section>
+
+      {/* Danger zone — separated from primary actions */}
+      <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--color-border)" }}>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-soft)" }}>Danger zone</p>
+        <div className="mt-3 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>Delete project</p>
+            <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+              Permanently removes this project from the catalog. This cannot be undone.
+            </p>
+          </div>
+          <button type="button" className="button-danger shrink-0" onClick={() => setShowDeleteConfirm(true)}>
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

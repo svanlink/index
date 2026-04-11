@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ScanSessionSnapshot, ScanStartRequest, ScanStartResponse } from "@drive-project-catalog/domain";
@@ -6,6 +7,13 @@ import {
   parseScanSessionSnapshotList,
   ScanSnapshotValidationError
 } from "@drive-project-catalog/data";
+
+export interface VolumeInfo {
+  filesystemType: string;
+  volumeName: string;
+  totalBytes: number;
+  freeBytes: number;
+}
 
 export function isDesktopScanAvailable() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -59,6 +67,26 @@ export async function listDesktopScanSnapshots(): Promise<ScanSessionSnapshot[]>
     return parseScanSessionSnapshotList(raw, "list_scan_snapshots");
   } catch (error) {
     throw new Error(normalizeScanCommandError("list", error));
+  }
+}
+
+export function useVolumeInfo(rootPath: string | null | undefined): VolumeInfo | null {
+  const [info, setInfo] = useState<VolumeInfo | null>(null);
+  useEffect(() => {
+    if (!rootPath) { setInfo(null); return; }
+    let cancelled = false;
+    void getVolumeInfo(rootPath).then((v) => { if (!cancelled) setInfo(v); });
+    return () => { cancelled = true; };
+  }, [rootPath]);
+  return info;
+}
+
+export async function getVolumeInfo(path: string): Promise<VolumeInfo | null> {
+  if (!isDesktopScanAvailable()) return null;
+  try {
+    return await invoke<VolumeInfo | null>("get_volume_info", { path });
+  } catch {
+    return null;
   }
 }
 

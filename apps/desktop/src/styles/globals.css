@@ -46,6 +46,16 @@
   --shadow-soft: none;
   --shadow-panel: none;
 
+  /* Animation tokens */
+  --duration-instant: 80ms;
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 400ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Skeleton */
+  --color-skeleton: var(--color-surface-subtle);
+
   color: var(--color-text);
   background: var(--color-canvas);
   font-family: var(--font-sans);
@@ -60,10 +70,25 @@ html {
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 1180px;
   min-height: 100vh;
   background: var(--color-canvas);
   color: var(--color-text);
+  /* Native desktop feel: no text selection drag, no bounce scroll */
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+  overscroll-behavior: none;
+  cursor: default;
+}
+
+/* Re-enable selection + text cursor inside inputs */
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 * {
@@ -219,5 +244,49 @@ select {
   /* Keyboard shortcut key appearance */
   kbd {
     font-family: inherit;
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    background: var(--color-skeleton);
+    border-radius: 4px;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Button press micro-interaction — all button variants */
+  .button-secondary:active,
+  .button-primary:active,
+  .button-danger:active,
+  .button-success:active {
+    transform: scale(0.97);
+    transition:
+      background var(--duration-instant) ease,
+      transform var(--duration-instant) ease;
+  }
+
+  /* Animated capacity bar width */
+  .capacity-bar-fill {
+    transition: width var(--duration-slow) var(--ease-out);
+  }
+}
+
+/* Skeleton pulse animation */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Reduced motion — disable non-essential animations */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    opacity: 0.6;
+  }
+  .capacity-bar-fill {
+    transition: none;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

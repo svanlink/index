@@ -296,11 +296,20 @@ export function StatusBadge({ label }: { label: string }) {
   return <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${tone}`}>{label}</span>;
 }
 
-export function EmptyState({ title, description }: { title: string; description: string }) {
+export function EmptyState({
+  title,
+  description,
+  action
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="rounded-lg border border-dashed px-6 py-8 text-center" style={{ borderColor: "var(--color-border-strong)" }}>
       <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{title}</p>
       <p className="mt-1 text-[12px]" style={{ color: "var(--color-text-muted)" }}>{description}</p>
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }
@@ -310,6 +319,81 @@ export function LoadingState({ label }: { label: string }) {
     <div className="py-6 text-center">
       <p className="text-[13px]" style={{ color: "var(--color-text-muted)" }}>{label}</p>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton loaders
+// ---------------------------------------------------------------------------
+
+/** Skeleton for a drive card (used in DrivesPage grid) */
+export function DriveCardSkeleton() {
+  return (
+    <div className="app-panel flex flex-col overflow-hidden" style={{ padding: 0 }} aria-hidden="true">
+      <div className="px-4 pt-4 pb-3">
+        <div className="skeleton h-3.5 w-2/3 rounded" />
+        <div className="skeleton mt-2 h-2.5 w-1/3 rounded" />
+        <div className="skeleton mt-2 h-2.5 w-1/2 rounded" />
+      </div>
+      <div className="px-4 pb-3">
+        <div className="skeleton h-1.5 w-full rounded-full" />
+        <div className="mt-2 flex gap-4">
+          <div className="skeleton h-2 w-16 rounded" />
+          <div className="skeleton h-2 w-16 rounded" />
+          <div className="skeleton h-2 w-12 rounded" />
+        </div>
+      </div>
+      <div className="flex gap-3 border-t px-4 py-2.5" style={{ borderColor: "var(--color-border)" }}>
+        <div className="skeleton h-3 w-8 rounded" />
+        <div className="skeleton h-3 w-12 rounded" />
+      </div>
+    </div>
+  );
+}
+
+/** Skeleton for a project table row */
+export function ProjectRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 border-b px-3 py-2.5" style={{ borderColor: "var(--color-border)" }} aria-hidden="true">
+      <div className="skeleton h-3.5 w-3.5 shrink-0 rounded" />
+      <div className="skeleton h-2.5 w-16 shrink-0 rounded" />
+      <div className="skeleton h-2.5 w-24 shrink-0 rounded" />
+      <div className="skeleton h-2.5 flex-1 rounded" />
+      <div className="skeleton h-2.5 w-20 shrink-0 rounded" />
+      <div className="skeleton h-2.5 w-16 shrink-0 rounded" />
+      <div className="skeleton h-2.5 w-14 shrink-0 rounded" />
+    </div>
+  );
+}
+
+/** Skeleton for a metric card (label + value) */
+export function MetricCardSkeleton() {
+  return (
+    <div aria-hidden="true">
+      <div className="skeleton h-2.5 w-14 rounded" />
+      <div className="skeleton mt-1.5 h-4 w-20 rounded" />
+    </div>
+  );
+}
+
+/** Skeleton for a scan list row */
+export function ScanRowSkeleton() {
+  return (
+    <article className="border-b px-4 py-3" style={{ borderColor: "var(--color-border)" }} aria-hidden="true">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="skeleton h-5 w-14 rounded" />
+          <div className="skeleton h-3 w-32 rounded" />
+        </div>
+        <div className="skeleton h-6 w-14 rounded" />
+      </div>
+      <div className="skeleton mt-2 h-2.5 w-3/4 rounded" />
+      <div className="mt-2 flex gap-4">
+        <div className="skeleton h-2.5 w-20 rounded" />
+        <div className="skeleton h-2.5 w-20 rounded" />
+        <div className="skeleton h-2.5 w-16 rounded" />
+      </div>
+    </article>
   );
 }
 
@@ -447,10 +531,20 @@ export function CapacityBar({
       : undefined;
   const h = height === "sm" ? "h-2.5" : "h-3";
 
+  const usedPctNum = totalBytes && usedBytes !== null ? Math.round((usedBytes / totalBytes) * 100) : null;
+
   return (
-    <div className="overflow-hidden rounded-full" style={{ background: "var(--color-progress-track)" }}>
+    <div
+      className="overflow-hidden rounded-full"
+      style={{ background: "var(--color-progress-track)" }}
+      role="progressbar"
+      aria-valuenow={usedPctNum ?? undefined}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={usedPctNum !== null ? `Storage ${usedPctNum}% used` : "Storage usage unknown"}
+    >
       <div
-        className={`relative ${h} rounded-full`}
+        className={`capacity-bar-fill relative ${h} rounded-full`}
         style={{ width: usedPct, background: "var(--color-accent)" }}
       >
         {reservedPct ? (
@@ -523,13 +617,59 @@ export function FeedbackNotice({
           : { borderColor: "#c9d5df", background: "var(--color-info-soft)", color: "var(--color-info)" };
 
   return (
-    <div className="rounded-md border px-3 py-3" style={palette}>
-      <p className="text-[12px] font-semibold">{title}</p>
-      <div className="mt-1.5 space-y-1">
-        {messages.map((message) => (
-          <p key={message} className="text-[13px] leading-snug">{message}</p>
-        ))}
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-md border px-3 py-3"
+      style={palette}
+    >
+      <div className="flex items-start gap-2">
+        <FeedbackIcon tone={tone} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-semibold">{title}</p>
+          <div className="mt-1.5 space-y-1">
+            {messages.map((message) => (
+              <p key={message} className="text-[13px] leading-snug">{message}</p>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+function FeedbackIcon({ tone }: { tone: "success" | "warning" | "error" | "info" }) {
+  if (tone === "success") {
+    return (
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (tone === "warning") {
+    return (
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+        <path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M8 6.5V9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="8" cy="11.5" r="0.75" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (tone === "error") {
+    return (
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  // info
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 7.5V11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="8" cy="5" r="0.75" fill="currentColor" />
+    </svg>
   );
 }

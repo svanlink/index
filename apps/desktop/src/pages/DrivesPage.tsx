@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
+import { useVolumeInfo } from "../app/scanCommands";
+import { useShortcut } from "../app/useShortcut";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate } from "./dashboardHelpers";
-import { EmptyState, FeedbackNotice, LoadingState } from "./pagePrimitives";
+import { DriveCardSkeleton, EmptyState, FeedbackNotice } from "./pagePrimitives";
 
 type FeedbackState = {
   tone: "success" | "warning" | "error" | "info";
@@ -66,6 +68,9 @@ export function DrivesPage() {
   const [driveForm, setDriveForm] = useState<DriveFormState>(initialDriveForm);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const projectCounts = useDriveMetrics(projects);
+
+  // Cmd+N — toggle create form
+  useShortcut({ key: "n", meta: true, onTrigger: () => setIsCreateOpen((c) => !c), enabled: !isMutating });
 
   // S6/M7 — auto-dismiss feedback. Cleanup clears the prior timer on every
   // feedback change, so rapidly-changing notices never stack.
@@ -138,11 +143,22 @@ export function DrivesPage() {
       ) : null}
 
       {isLoading ? (
-        <LoadingState label="Loading drives…" />
+        <div className="grid gap-5 lg:grid-cols-2" aria-busy="true" aria-label="Loading drives">
+          {[0, 1, 2, 3].map((i) => <DriveCardSkeleton key={i} />)}
+        </div>
       ) : drives.length === 0 ? (
         <EmptyState
           title="No drives in catalog"
           description="Add a manual drive to start planning storage, or run a scan to index a connected volume."
+          action={
+            <button
+              type="button"
+              className="button-primary"
+              onClick={() => setIsCreateOpen(true)}
+            >
+              Add drive
+            </button>
+          }
         />
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
@@ -173,21 +189,32 @@ function DriveCard({
   projectCount: number;
   scanSession: ScanSessionSnapshot | null;
 }) {
+  const volumeInfo = useVolumeInfo(scanSession?.rootPath);
   const isScanning = scanSession?.status === "running";
   const scanFailed =
     scanSession?.status === "failed" || scanSession?.status === "interrupted";
-  const hasCapacity = drive.totalCapacityBytes !== null && drive.usedBytes !== null;
+
+  // Prefer stored drive values; fall back to live OS volume info when null.
+  const effectiveTotalBytes = drive.totalCapacityBytes ?? volumeInfo?.totalBytes ?? null;
+  const effectiveFreeBytes = drive.freeBytes ?? volumeInfo?.freeBytes ?? null;
+  const effectiveUsedBytes =
+    drive.usedBytes ??
+    (effectiveTotalBytes !== null && volumeInfo?.freeBytes !== undefined
+      ? effectiveTotalBytes - volumeInfo.freeBytes
+      : null);
+
+  const hasCapacity = effectiveTotalBytes !== null && effectiveUsedBytes !== null;
   const usedPercent = hasCapacity
-    ? Math.max(4, (drive.usedBytes! / drive.totalCapacityBytes!) * 100)
+    ? Math.max(4, (effectiveUsedBytes! / effectiveTotalBytes!) * 100)
     : null;
   const reservedPercent =
     hasCapacity && drive.reservedIncomingBytes > 0
-      ? Math.max(3, (drive.reservedIncomingBytes / drive.totalCapacityBytes!) * 100)
+      ? Math.max(3, (drive.reservedIncomingBytes / effectiveTotalBytes!) * 100)
       : null;
 
   return (
     <article
-      className="app-panel flex flex-col overflow-hidden"
+      className="app-panel flex flex-col overflow-hidden transition-transform duration-150 hover:-translate-y-px"
       style={{ padding: 0 }}
     >
       {isScanning ? (
@@ -213,10 +240,28 @@ function DriveCard({
       </div>
 
       <div className="px-4 pb-3">
-        <div className="overflow-hidden rounded-full" style={{ height: 6, background: "var(--color-surface-subtle)" }}>
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[11px]" style={{ color: "var(--color-text-soft)" }}>
+            {hasCapacity ? `${formatBytes(effectiveUsedBytes!)} used` : "Unknown capacity"}
+          </span>
+          {usedPercent !== null ? (
+            <span className="text-[11px] font-medium tabular-nums" style={{ color: "var(--color-text-muted)" }}>
+              {Math.round((effectiveUsedBytes! / effectiveTotalBytes!) * 100)}%
+            </span>
+          ) : null}
+        </div>
+        <div
+          className="overflow-hidden rounded-full"
+          style={{ height: 6, background: "var(--color-surface-subtle)" }}
+          role="progressbar"
+          aria-valuenow={usedPercent !== null ? Math.round((effectiveUsedBytes! / effectiveTotalBytes!) * 100) : undefined}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={hasCapacity ? `${Math.round((effectiveUsedBytes! / effectiveTotalBytes!) * 100)}% storage used` : "Storage usage unknown"}
+        >
           {usedPercent !== null ? (
             <div
-              className="relative h-full rounded-full"
+              className="capacity-bar-fill relative h-full rounded-full"
               style={{ width: `${usedPercent}%`, background: "var(--color-accent)" }}
             >
               {reservedPercent !== null ? (
@@ -231,9 +276,9 @@ function DriveCard({
           )}
         </div>
         <div className="mt-1.5 flex gap-4 text-[11px]" style={{ color: "var(--color-text-soft)" }}>
-          <span>{hasCapacity ? `${formatBytes(drive.usedBytes)} used` : "Unknown"}</span>
-          <span>{formatBytes(drive.freeBytes)} free</span>
-          <span>{projectCount} projects</span>
+          <span>{effectiveFreeBytes !== null ? `${formatBytes(effectiveFreeBytes)} free` : "Unknown free"}</span>
+          <span>{projectCount} {projectCount === 1 ? "project" : "projects"}</span>
+          {volumeInfo ? <span>{volumeInfo.filesystemType}</span> : null}
         </div>
       </div>
 

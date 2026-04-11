@@ -38,7 +38,7 @@ export function TopUtilityBar({
         {onSearchChange ? (
           <form onSubmit={handleSubmit} className="min-w-0">
             <label
-              className="field-shell flex w-[240px] items-center gap-2 text-[13px]"
+              className="field-shell flex w-[200px] shrink-0 items-center gap-2 text-[13px]"
               style={{ color: "var(--color-text-soft)" }}
             >
               <svg

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Project } from "@drive-project-catalog/domain";
 
-
+import { useVolumeInfo } from "../app/scanCommands";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate, formatParsedDate, getProjectName, getProjectStatusBadges } from "./dashboardHelpers";
 import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
@@ -10,8 +10,17 @@ import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, LoadingState, Me
 export function DriveDetailPage() {
   const { driveId = "" } = useParams();
   const navigate = useNavigate();
-  const { isLoading, isMutating, getDriveDetailView, selectDrive, deleteDrive } = useCatalogStore();
+  const { isLoading, isMutating, getDriveDetailView, selectDrive, deleteDrive, scanSessions } = useCatalogStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const driveRootPath = scanSessions
+    .filter((s) => s.requestedDriveId === driveId)
+    .sort((a, b) =>
+      (b.finishedAt ?? b.updatedAt ?? b.startedAt).localeCompare(
+        a.finishedAt ?? a.updatedAt ?? a.startedAt
+      )
+    )[0]?.rootPath ?? null;
+  const volumeInfo = useVolumeInfo(driveRootPath);
 
   useEffect(() => {
     selectDrive(driveId || null);
@@ -57,10 +66,7 @@ export function DriveDetailPage() {
 
       <div className="flex items-center justify-between">
         <div />
-        <div className="flex items-center gap-2">
-          <button type="button" className="button-danger" onClick={() => setShowDeleteConfirm(true)}>Delete</button>
-          <Link to="/drives" className="button-secondary">Back</Link>
-        </div>
+        <Link to="/drives" className="button-secondary">Back</Link>
       </div>
 
       <SectionCard title="Drive summary" description="Capacity and reservation data stays local-first and updates as move plans change.">
@@ -85,6 +91,13 @@ export function DriveDetailPage() {
             <MetricCard label="Incoming plans" value={String(incomingProjects.length)} />
             <MetricCard label="Missing records" value={String(missingProjects.length)} />
             <MetricCard label="Last scan" value={formatDate(drive.lastScannedAt)} />
+            {volumeInfo ? (
+              <>
+                <MetricCard label="Filesystem" value={volumeInfo.filesystemType} />
+                <MetricCard label="Volume total" value={formatBytes(volumeInfo.totalBytes)} />
+                <MetricCard label="Volume free" value={formatBytes(volumeInfo.freeBytes)} />
+              </>
+            ) : null}
           </div>
         </div>
       </SectionCard>
@@ -108,6 +121,22 @@ export function DriveDetailPage() {
           accentLabel="Missing"
         />
       </section>
+
+      {/* Danger zone — separated from primary actions */}
+      <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--color-border)" }}>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-soft)" }}>Danger zone</p>
+        <div className="mt-3 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>Delete drive</p>
+            <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+              Permanently removes this drive from the catalog. Projects assigned to it will become unassigned.
+            </p>
+          </div>
+          <button type="button" className="button-danger shrink-0" onClick={() => setShowDeleteConfirm(true)}>
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

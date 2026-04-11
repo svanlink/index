@@ -1,8 +1,8 @@
 import { Link, useParams } from "react-router-dom";
 import { buildScanSessionDetailView, findCatalogProjectForScanRecord, getScanStatusLabel, getScanStatusMessage } from "@drive-project-catalog/data";
 
-
 import { useCatalogStore } from "../app/providers";
+import { useVolumeInfo } from "../app/scanCommands";
 import { formatBytes, formatDate } from "./dashboardHelpers";
 import { EmptyState, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
 import { formatScanDuration } from "./scanPageHelpers";
@@ -12,6 +12,7 @@ export function ScanDetailPage() {
   const { scanSessions, drives, projects, isLoading } = useCatalogStore();
   const session = scanSessions.find((entry) => entry.scanId === scanId) ?? null;
   const detail = buildScanSessionDetailView(scanSessions, drives, scanId);
+  const volumeInfo = useVolumeInfo(detail?.targetPath);
 
   if (isLoading) {
     return <LoadingState label="Loading scan detail" />;
@@ -76,6 +77,17 @@ export function ScanDetailPage() {
           ) : null}
         </div>
       </section>
+
+      {volumeInfo ? (
+        <SectionCard title="Volume info" description="Disk Utility–sourced volume metrics for the scanned drive.">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <DetailField label="Filesystem" value={volumeInfo.filesystemType} />
+            <DetailField label="Volume name" value={volumeInfo.volumeName || "—"} />
+            <DetailField label="Total space" value={formatBytes(volumeInfo.totalBytes)} />
+            <DetailField label="Free space" value={formatBytes(volumeInfo.freeBytes)} />
+          </div>
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="Observed projects" description="Folder observations already stored with the scan session and ready for future scan-history workflows.">
         {detail.projects.length === 0 ? (

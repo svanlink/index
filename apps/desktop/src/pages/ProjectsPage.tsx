@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useShortcut } from "../app/useShortcut";
 import { buildProjectSearchSuggestions, filterProjectCatalog, UNASSIGNED_DRIVE_FILTER_VALUE } from "@drive-project-catalog/data";
 import {
   categoryValues,
@@ -19,7 +20,7 @@ import {
   getDriveName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { EmptyState, FeedbackNotice, LoadingState, SearchField, SectionCard, StatusBadge } from "./pagePrimitives";
+import { EmptyState, FeedbackNotice, ProjectRowSkeleton, SearchField, SectionCard, StatusBadge } from "./pagePrimitives";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -82,6 +83,9 @@ export function ProjectsPage() {
   const [batchState, setBatchState] = useState<BatchState>(initialBatchState);
   const [feedback, setFeedback] = useState<{ tone: "success" | "warning" | "error" | "info"; title: string; messages: string[] } | null>(null);
   const [batchPreview, setBatchPreview] = useState<ReturnType<typeof buildBatchActionPreview> | null>(null);
+
+  // Cmd+N — toggle create form (disabled while a mutation is in flight)
+  useShortcut({ key: "n", meta: true, onTrigger: () => setIsCreateOpen((c) => !c), enabled: !isMutating });
 
   // Read filter params
   const categoryFilter = (searchParams.get("category") as Category | null) ?? "";
@@ -401,8 +405,8 @@ export function ProjectsPage() {
       {/* ── Project list ── */}
       <div className="overflow-hidden">
         {isLoading ? (
-          <div className="py-4">
-            <LoadingState label="Loading projects…" />
+          <div aria-busy="true" aria-label="Loading projects">
+            {[0, 1, 2, 3, 4, 5].map((i) => <ProjectRowSkeleton key={i} />)}
           </div>
         ) : filteredProjects.length === 0 ? (
           <div className="py-4">
@@ -433,10 +437,21 @@ export function ProjectsPage() {
                 {allVisibleSelected ? "Deselect all" : "Select all"}
               </label>
               <p className="text-[11px] tabular-nums" style={{ color: "var(--color-text-soft)" }}>
-                <span className="font-semibold" style={{ color: "var(--color-text-muted)" }}>{filteredProjects.length}</span>
-                {" "}
-                {filteredProjects.length === 1 ? "entry" : "entries"}
-                {hasActiveFilters ? " (filtered)" : ""}
+                {hasActiveFilters || search.trim() ? (
+                  <>
+                    <span className="font-semibold" style={{ color: "var(--color-text-muted)" }}>{filteredProjects.length}</span>
+                    {" of "}
+                    <span className="font-semibold" style={{ color: "var(--color-text-muted)" }}>{projects.length}</span>
+                    {" "}
+                    {projects.length === 1 ? "project" : "projects"}
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold" style={{ color: "var(--color-text-muted)" }}>{projects.length}</span>
+                    {" "}
+                    {projects.length === 1 ? "project" : "projects"}
+                  </>
+                )}
               </p>
             </div>
 
@@ -483,10 +498,18 @@ function ProjectRow({
   const statusBadges = getProjectStatusBadges(project).filter((b) => b !== "Normal");
   const driveName = getDriveName(drives, project.currentDriveId);
 
+  const isMissing = project.missingStatus === "missing";
+  const isDuplicate = project.duplicateStatus === "duplicate";
+  const statusBoxShadow = isMissing
+    ? "inset 3px 0 0 var(--color-danger)"
+    : isDuplicate
+      ? "inset 3px 0 0 var(--color-warning)"
+      : undefined;
+
   return (
     <tr
-      className={`group border-b transition-colors duration-75 ${isSelected ? "bg-[color:var(--color-accent-soft)] hover:bg-[#dbe3ec]" : "hover:bg-[#f7f5f0]"}`}
-      style={{ borderColor: "var(--color-border)" }}
+      className={`group border-b transition duration-100 ${isSelected ? "bg-[color:var(--color-accent-soft)] hover:bg-[#dbe3ec]" : "hover:bg-[#f7f5f0] hover:-translate-y-px hover:shadow-[0_2px_6px_-1px_rgba(0,0,0,0.06)]"}`}
+      style={{ borderColor: "var(--color-border)", boxShadow: statusBoxShadow }}
       aria-selected={isSelected}
     >
       {/* Checkbox */}
@@ -668,7 +691,7 @@ function BatchActionBar({
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex min-w-0 flex-wrap items-end gap-4">
           {/* Selection count */}
           <div className="flex items-center gap-2.5">
             <span

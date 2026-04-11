@@ -1,6 +1,7 @@
 import { getScanStatusLabel, getScanStatusMessage } from "@drive-project-catalog/data";
-import { formatDate } from "../pages/dashboardHelpers";
+import { formatBytes, formatDate } from "../pages/dashboardHelpers";
 import { useCatalogStore } from "./providers";
+import { useVolumeInfo } from "./scanCommands";
 import { useScanWorkflow } from "./scanWorkflow";
 
 function formatDuration(durationMs: number | null | undefined) {
@@ -33,6 +34,7 @@ export function DesktopScanPanel() {
   } = useScanWorkflow();
 
   const summarySession = activeSession ?? latestTerminalSession ?? latestCompletedSession;
+  const volumeInfo = useVolumeInfo(summarySession?.rootPath);
 
   return (
     <>
@@ -41,8 +43,8 @@ export function DesktopScanPanel() {
       </button>
 
       {isPanelOpen ? (
-        <div className="fixed inset-0 z-40 flex items-start justify-end bg-[rgba(22,22,20,0.16)] px-4 py-4">
-          <aside className="w-full max-w-[440px] rounded-lg border p-6 " style={{ borderColor: "var(--color-border)", background: "var(--color-surface-elevated)" }}>
+        <div className="fixed inset-0 z-40 flex items-start justify-end bg-[rgba(22,22,20,0.28)] px-4 py-4">
+          <aside className="w-full max-w-[440px] max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border p-6" style={{ borderColor: "var(--color-border)", background: "var(--color-surface-elevated)" }}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--color-text-soft)" }}>
@@ -147,6 +149,20 @@ export function DesktopScanPanel() {
                     <Metric label="Missing detected" value={String(summarySession.summary.missingProjectsCount)} />
                     <Metric label="Duplicates flagged" value={String(summarySession.summary.duplicatesFlaggedCount)} />
                     <Metric label="Duration" value={formatDuration(summarySession.summary.durationMs)} />
+                  </div>
+                ) : null}
+
+                {volumeInfo ? (
+                  <div className="border-t pt-4" style={{ borderColor: "var(--color-border)" }}>
+                    <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
+                      Volume info
+                    </p>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Metric label="Filesystem" value={volumeInfo.filesystemType} />
+                      <Metric label="Volume" value={volumeInfo.volumeName || "—"} />
+                      <Metric label="Total space" value={formatBytes(volumeInfo.totalBytes)} />
+                      <Metric label="Free space" value={formatBytes(volumeInfo.freeBytes)} />
+                    </div>
                   </div>
                 ) : null}
 

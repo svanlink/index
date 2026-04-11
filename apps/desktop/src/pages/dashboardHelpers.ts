@@ -39,11 +39,8 @@ export function getDriveName(drives: Drive[], driveId: string | null) {
 }
 
 export function formatDate(value: string | null) {
-  if (!value) {
-    return "Not available";
-  }
-
-  return new Date(value).toLocaleDateString();
+  if (!value) return "Not available";
+  return new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function formatParsedDate(value: string | null) {
