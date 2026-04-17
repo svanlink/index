@@ -11,10 +11,10 @@ import type { CatalogSnapshot, LocalPersistenceAdapter } from "./localPersistenc
 /**
  * Shared contract-test suite for LocalPersistenceAdapter implementations.
  *
- * All three adapters (InMemoryLocalPersistence, StorageLocalPersistence,
- * SqliteLocalPersistence) must pass these tests identically. This enforces
- * behavioural parity across storage backends and guards against drift
- * regressions like H3 (scan_session cascade mismatch on deleteDrive).
+ * Both adapters (InMemoryLocalPersistence, SqliteLocalPersistence) must
+ * pass these tests identically. This enforces behavioural parity across
+ * storage backends and guards against drift regressions like H3
+ * (scan_session cascade mismatch on deleteDrive).
  *
  * Usage:
  *   describeLocalPersistenceContract("InMemory", async (seed) =>

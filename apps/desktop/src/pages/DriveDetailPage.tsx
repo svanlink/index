@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Project } from "@drive-project-catalog/domain";
+import { getScanStatusLabel, getScanStatusMessage } from "@drive-project-catalog/data";
 
 import { useVolumeInfo } from "../app/scanCommands";
 import { useCatalogStore } from "../app/providers";
+import { useScanWorkflow } from "../app/scanWorkflow";
 import { formatBytes, formatDate, formatParsedDate, getProjectName, getProjectStatusBadges } from "./dashboardHelpers";
 import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, FeedbackNotice, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
 
@@ -13,29 +15,76 @@ type FeedbackState = {
   messages: string[];
 } | null;
 
+// ---------------------------------------------------------------------------
+// DriveDetailPage
+// ---------------------------------------------------------------------------
+//
+// Scans are inherently per-drive, so the scan workflow lives inline here
+// rather than as a global toolbar modal. The previous DesktopScanPanel /
+// ShellToolbarActions layer was removed — all its state is sourced directly
+// from the ScanWorkflowProvider context and rendered as a first-class section
+// on this page.
+// ---------------------------------------------------------------------------
+
 export function DriveDetailPage() {
   const { driveId = "" } = useParams();
   const navigate = useNavigate();
   const { isLoading, isMutating, getDriveDetailView, selectDrive, deleteDrive, scanSessions } = useCatalogStore();
+  const {
+    isDesktopScanAvailable,
+    draftRootPath,
+    isPickingDirectory,
+    activeSession: workflowActiveSession,
+    lastError: scanError,
+    setDraftRootPath,
+    setSelectedDriveId,
+    chooseDirectory,
+    startScan,
+    cancelScan
+  } = useScanWorkflow();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
 
-  const driveRootPath = scanSessions
-    .filter((s) => s.requestedDriveId === driveId)
-    .sort((a, b) =>
-      (b.finishedAt ?? b.updatedAt ?? b.startedAt).localeCompare(
-        a.finishedAt ?? a.updatedAt ?? a.startedAt
-      )
-    )[0]?.rootPath ?? null;
+  // Most recent session for this drive drives two things: the volume info
+  // lookup (which needs a valid rootPath) and the default target path we seed
+  // into the scan form below.
+  const latestSessionForDrive = useMemo(
+    () =>
+      scanSessions
+        .filter((s) => s.requestedDriveId === driveId)
+        .sort((a, b) =>
+          (b.finishedAt ?? b.updatedAt ?? b.startedAt).localeCompare(
+            a.finishedAt ?? a.updatedAt ?? a.startedAt
+          )
+        )[0] ?? null,
+    [driveId, scanSessions]
+  );
+  const driveRootPath = latestSessionForDrive?.rootPath ?? null;
   const volumeInfo = useVolumeInfo(driveRootPath);
+
+  // Only treat the workflow's active session as "ours" if it targets this
+  // drive — otherwise we'd show a running scan from another drive under this
+  // drive's header.
+  const activeSession =
+    workflowActiveSession?.requestedDriveId === driveId ? workflowActiveSession : null;
+  const scanSummary = activeSession ?? latestSessionForDrive;
 
   useEffect(() => {
     selectDrive(driveId || null);
-
     return () => {
       selectDrive(null);
     };
   }, [driveId, selectDrive]);
+
+  // Bind the scan workflow to this drive while the page is mounted. Seeding
+  // `draftRootPath` from the last known scan spares the user from retyping the
+  // /Volumes/... path every time they revisit an existing drive.
+  useEffect(() => {
+    setSelectedDriveId(driveId);
+    if (!draftRootPath && driveRootPath) {
+      setDraftRootPath(driveRootPath);
+    }
+  }, [driveId, driveRootPath, draftRootPath, setSelectedDriveId, setDraftRootPath]);
 
   // Auto-dismiss feedback after 2.8s. Matches the pattern used across pages so
   // transient notices never stack and the surface stays calm.
@@ -74,6 +123,9 @@ export function DriveDetailPage() {
       });
     }
   }
+
+  const canStartScan = isDesktopScanAvailable && !activeSession && Boolean(draftRootPath.trim());
+  const scanPlaceholder = drive.volumeName ? `/Volumes/${drive.volumeName}` : "/Volumes/…";
 
   return (
     <div className="space-y-6">
@@ -131,6 +183,106 @@ export function DriveDetailPage() {
               </>
             ) : null}
           </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Scan drive"
+        description="Index this drive's folder structure into the catalog. Runs locally — nothing leaves your machine."
+        action={
+          <div className="flex gap-2">
+            {activeSession ? (
+              <button type="button" className="button-danger" onClick={() => void cancelScan()}>
+                Cancel
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="button-success"
+              onClick={() => void startScan()}
+              disabled={!canStartScan}
+            >
+              {activeSession ? "Scan running" : "Start scan"}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <label className="block space-y-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
+              Scan target path
+            </span>
+            <div className="flex gap-2">
+              <input
+                value={draftRootPath}
+                onChange={(event) => setDraftRootPath(event.target.value)}
+                className="field-shell min-w-0 flex-1 bg-transparent px-4 py-3 outline-none"
+                placeholder={scanPlaceholder}
+                disabled={Boolean(activeSession)}
+              />
+              <button
+                type="button"
+                className="button-secondary shrink-0"
+                onClick={() => void chooseDirectory()}
+                disabled={!isDesktopScanAvailable || isPickingDirectory || Boolean(activeSession)}
+              >
+                {isPickingDirectory ? "Opening..." : "Browse"}
+              </button>
+            </div>
+          </label>
+
+          {!isDesktopScanAvailable ? (
+            <FeedbackNotice
+              tone="warning"
+              title="Desktop scan only"
+              messages={["Scans require the native desktop app. Persisted state is visible here, but starting a scan needs the Tauri shell."]}
+            />
+          ) : null}
+          {scanError ? (
+            <FeedbackNotice tone="error" title="Scan error" messages={[scanError]} />
+          ) : null}
+
+          {scanSummary ? (
+            <div className="rounded-md border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
+                  {activeSession ? "Running" : "Last scan"}
+                </p>
+                <p className="mt-1 text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
+                  {getScanStatusLabel(scanSummary)}
+                </p>
+                <p className="mt-0.5 text-[12px] break-all" style={{ color: "var(--color-text-muted)" }}>
+                  {scanSummary.rootPath}
+                </p>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <MetricCard label="Folders" value={String(scanSummary.foldersScanned)} />
+                <MetricCard label="Matches" value={String(scanSummary.matchesFound)} />
+                {scanSummary.summary ? (
+                  <>
+                    <MetricCard label="New" value={String(scanSummary.summary.newProjectsCount)} />
+                    <MetricCard label="Updated" value={String(scanSummary.summary.updatedProjectsCount)} />
+                    <MetricCard label="Missing" value={String(scanSummary.summary.missingProjectsCount)} />
+                    <MetricCard label="Duplicates" value={String(scanSummary.summary.duplicatesFlaggedCount)} />
+                  </>
+                ) : null}
+                <MetricCard label="Started" value={formatDate(scanSummary.startedAt)} />
+                <MetricCard label="Ended" value={formatDate(scanSummary.finishedAt)} />
+              </div>
+              {(scanSummary.status === "failed" ||
+                scanSummary.status === "interrupted" ||
+                scanSummary.status === "cancelled") ? (
+                <p
+                  className="mt-3 text-[12px]"
+                  style={{
+                    color: scanSummary.status === "cancelled" ? "var(--color-warning)" : "var(--color-danger)"
+                  }}
+                >
+                  {getScanStatusMessage(scanSummary)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </SectionCard>
 
@@ -216,4 +368,3 @@ function ProjectCollection({
     </SectionCard>
   );
 }
-

@@ -1,5 +1,5 @@
 import type { Drive, Project, ScanProjectRecord, ScanSessionSnapshot } from "@drive-project-catalog/domain";
-import { getMappedDriveId } from "./scanHistorySelectors";
+import { getMappedDriveId } from "./scanSelectors";
 
 export function findCatalogProjectForScanRecord(
   record: ScanProjectRecord,

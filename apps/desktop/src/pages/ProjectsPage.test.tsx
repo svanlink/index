@@ -7,7 +7,7 @@ import { createTestRouter } from "../app/router";
 import { ScanWorkflowProvider } from "../app/scanWorkflow";
 
 vi.mock("../app/catalogRepository", async () => {
-  const { MockCatalogRepository } = await import("@drive-project-catalog/data");
+  const { MockCatalogRepository } = await import("@drive-project-catalog/data/testing");
   return { repository: new MockCatalogRepository() };
 });
 

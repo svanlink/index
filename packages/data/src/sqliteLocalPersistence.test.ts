@@ -4,24 +4,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import { describeLocalPersistenceContract } from "./localPersistenceContract";
-import { mockCatalogSnapshot } from "./mockData";
+import { mockCatalogSnapshot } from "./testing/mockData";
 import { SqliteLocalPersistence, type SqlDatabase } from "./sqliteLocalPersistence";
-
-class MemoryStorage {
-  private readonly store = new Map<string, string>();
-
-  getItem(key: string) {
-    return this.store.get(key) ?? null;
-  }
-
-  setItem(key: string, value: string) {
-    this.store.set(key, value);
-  }
-
-  removeItem(key: string) {
-    this.store.delete(key);
-  }
-}
 
 const tempDirectories: string[] = [];
 
@@ -51,30 +35,6 @@ describe("SqliteLocalPersistence", () => {
 
     expect(persisted.projects[0]?.correctedProject).toBe("Persisted in SQLite");
     expect(persisted.scanSessions.length).toBeGreaterThan(0);
-  });
-
-  it("imports legacy localStorage data into SQLite on first boot", async () => {
-    const databasePath = createTempDatabasePath();
-    const legacyStorage = new MemoryStorage();
-    const legacySnapshot = structuredClone(mockCatalogSnapshot);
-    legacySnapshot.drives[0] = {
-      ...legacySnapshot.drives[0]!,
-      displayName: "Migrated Drive"
-    };
-    legacyStorage.setItem(
-      "catalog",
-      JSON.stringify({
-        version: 1,
-        snapshot: legacySnapshot
-      })
-    );
-
-    const persistence = createPersistence(databasePath, legacyStorage);
-    const migrated = await persistence.readSnapshot();
-
-    expect(migrated.drives.some((drive) => drive.displayName === "Migrated Drive")).toBe(true);
-    expect(migrated.projects).toHaveLength(mockCatalogSnapshot.projects.length);
-    expect(legacyStorage.getItem("catalog")).toBeNull();
   });
 
   it("supports granular SQLite upserts without replacing the full snapshot", async () => {
@@ -729,12 +689,10 @@ describe("Sequential migration chain (M11)", () => {
   });
 });
 
-function createPersistence(databasePath: string, legacyStorage?: MemoryStorage) {
+function createPersistence(databasePath: string) {
   return new SqliteLocalPersistence({
     loadDatabase: async () => openNodeSqlDatabase(databasePath),
-    seed: mockCatalogSnapshot,
-    legacyStorage,
-    legacyStorageKey: legacyStorage ? "catalog" : undefined
+    seed: mockCatalogSnapshot
   });
 }
 

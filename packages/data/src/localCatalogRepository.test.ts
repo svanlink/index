@@ -6,25 +6,10 @@ import { describe, expect, it } from "vitest";
 import { InMemoryLocalPersistence } from "./inMemoryLocalPersistence";
 import { InMemorySyncAdapter } from "./inMemorySyncAdapter";
 import { LocalCatalogRepository } from "./localCatalogRepository";
-import { mockCatalogSnapshot } from "./mockData";
+import { mockCatalogSnapshot } from "./testing/mockData";
 import { SqliteLocalPersistence, type SqlDatabase } from "./sqliteLocalPersistence";
-import { StorageSyncAdapter } from "./storageSyncAdapter";
+import { SqliteSyncAdapter } from "./sqliteSyncAdapter";
 import { getDefaultSyncState, type RemoteSyncAdapter, type SyncableCatalogEntity, type SyncAdapter, type SyncOperation, type SyncPullResult, type SyncRecoveryResult, type SyncResult, type SyncState } from "./sync";
-
-// Minimal in-memory `StorageLike` for Pass 5 F8 tests that exercise the real
-// `StorageSyncAdapter` wired to a spy `RemoteSyncAdapter`. Intentionally not
-// shared with other test files — each file owns its own to keep deps flat.
-class MemoryStorage {
-  private readonly store = new Map<string, string>();
-
-  getItem(key: string) {
-    return this.store.get(key) ?? null;
-  }
-
-  setItem(key: string, value: string) {
-    this.store.set(key, value);
-  }
-}
 
 describe("LocalCatalogRepository", () => {
   it("supports filtered project reads from local persistence", async () => {
@@ -1008,113 +993,123 @@ describe("LocalCatalogRepository", () => {
   // replaced it with `SyncAdapter.cancelPendingForRecord`, a pure local
   // filter that never touches the remote.
   //
-  // These tests run the repository against a real `StorageSyncAdapter` wired
+  // These tests run the repository against a real `SqliteSyncAdapter` wired
   // to a spy `RemoteSyncAdapter`, so a regression that reintroduces the old
   // helper would be caught as a non-zero push spy count.
   // -------------------------------------------------------------------------
 
   it("F8: deleteDrive does NOT push to remote even when unrelated pending upserts exist", async () => {
-    const pushes: SyncOperation[][] = [];
-    const remote: RemoteSyncAdapter = {
-      mode: "remote-ready",
-      async pushChanges(request) {
-        pushes.push([...request.operations]);
-        return {
-          acceptedOperationIds: request.operations.map((op) => op.id),
-          rejected: [],
-          remoteCursor: "cursor-after-push"
-        };
-      },
-      async pullChanges() {
-        return { changes: [], remoteCursor: null };
-      }
-    };
-    const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
-    const sync = new StorageSyncAdapter({
-      storage: new MemoryStorage(),
-      storageKey: "sync",
-      remote
-    });
-    const repository = new LocalCatalogRepository(persistence, sync);
+    const directory = mkdtempSync(join(tmpdir(), "drive-project-catalog-f8-"));
 
-    // Queue an upsert for drive-b — totally unrelated to the drive we delete.
-    const driveB = (await repository.getDriveById("drive-b"))!;
-    await repository.saveDrive({ ...driveB, displayName: "Unrelated Edit" });
-    expect(await repository.listPendingSyncOperations()).toHaveLength(1);
+    try {
+      const pushes: SyncOperation[][] = [];
+      const remote: RemoteSyncAdapter = {
+        mode: "remote-ready",
+        async pushChanges(request) {
+          pushes.push([...request.operations]);
+          return {
+            acceptedOperationIds: request.operations.map((op) => op.id),
+            rejected: [],
+            remoteCursor: "cursor-after-push"
+          };
+        },
+        async pullChanges() {
+          return { changes: [], remoteCursor: null };
+        }
+      };
+      const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
+      const sync = new SqliteSyncAdapter({
+        loadDatabase: async () => openNodeSqlDatabase(join(directory, "sync.db")),
+        remote
+      });
+      const repository = new LocalCatalogRepository(persistence, sync);
 
-    // And queue an upsert for drive-a itself — the target of the delete.
-    const driveA = (await repository.getDriveById("drive-a"))!;
-    await repository.saveDrive({ ...driveA, displayName: "About To Be Deleted" });
-    expect(await repository.listPendingSyncOperations()).toHaveLength(2);
+      // Queue an upsert for drive-b — totally unrelated to the drive we delete.
+      const driveB = (await repository.getDriveById("drive-b"))!;
+      await repository.saveDrive({ ...driveB, displayName: "Unrelated Edit" });
+      expect(await repository.listPendingSyncOperations()).toHaveLength(1);
 
-    // Sanity: no pushes yet.
-    expect(pushes).toHaveLength(0);
+      // And queue an upsert for drive-a itself — the target of the delete.
+      const driveA = (await repository.getDriveById("drive-a"))!;
+      await repository.saveDrive({ ...driveA, displayName: "About To Be Deleted" });
+      expect(await repository.listPendingSyncOperations()).toHaveLength(2);
 
-    await repository.deleteDrive("drive-a");
+      // Sanity: no pushes yet.
+      expect(pushes).toHaveLength(0);
 
-    // REGRESSION GUARD: the old helper would have pushed both drive-a.upsert
-    // (the target it was trying to cancel) and drive-b.upsert (unrelated) to
-    // the remote as a side-effect of deleteDrive. Pass 5's primitive must
-    // push NOTHING.
-    expect(pushes).toHaveLength(0);
+      await repository.deleteDrive("drive-a");
 
-    // The unrelated drive-b upsert survives untouched in the queue.
-    const remaining = await repository.listPendingSyncOperations();
-    expect(remaining.some((op) => op.entity === "drive" && op.recordId === "drive-b" && op.change === "upsert")).toBe(true);
+      // REGRESSION GUARD: the old helper would have pushed both drive-a.upsert
+      // (the target it was trying to cancel) and drive-b.upsert (unrelated) to
+      // the remote as a side-effect of deleteDrive. Pass 5's primitive must
+      // push NOTHING.
+      expect(pushes).toHaveLength(0);
 
-    // The drive-a upsert was cancelled (the whole point of the helper).
-    expect(remaining.some((op) => op.entity === "drive" && op.recordId === "drive-a" && op.change === "upsert")).toBe(false);
+      // The unrelated drive-b upsert survives untouched in the queue.
+      const remaining = await repository.listPendingSyncOperations();
+      expect(remaining.some((op) => op.entity === "drive" && op.recordId === "drive-b" && op.change === "upsert")).toBe(true);
 
-    // And the drive-a delete is the only surviving op for drive-a.
-    const driveAOps = remaining.filter((op) => op.entity === "drive" && op.recordId === "drive-a");
-    expect(driveAOps).toHaveLength(1);
-    expect(driveAOps[0]!.type).toBe("drive.delete");
+      // The drive-a upsert was cancelled (the whole point of the helper).
+      expect(remaining.some((op) => op.entity === "drive" && op.recordId === "drive-a" && op.change === "upsert")).toBe(false);
+
+      // And the drive-a delete is the only surviving op for drive-a.
+      const driveAOps = remaining.filter((op) => op.entity === "drive" && op.recordId === "drive-a");
+      expect(driveAOps).toHaveLength(1);
+      expect(driveAOps[0]!.type).toBe("drive.delete");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("F8: deleteProject does NOT push to remote even when unrelated pending upserts exist", async () => {
-    const pushes: SyncOperation[][] = [];
-    const remote: RemoteSyncAdapter = {
-      mode: "remote-ready",
-      async pushChanges(request) {
-        pushes.push([...request.operations]);
-        return {
-          acceptedOperationIds: request.operations.map((op) => op.id),
-          rejected: [],
-          remoteCursor: "cursor-after-push"
-        };
-      },
-      async pullChanges() {
-        return { changes: [], remoteCursor: null };
-      }
-    };
-    const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
-    const sync = new StorageSyncAdapter({
-      storage: new MemoryStorage(),
-      storageKey: "sync",
-      remote
-    });
-    const repository = new LocalCatalogRepository(persistence, sync);
+    const directory = mkdtempSync(join(tmpdir(), "drive-project-catalog-f8-"));
 
-    // Queue an upsert for an unrelated project.
-    const unrelated = (await repository.getProjectById("project-240320-nike-ad"))!;
-    await repository.saveProject({ ...unrelated, correctedProject: "Unrelated Edit" });
+    try {
+      const pushes: SyncOperation[][] = [];
+      const remote: RemoteSyncAdapter = {
+        mode: "remote-ready",
+        async pushChanges(request) {
+          pushes.push([...request.operations]);
+          return {
+            acceptedOperationIds: request.operations.map((op) => op.id),
+            rejected: [],
+            remoteCursor: "cursor-after-push"
+          };
+        },
+        async pullChanges() {
+          return { changes: [], remoteCursor: null };
+        }
+      };
+      const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
+      const sync = new SqliteSyncAdapter({
+        loadDatabase: async () => openNodeSqlDatabase(join(directory, "sync.db")),
+        remote
+      });
+      const repository = new LocalCatalogRepository(persistence, sync);
 
-    // And an upsert for the project we are about to delete.
-    const target = (await repository.getProjectById("project-240401-apple-shoot"))!;
-    await repository.saveProject({ ...target, correctedProject: "About To Be Deleted" });
+      // Queue an upsert for an unrelated project.
+      const unrelated = (await repository.getProjectById("project-240320-nike-ad"))!;
+      await repository.saveProject({ ...unrelated, correctedProject: "Unrelated Edit" });
 
-    expect(pushes).toHaveLength(0);
+      // And an upsert for the project we are about to delete.
+      const target = (await repository.getProjectById("project-240401-apple-shoot"))!;
+      await repository.saveProject({ ...target, correctedProject: "About To Be Deleted" });
 
-    await repository.deleteProject("project-240401-apple-shoot");
+      expect(pushes).toHaveLength(0);
 
-    // REGRESSION GUARD: must not push anything as a side-effect of delete.
-    expect(pushes).toHaveLength(0);
+      await repository.deleteProject("project-240401-apple-shoot");
 
-    const remaining = await repository.listPendingSyncOperations();
-    // Unrelated upsert survived.
-    expect(remaining.some((op) => op.entity === "project" && op.recordId === "project-240320-nike-ad" && op.change === "upsert")).toBe(true);
-    // Target's upsert was cancelled.
-    expect(remaining.some((op) => op.entity === "project" && op.recordId === "project-240401-apple-shoot" && op.change === "upsert")).toBe(false);
+      // REGRESSION GUARD: must not push anything as a side-effect of delete.
+      expect(pushes).toHaveLength(0);
+
+      const remaining = await repository.listPendingSyncOperations();
+      // Unrelated upsert survived.
+      expect(remaining.some((op) => op.entity === "project" && op.recordId === "project-240320-nike-ad" && op.change === "upsert")).toBe(true);
+      // Target's upsert was cancelled.
+      expect(remaining.some((op) => op.entity === "project" && op.recordId === "project-240401-apple-shoot" && op.change === "upsert")).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("F8: deleteDrive preserves retry history (lastError, attempts) on unrelated failed entries", async () => {
@@ -1126,68 +1121,73 @@ describe("LocalCatalogRepository", () => {
     // entry with real error context was silently reset — corrupting the
     // sync state machine's diagnostic trail. The Pass 3 primitive never
     // touches non-target entries, so this information survives.
-    const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
-    const storage = new MemoryStorage();
-    // Seed the storage envelope directly with a pre-existing failed op for
-    // drive-b (an unrelated record). This simulates "previous push
-    // attempt failed with a transport error; we want to retry it later".
-    storage.setItem(
-      "sync",
-      JSON.stringify({
-        version: 1,
-        queue: [
-          {
-            id: "pre-existing-failed",
-            type: "drive.upsert",
-            entity: "drive",
-            recordId: "drive-b",
-            change: "upsert",
-            occurredAt: "2026-04-06T11:00:00.000Z",
-            recordUpdatedAt: "2026-04-06T11:00:00.000Z",
-            payload: { id: "drive-b", displayName: "Needs Retry" },
-            source: "manual",
-            status: "failed",
-            attempts: 2,
-            lastAttemptAt: "2026-04-06T11:05:00.000Z",
-            lastError: "Transport timeout — retry later"
-          }
-        ],
-        state: getDefaultSyncState()
-      })
-    );
+    const directory = mkdtempSync(join(tmpdir(), "drive-project-catalog-f8-"));
 
-    const pushes: SyncOperation[][] = [];
-    const remote: RemoteSyncAdapter = {
-      mode: "remote-ready",
-      async pushChanges(request) {
-        pushes.push([...request.operations]);
-        return {
-          acceptedOperationIds: request.operations.map((op) => op.id),
-          rejected: [],
-          remoteCursor: "cursor"
-        };
-      },
-      async pullChanges() {
-        return { changes: [], remoteCursor: null };
-      }
-    };
-    const sync = new StorageSyncAdapter({ storage, storageKey: "sync", remote });
-    const repository = new LocalCatalogRepository(persistence, sync);
+    try {
+      const persistence = new InMemoryLocalPersistence(mockCatalogSnapshot);
+      const pushes: SyncOperation[][] = [];
+      const remote: RemoteSyncAdapter = {
+        mode: "remote-ready",
+        async pushChanges(request) {
+          pushes.push([...request.operations]);
+          return {
+            acceptedOperationIds: request.operations.map((op) => op.id),
+            rejected: [],
+            remoteCursor: "cursor"
+          };
+        },
+        async pullChanges() {
+          return { changes: [], remoteCursor: null };
+        }
+      };
+      const databasePath = join(directory, "sync.db");
+      const sync = new SqliteSyncAdapter({
+        loadDatabase: async () => openNodeSqlDatabase(databasePath),
+        remote
+      });
+      const repository = new LocalCatalogRepository(persistence, sync);
 
-    await repository.deleteDrive("drive-a");
+      // Seed a pre-existing failed op for drive-b (an unrelated record) via
+      // the adapter's own enqueue, then mutate its status fields directly in
+      // SQLite to simulate "previous push attempt failed with a transport
+      // error; we want to retry it later".
+      await sync.enqueue({
+        id: "pre-existing-failed",
+        type: "drive.upsert",
+        entity: "drive",
+        recordId: "drive-b",
+        change: "upsert",
+        occurredAt: "2026-04-06T11:00:00.000Z",
+        recordUpdatedAt: "2026-04-06T11:00:00.000Z",
+        payload: { id: "drive-b", displayName: "Needs Retry" },
+        source: "manual",
+        status: "pending",
+        attempts: 0,
+        lastAttemptAt: null,
+        lastError: null
+      });
+      const rawDatabase = openNodeSqlDatabase(databasePath);
+      await rawDatabase.execute(
+        "UPDATE sync_queue SET status = 'failed', attempts = 2, last_attempt_at = '2026-04-06T11:05:00.000Z', last_error = 'Transport timeout — retry later' WHERE id = 'pre-existing-failed'"
+      );
 
-    // No push happened as a side-effect.
-    expect(pushes).toHaveLength(0);
+      await repository.deleteDrive("drive-a");
 
-    // The failed op for drive-b is still failed, with attempts and lastError
-    // intact — NOT reset to pending/0/null as the old helper would have done.
-    const queue = await sync.listQueue();
-    const preserved = queue.find((op) => op.id === "pre-existing-failed");
-    expect(preserved).toBeDefined();
-    expect(preserved!.status).toBe("failed");
-    expect(preserved!.attempts).toBe(2);
-    expect(preserved!.lastError).toBe("Transport timeout — retry later");
-    expect(preserved!.lastAttemptAt).toBe("2026-04-06T11:05:00.000Z");
+      // No push happened as a side-effect.
+      expect(pushes).toHaveLength(0);
+
+      // The failed op for drive-b is still failed, with attempts and lastError
+      // intact — NOT reset to pending/0/null as the old helper would have done.
+      const queue = await sync.listQueue();
+      const preserved = queue.find((op) => op.id === "pre-existing-failed");
+      expect(preserved).toBeDefined();
+      expect(preserved!.status).toBe("failed");
+      expect(preserved!.attempts).toBe(2);
+      expect(preserved!.lastError).toBe("Transport timeout — retry later");
+      expect(preserved!.lastAttemptAt).toBe("2026-04-06T11:05:00.000Z");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("skips startup sync when sync is disabled", async () => {

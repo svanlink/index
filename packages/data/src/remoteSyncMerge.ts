@@ -242,7 +242,7 @@ export async function applyRemoteSyncChanges(params: {
   // Apply inbound deletes after the upsert flush. `deleteDrive` cascades
   // into projects / scans / project_scan_events / scan_sessions /
   // scan_session_projects (see Pass 1 F1 hardening in `sqliteLocalPersistence`
-  // and the equivalent in `storageLocalPersistence` / `inMemoryLocalPersistence`).
+  // and the equivalent in `inMemoryLocalPersistence`).
   // `deleteProject` cascades into `project_scan_events`.
   //
   // These persistence calls bypass the sync queue — they apply a remote

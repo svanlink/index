@@ -25,8 +25,7 @@ export interface CatalogCascadeIds {
 /**
  * Enumerate the child record ids that `persistence.deleteDrive(driveId)`
  * will cascade-remove. Mirrors the cascade rules implemented identically in
- * `inMemoryLocalPersistence`, `storageLocalPersistence`, and
- * `sqliteLocalPersistence`:
+ * `inMemoryLocalPersistence` and `sqliteLocalPersistence`:
  *
  *   - `scans` where `driveId === driveId`
  *   - `scanSessions` where `requestedDriveId === driveId`

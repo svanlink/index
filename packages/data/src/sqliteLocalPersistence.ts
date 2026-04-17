@@ -9,8 +9,6 @@ import type {
   ScanSessionSnapshot
 } from "@drive-project-catalog/domain";
 import type { CatalogSnapshot, LocalPersistenceAdapter } from "./localPersistence";
-import type { StorageLike } from "./storageLocalPersistence";
-import { normalizeCatalogSnapshot, parseStoredCatalogSnapshot } from "./storageLocalPersistence";
 
 export interface SqlQueryResult {
   rowsAffected: number;
@@ -25,8 +23,37 @@ export interface SqlDatabase {
 export interface SqliteLocalPersistenceOptions {
   loadDatabase(): Promise<SqlDatabase>;
   seed: CatalogSnapshot;
-  legacyStorage?: StorageLike;
-  legacyStorageKey?: string;
+}
+
+const cloneSnapshotValue = <T>(value: T): T => structuredClone(value);
+
+/**
+ * Normalizes a catalog snapshot by deep-cloning each collection and
+ * back-filling createdAt/updatedAt timestamps on scans, project scan events,
+ * and scan sessions from their legacy fields. The SQLite persistence layer
+ * routes every inbound snapshot (seeds and `replaceSnapshot` input) through
+ * this helper so the downstream write path sees a canonical shape.
+ */
+function normalizeCatalogSnapshot(snapshot: CatalogSnapshot): CatalogSnapshot {
+  return {
+    drives: cloneSnapshotValue(snapshot.drives ?? []),
+    projects: cloneSnapshotValue(snapshot.projects ?? []),
+    scans: cloneSnapshotValue(snapshot.scans ?? []).map((scan) => ({
+      ...scan,
+      createdAt: scan.createdAt ?? scan.startedAt,
+      updatedAt: scan.updatedAt ?? scan.finishedAt ?? scan.startedAt
+    })),
+    projectScanEvents: cloneSnapshotValue(snapshot.projectScanEvents ?? []).map((event) => ({
+      ...event,
+      createdAt: event.createdAt ?? event.observedAt,
+      updatedAt: event.updatedAt ?? event.observedAt
+    })),
+    scanSessions: cloneSnapshotValue(snapshot.scanSessions ?? []).map((session) => ({
+      ...session,
+      createdAt: session.createdAt ?? session.startedAt,
+      updatedAt: session.updatedAt ?? session.finishedAt ?? session.startedAt
+    }))
+  };
 }
 
 interface Migration {
@@ -517,16 +544,12 @@ const migrations: Migration[] = [
 export class SqliteLocalPersistence implements LocalPersistenceAdapter {
   readonly #loadDatabase: SqliteLocalPersistenceOptions["loadDatabase"];
   readonly #seed: CatalogSnapshot;
-  readonly #legacyStorage?: StorageLike;
-  readonly #legacyStorageKey?: string;
   #databasePromise: Promise<SqlDatabase> | null = null;
   #readyPromise: Promise<SqlDatabase> | null = null;
 
   constructor(options: SqliteLocalPersistenceOptions) {
     this.#loadDatabase = options.loadDatabase;
     this.#seed = normalizeCatalogSnapshot(options.seed);
-    this.#legacyStorage = options.legacyStorage;
-    this.#legacyStorageKey = options.legacyStorageKey;
   }
 
   async readSnapshot(): Promise<CatalogSnapshot> {
@@ -761,12 +784,11 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
         // The live cascade contract is instead enforced in two layers:
         //   1. `cascadeDelete.ts` — pure snapshot transforms that are the
         //      single authoritative specification for `deleteDrive` /
-        //      `deleteProject` across the three adapters (Pass 7).
+        //      `deleteProject` across the two adapters (Pass 7).
         //   2. `localPersistenceContract.ts` — shared cross-adapter test
         //      suite that runs the same delete-cascade fixture against
-        //      InMemory, Storage, and SQLite, so any drift between the
-        //      pure helper and this file's SQL translation surfaces
-        //      immediately.
+        //      InMemory and SQLite, so any drift between the pure helper
+        //      and this file's SQL translation surfaces immediately.
         //
         // The remote tier (Supabase / Postgres) DOES enforce FKs; the
         // rejection path is exercised in `supabaseSyncAdapter.test.ts`.
@@ -777,12 +799,7 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
         await this.#runMigrations(database);
 
         if (await this.#isEmpty(database)) {
-          const legacySnapshot = this.#readLegacySnapshot();
-          const initialSnapshot = legacySnapshot ?? this.#seed;
-          await this.#replaceSnapshotInDatabase(database, initialSnapshot);
-          if (legacySnapshot) {
-            this.#legacyStorage?.removeItem?.(this.#legacyStorageKey!);
-          }
+          await this.#replaceSnapshotInDatabase(database, this.#seed);
         }
 
         return database;
@@ -798,14 +815,6 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
     }
 
     return this.#databasePromise;
-  }
-
-  #readLegacySnapshot() {
-    if (!this.#legacyStorage || !this.#legacyStorageKey) {
-      return null;
-    }
-
-    return parseStoredCatalogSnapshot(this.#legacyStorage.getItem(this.#legacyStorageKey));
   }
 
   async #runMigrations(database: SqlDatabase) {

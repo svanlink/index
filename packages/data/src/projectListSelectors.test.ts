@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Project } from "@drive-project-catalog/domain";
-import { mockDrives, mockProjects } from "./mockData";
+import { mockDrives, mockProjects } from "./testing/mockData";
 import { filterProjectCatalog, UNASSIGNED_DRIVE_FILTER_VALUE } from "./projectListSelectors";
 
 // A personal_folder entry used across multiple search/filter tests

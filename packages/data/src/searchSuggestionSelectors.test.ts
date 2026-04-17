@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Drive, Project } from "@drive-project-catalog/domain";
-import { buildProjectSearchSuggestions, mockDrives, mockProjects, UNASSIGNED_DRIVE_FILTER_VALUE } from "./index";
+import { buildProjectSearchSuggestions, UNASSIGNED_DRIVE_FILTER_VALUE } from "./index";
+import { mockDrives, mockProjects } from "./testing/mockData";
 
 // ---------------------------------------------------------------------------
 // Fixtures for personal_folder tests

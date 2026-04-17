@@ -14,7 +14,6 @@ import {
   type CreateDriveInput,
   type CreateProjectInput,
   type DashboardSnapshot,
-  type ReclassifyLegacyFolderTypesResult,
   type StartupSyncResult,
   type SyncCycleResult,
   type SyncState,
@@ -76,7 +75,6 @@ interface CatalogStoreContextValue {
   updateProjectMetadata(input: UpdateProjectMetadataInput): Promise<Project>;
   createProject(input: CreateProjectInput): Promise<Project>;
   createDrive(input: CreateDriveInput): Promise<Drive>;
-  reclassifyLegacyFolderTypes(): Promise<ReclassifyLegacyFolderTypesResult>;
   deleteProject(projectId: string): Promise<void>;
   deleteDrive(driveId: string): Promise<void>;
   planProjectMove(projectId: string, targetDriveId: string): Promise<Project>;
@@ -294,7 +292,6 @@ export function AppProviders({ children }: AppProvidersProps) {
     updateProjectMetadata: (input) => runMutation(() => repository.updateProjectMetadata(input)),
     createProject: (input) => runMutation(() => repository.createProject(input)),
     createDrive: (input) => runMutation(() => repository.createDrive(input)),
-    reclassifyLegacyFolderTypes: () => runMutation(() => repository.reclassifyLegacyFolderTypes()),
     deleteProject: (projectId) => runMutation(() => repository.deleteProject(projectId)),
     deleteDrive: (driveId) => runMutation(() => repository.deleteDrive(driveId)),
     planProjectMove: (projectId, targetDriveId) => runMutation(() => repository.planProjectMove(projectId, targetDriveId)),

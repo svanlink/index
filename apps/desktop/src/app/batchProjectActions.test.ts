@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryLocalPersistence, InMemorySyncAdapter, LocalCatalogRepository, mockCatalogSnapshot } from "@drive-project-catalog/data";
+import { InMemoryLocalPersistence, InMemorySyncAdapter, LocalCatalogRepository } from "@drive-project-catalog/data";
+import { mockCatalogSnapshot } from "@drive-project-catalog/data/testing";
 import { assignProjectsToDrive, setProjectsCategory } from "./batchProjectActions";
 
 describe("batchProjectActions", () => {

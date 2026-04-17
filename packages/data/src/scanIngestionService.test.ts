@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ScanProjectRecord, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import type { CatalogSnapshot } from "./localPersistence";
-import { mockCatalogSnapshot } from "./mockData";
+import { mockCatalogSnapshot } from "./testing/mockData";
 import { ingestScanSessionSnapshot } from "./scanIngestionService";
 
 // ---------------------------------------------------------------------------

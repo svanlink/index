@@ -7,7 +7,7 @@ import { createTestRouter } from "./router";
 import { ScanWorkflowProvider } from "./scanWorkflow";
 
 vi.mock("./catalogRepository", async () => {
-  const { MockCatalogRepository } = await import("@drive-project-catalog/data");
+  const { MockCatalogRepository } = await import("@drive-project-catalog/data/testing");
   return { repository: new MockCatalogRepository() };
 });
 
@@ -15,11 +15,8 @@ describe("desktop routes", () => {
   it.each([
     { path: "/", value: "Dashboard" },
     { path: "/projects", value: "Projects" },
-    { path: "/scans", value: "Scans" },
-    { path: "/storage", value: "Storage Planning" },
     { path: "/drives", value: "Drives" },
     { path: "/projects/project-240401-apple-shoot", value: "Project Detail" },
-    { path: "/scans/scan-drive-a-20260405", value: "Scan Detail" },
     { path: "/drives/drive-a", value: "Drive Detail" }
   ])("renders $path", async ({ path, value }) => {
     const router = createTestRouter([path]);

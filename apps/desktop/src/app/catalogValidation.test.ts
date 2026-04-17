@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mockDrives, mockProjects } from "@drive-project-catalog/data";
+import { mockDrives, mockProjects } from "@drive-project-catalog/data/testing";
 import {
   buildBatchActionPreview,
   validateManualProjectForm,

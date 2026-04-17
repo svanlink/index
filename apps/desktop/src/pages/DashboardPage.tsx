@@ -90,7 +90,11 @@ export function DashboardPage() {
             {foldersPerSec !== null ? ` · ${foldersPerSec}/s` : ""}
           </span>
           <StatusBadge label={activeScan.status} />
-          <Link to="/scans" className="button-secondary ml-auto">View scans</Link>
+          {activeScan.requestedDriveId ? (
+            <Link to={`/drives/${activeScan.requestedDriveId}`} className="button-secondary ml-auto">Open drive</Link>
+          ) : (
+            <Link to="/drives" className="button-secondary ml-auto">Open drives</Link>
+          )}
         </div>
       ) : null}
 
@@ -109,7 +113,11 @@ export function DashboardPage() {
           {latestCompletedScan?.summary ? (
             <SectionCard
               title="Latest scan summary"
-              action={<Link to={`/scans/${latestCompletedScan.scanId}`} className="button-secondary">Open session</Link>}
+              action={
+                latestCompletedScan.requestedDriveId ? (
+                  <Link to={`/drives/${latestCompletedScan.requestedDriveId}`} className="button-secondary">Open drive</Link>
+                ) : null
+              }
             >
               <div className="flex flex-wrap items-center gap-6">
                 <MetricCard label="New" value={String(latestCompletedScan.summary.newProjectsCount)} />
@@ -169,7 +177,7 @@ export function DashboardPage() {
               {dashboard.recentScans.map((scan) => (
                 <Link
                   key={scan.id}
-                  to={scan.driveId ? `/scans?drive=${scan.driveId}` : "/scans"}
+                  to={scan.driveId ? `/drives/${scan.driveId}` : "/drives"}
                   className="link-card block py-3 transition-colors first:pt-0 hover:bg-[color:var(--color-surface-subtle)]"
                 >
                   <div className="flex items-center justify-between">

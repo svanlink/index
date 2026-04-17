@@ -1,6 +1,6 @@
 import type { Drive, Project, ProjectScanEvent, ScanRecord, ScanSessionSnapshot, ScanSummary } from "@drive-project-catalog/domain";
-import type { DashboardSnapshot, MoveReminder, StatusAlert } from "./repository";
-import type { CatalogSnapshot } from "./localPersistence";
+import type { DashboardSnapshot, MoveReminder, StatusAlert } from "../repository";
+import type { CatalogSnapshot } from "../localPersistence";
 
 const now = "2026-04-06T10:30:00.000Z";
 

@@ -474,8 +474,8 @@ export class LocalCatalogRepository implements CatalogRepository {
     // F7 — enumerate the cascade BEFORE persistence.deleteDrive mutates
     // the local state. `deleteDrive` cascades scans, scanSessions, and
     // projectScanEvents (see the identical cascade rules in
-    // `inMemoryLocalPersistence`, `storageLocalPersistence`, and
-    // `sqliteLocalPersistence`). Any of those child entities may have a
+    // `inMemoryLocalPersistence` and `sqliteLocalPersistence`). Any of
+    // those child entities may have a
     // pending outbound upsert in the queue (e.g. from a recent scan
     // ingestion). Without cancelling those upserts, the next flush would
     // push them against a `drive_id` / `scan_id` that no longer exists,

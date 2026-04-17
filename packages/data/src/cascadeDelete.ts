@@ -5,19 +5,18 @@ import type { CatalogSnapshot } from "./localPersistence";
  *
  * These pure snapshot transforms are the single authoritative specification
  * of what `deleteDrive` / `deleteProject` must do to a CatalogSnapshot. The
- * three LocalPersistenceAdapter implementations used to carry identical
- * cascade logic triplicated across:
+ * two LocalPersistenceAdapter implementations used to carry identical
+ * cascade logic duplicated across:
  *
  *   - `InMemoryLocalPersistence.deleteDrive` / `.deleteProject`
- *   - `StorageLocalPersistence.deleteDrive` / `.deleteProject`
  *   - `SqliteLocalPersistence.deleteDrive` / `.deleteProject` (as SQL)
  *
- * InMemory and Storage now delegate here. The SQLite adapter continues to
- * use raw SQL for efficiency (no snapshot read on the hot path, no id-list
- * marshalling across the process boundary), but its SQL is locked to this
- * specification by the shared contract test in `localPersistenceContract.ts`
- * — every adapter runs the same `deleteDrive` / `deleteProject` fixture
- * suite, so a divergence anywhere surfaces immediately.
+ * InMemory now delegates here. The SQLite adapter continues to use raw SQL
+ * for efficiency (no snapshot read on the hot path, no id-list marshalling
+ * across the process boundary), but its SQL is locked to this specification
+ * by the shared contract test in `localPersistenceContract.ts` — every
+ * adapter runs the same `deleteDrive` / `deleteProject` fixture suite, so a
+ * divergence anywhere surfaces immediately.
  *
  * Behavior contract (mirrors Passes 1 / 3 / 4 hardening markers):
  *
@@ -43,9 +42,8 @@ import type { CatalogSnapshot } from "./localPersistence";
  *   Rows that are NOT mutated are returned by the same reference. Rows
  *   that ARE mutated are shallow-cloned with the update spread applied.
  *   Callers that want a deep clone of the result should clone it
- *   themselves — the `StorageLocalPersistence` path does so implicitly by
- *   round-tripping through JSON; the `InMemoryLocalPersistence` path
- *   clones at `readSnapshot` time.
+ *   themselves — the `InMemoryLocalPersistence` path clones at
+ *   `readSnapshot` time.
  *
  * Purity:
  *   These helpers do not read or write any I/O, do not throw on missing

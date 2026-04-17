@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ScanSessionSnapshot } from "@drive-project-catalog/domain";
-import { MockCatalogRepository } from "@drive-project-catalog/data";
+import { MockCatalogRepository } from "@drive-project-catalog/data/testing";
 
 // ---------------------------------------------------------------------------
 // Mock the ./scanCommands Tauri bridge. The tests below drive

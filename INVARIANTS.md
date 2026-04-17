@@ -36,9 +36,9 @@ A future change that alters a locked behavior must update every enforcement poin
 
 ### Enforcement
 
-- `InMemoryLocalPersistence` and `StorageLocalPersistence` delegate `deleteProject` / `deleteDrive` directly to the `cascadeDelete.ts` helpers.
+- `InMemoryLocalPersistence` delegates `deleteProject` / `deleteDrive` directly to the `cascadeDelete.ts` helpers.
 - `SqliteLocalPersistence` uses raw SQL (efficiency: no snapshot marshalling across the IPC boundary) but is locked to the same behavior by the contract test.
-- `packages/data/src/localPersistenceContract.ts` runs the identical `deleteDrive` / `deleteProject` fixture suite against all three adapters. A divergence anywhere surfaces immediately.
+- `packages/data/src/localPersistenceContract.ts` runs the identical `deleteDrive` / `deleteProject` fixture suite against both adapters. A divergence anywhere surfaces immediately.
 
 ### Change protocol
 
@@ -79,17 +79,16 @@ A future FK migration must:
 
 ---
 
-## 3. Three-backend LocalPersistenceAdapter contract
+## 3. Two-backend LocalPersistenceAdapter contract
 
 ### What is locked
 
-Three adapters implement `LocalPersistenceAdapter` with identical observable behavior:
+Two adapters implement `LocalPersistenceAdapter` with identical observable behavior:
 
 - `SqliteLocalPersistence` — desktop production, backed by the Tauri SQL plugin.
-- `StorageLocalPersistence` — fallback when `localStorage` is available but Tauri is not (primarily the `pnpm dev:frontend` dev shortcut that runs Vite alone).
-- `InMemoryLocalPersistence` — test-only fallback.
+- `InMemoryLocalPersistence` — test-only fallback (also used by headless Vitest runs where the Tauri runtime is not present).
 
-All three must pass:
+Both must pass:
 - `readSnapshot` / `replaceSnapshot` atomic semantics.
 - `list*` and `get*ById` query shapes.
 - `upsert*` insert-or-update semantics for drives, projects, scans, `projectScanEvents`, and `scanSessions`.
@@ -102,15 +101,14 @@ All three must pass:
 
 ### Enforcement
 
-Each adapter's own `*.test.ts` file calls `describeLocalPersistenceContract(name, factory)` with a fresh fixture seed. All three must stay green:
+Each adapter's own `*.test.ts` file calls `describeLocalPersistenceContract(name, factory)` with a fresh fixture seed. Both must stay green:
 
 - `packages/data/src/inMemoryLocalPersistence.test.ts`
-- `packages/data/src/storageLocalPersistence.test.ts`
 - `packages/data/src/sqliteLocalPersistence.test.ts`
 
 ### Change protocol
 
-Adding or changing adapter-contract behavior requires updating all three adapters in the same diff plus the contract test fixture, or explicitly removing a backend with its own deletion pass (which must also update the `catalogRepository.ts` fallback ladder and this file).
+Adding or changing adapter-contract behavior requires updating both adapters in the same diff plus the contract test fixture, or explicitly removing a backend with its own deletion pass (which must also update the `catalogRepository.ts` fallback ladder and this file).
 
 ---
 
@@ -216,7 +214,7 @@ Call sites listed above. The detection logic is duplicated because each file nee
 ### Enforcement
 
 - `apps/desktop/src/app/catalogActions.test.ts` mocks `isDesktopScanAvailable` to verify the non-desktop fallback path.
-- The UI copy in `DesktopScanPanel.tsx` exercises the `!isDesktopScanAvailable` branch visually.
+- The scan form on `DriveDetailPage.tsx` renders a "Desktop scan only" warning notice when `isDesktopScanAvailable` is false, exercising the fallback branch visually.
 
 ### Change protocol
 

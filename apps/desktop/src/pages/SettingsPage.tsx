@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 
-
 import { FeedbackNotice, SectionCard } from "./pagePrimitives";
 import { useCatalogStore } from "../app/providers";
 import {
@@ -12,81 +11,33 @@ import {
   getSyncSummaryMessages,
   isSyncEnabled
 } from "../app/syncHelpers";
-import { getRuntimeEnvironmentDiagnostics, getSupabaseSyncDiagnostics } from "../app/syncConfig";
+
+// ---------------------------------------------------------------------------
+// SettingsPage
+// ---------------------------------------------------------------------------
+//
+// Scope trimmed to a single responsibility: show sync state and let the user
+// trigger a manual sync. Previous sections ("Legacy folder type recovery",
+// "Release diagnostics", "Persistence foundation") were developer/migration
+// surfaces that didn't belong in a shipped single-user product:
+//   - Legacy folder recovery: one-shot migration → belongs in a dev script.
+//   - Release diagnostics: env + config inspection → belongs in dev tools.
+//   - Persistence foundation: pure marketing copy, no action.
+// Removing them keeps Settings focused on what the user can actually do.
+// ---------------------------------------------------------------------------
 
 export function SettingsPage() {
-  const {
-    syncState,
-    syncNow,
-    isSyncing,
-    startupSyncResult,
-    reclassifyLegacyFolderTypes,
-    isMutating
-  } = useCatalogStore();
+  const { syncState, syncNow, isSyncing, startupSyncResult } = useCatalogStore();
   const [feedback, setFeedback] = useState<{
     tone: "success" | "warning" | "error" | "info";
     title: string;
     messages: string[];
   } | null>(null);
-  const [reclassifyFeedback, setReclassifyFeedback] = useState<{
-    tone: "success" | "warning" | "error" | "info";
-    title: string;
-    messages: string[];
-  } | null>(null);
-  const [isReclassifying, setIsReclassifying] = useState(false);
 
   const enabled = isSyncEnabled(syncState);
   const summaryMessages = useMemo(() => getSyncSummaryMessages(syncState), [syncState]);
   const startupMessage = useMemo(() => getStartupSyncMessage(startupSyncResult), [startupSyncResult]);
   const startupTone = useMemo(() => getStartupSyncTone(startupSyncResult), [startupSyncResult]);
-  const configDiagnostics = useMemo(() => getSupabaseSyncDiagnostics(), []);
-  const runtimeDiagnostics = useMemo(() => getRuntimeEnvironmentDiagnostics(), []);
-
-  async function handleReclassify() {
-    setReclassifyFeedback(null);
-    setIsReclassifying(true);
-    try {
-      const result = await reclassifyLegacyFolderTypes();
-      const upgraded = result.clientReclassifiedCount + result.personalProjectReclassifiedCount;
-      if (result.examinedCount === 0) {
-        setReclassifyFeedback({
-          tone: "info",
-          title: "No legacy folder types to reclassify",
-          messages: [
-            "All non-manual projects are already classified as client or personal_project.",
-            "This action only examines rows currently stored as personal_folder."
-          ]
-        });
-      } else if (upgraded === 0) {
-        setReclassifyFeedback({
-          tone: "info",
-          title: "Reclassify complete — no upgrades",
-          messages: [
-            `Examined ${result.examinedCount} personal_folder row${result.examinedCount === 1 ? "" : "s"}.`,
-            "The classifier agreed all of them should remain personal_folder."
-          ]
-        });
-      } else {
-        setReclassifyFeedback({
-          tone: "success",
-          title: "Reclassify complete",
-          messages: [
-            `Examined ${result.examinedCount} personal_folder row${result.examinedCount === 1 ? "" : "s"}.`,
-            `Upgraded ${result.clientReclassifiedCount} to client and ${result.personalProjectReclassifiedCount} to personal_project.`,
-            `${result.unchangedCount} row${result.unchangedCount === 1 ? "" : "s"} left unchanged.`
-          ]
-        });
-      }
-    } catch (error) {
-      setReclassifyFeedback({
-        tone: "error",
-        title: "Reclassify failed",
-        messages: [error instanceof Error ? error.message : "The reclassify action did not complete."]
-      });
-    } finally {
-      setIsReclassifying(false);
-    }
-  }
 
   async function handleSync() {
     setFeedback(null);
@@ -115,7 +66,6 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6">
-
       <SectionCard
         title="Sync status"
         description="This surface reflects the current Supabase transport state from the local repository and queue."
@@ -157,82 +107,6 @@ export function SettingsPage() {
           {feedback ? <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} /> : null}
         </div>
       </SectionCard>
-
-      <SectionCard
-        title="Legacy folder type recovery"
-        description="One-shot maintenance action that re-runs the folder classifier against existing projects still stored as personal_folder. Useful for projects imported before the classifier was refined — for example, rows left over from the early blanket-assignment migration. The action never downgrades structured projects and never touches manually created entries."
-        action={
-          <button
-            type="button"
-            className="button-success"
-            disabled={isReclassifying || isMutating}
-            onClick={() => void handleReclassify()}
-          >
-            {isReclassifying ? "Reclassifying..." : "Reclassify legacy folder types"}
-          </button>
-        }
-      >
-        <div className="space-y-4">
-          <FeedbackNotice
-            tone="info"
-            title="What this does"
-            messages={[
-              "Examines every non-manual project currently stored as personal_folder.",
-              "Upgrades rows whose folder name matches the YYMMDD_Client_Project pattern to client or personal_project.",
-              "Skips manually created projects and never changes structured rows that are already client or personal_project."
-            ]}
-          />
-          {reclassifyFeedback ? (
-            <FeedbackNotice
-              tone={reclassifyFeedback.tone}
-              title={reclassifyFeedback.title}
-              messages={reclassifyFeedback.messages}
-            />
-          ) : null}
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Release diagnostics"
-        description="Lightweight environment and packaging checks for first-run confidence, local support triage, and desktop shipping sanity."
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <InfoRow label="Runtime" value={runtimeDiagnostics.message} />
-          <InfoRow label="Sync config" value={configDiagnostics.message} />
-        </div>
-        <div className="mt-4 space-y-4">
-          <FeedbackNotice
-            tone={configDiagnostics.enabled ? "success" : configDiagnostics.code === "missing" ? "info" : "warning"}
-            title="Configuration details"
-            messages={configDiagnostics.details}
-          />
-          <FeedbackNotice
-            tone="info"
-            title="Packaging notes"
-            messages={[
-              "The Tauri bundle is configured for desktop packaging with a product name, identifier, and icon asset.",
-              "Current release strategy: unsigned Tauri desktop build for local/personal use on macOS. Signed and notarized distribution is future/optional.",
-              "See the README and RELEASE_DESKTOP guides for environment variables, release-candidate discipline, and desktop-only runtime behavior."
-            ]}
-          />
-        </div>
-      </SectionCard>
-
-      <SectionCard
-        title="Persistence foundation"
-        description="The catalog remains fully local-first even when sync is enabled. Local SQLite stays authoritative for daily work, and manual sync only exchanges queued changes with the configured remote transport."
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <InfoRow
-            label="Offline behavior"
-            value="All project, drive, scan, and planning workflows continue to work locally when cloud sync is unavailable."
-          />
-          <InfoRow
-            label="Retry behavior"
-            value="Failed sync items remain queued with error metadata so they can be retried safely on the next manual sync."
-          />
-        </div>
-      </SectionCard>
     </div>
   );
 }
@@ -242,15 +116,6 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
       <p className="mt-0.5 text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>{value}</p>
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-0.5 text-[13px]" style={{ color: "var(--color-text-muted)" }}>{value}</p>
     </div>
   );
 }

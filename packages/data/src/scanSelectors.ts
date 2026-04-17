@@ -1,7 +1,19 @@
-import type { ScanIngestionSummary, ScanSessionSnapshot } from "@drive-project-catalog/domain";
+import type { Drive, ScanIngestionSummary, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 
 export function isTerminalScanStatus(status: ScanSessionSnapshot["status"]) {
   return status === "completed" || status === "cancelled" || status === "failed" || status === "interrupted";
+}
+
+export function getMappedDriveId(session: ScanSessionSnapshot, drives: Drive[]) {
+  if (session.requestedDriveId) {
+    return session.requestedDriveId;
+  }
+
+  return (
+    drives.find(
+      (drive) => drive.volumeName === session.driveName || drive.displayName === session.driveName
+    )?.id ?? null
+  );
 }
 
 export function getActiveScanSession(scanSessions: ScanSessionSnapshot[]) {
@@ -20,10 +32,6 @@ export function getLatestTerminalScanSession(scanSessions: ScanSessionSnapshot[]
   return [...scanSessions]
     .filter((session) => isTerminalScanStatus(session.status))
     .sort((left, right) => (right.finishedAt ?? right.startedAt).localeCompare(left.finishedAt ?? left.startedAt))[0] ?? null;
-}
-
-export function getLatestScanSummary(scanSessions: ScanSessionSnapshot[]) {
-  return getLatestCompletedScanSession(scanSessions)?.summary ?? null;
 }
 
 export function createEmptyScanSummary(): ScanIngestionSummary {

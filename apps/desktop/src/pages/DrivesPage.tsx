@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
+import {
+  buildStoragePlanningRows,
+  buildStoragePlanningSummary,
+  getDriveHealthLabel,
+  type DriveHealthState
+} from "@drive-project-catalog/data";
 import { useVolumeInfo } from "../app/scanCommands";
 import { useShortcut } from "../app/useShortcut";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate } from "./dashboardHelpers";
-import { DriveCardSkeleton, EmptyState, FeedbackNotice } from "./pagePrimitives";
+import { DriveCardSkeleton, EmptyState, FeedbackNotice, StatusBadge } from "./pagePrimitives";
 
 type FeedbackState = {
   tone: "success" | "warning" | "error" | "info";
@@ -68,6 +74,13 @@ export function DrivesPage() {
   const [driveForm, setDriveForm] = useState<DriveFormState>(initialDriveForm);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const projectCounts = useDriveMetrics(projects);
+
+  // Planning rows give us health-ranked ordering (overcommitted → near-capacity
+  // → healthy) and portfolio-level totals. Previously these lived on a separate
+  // /storage route; folding them here means the drives list doubles as the
+  // storage-planning surface.
+  const planningRows = useMemo(() => buildStoragePlanningRows(drives, projects), [drives, projects]);
+  const planningSummary = useMemo(() => buildStoragePlanningSummary(planningRows, projects), [planningRows, projects]);
 
   // Cmd+N — toggle create form
   useShortcut({ key: "n", meta: true, onTrigger: () => setIsCreateOpen((c) => !c), enabled: !isMutating });
@@ -132,6 +145,15 @@ export function DrivesPage() {
         />
       ) : null}
 
+      {!isLoading && drives.length > 0 ? (
+        <div className="flex items-center gap-8 border-b pb-4" style={{ borderColor: "var(--color-border)" }}>
+          <SummaryCard label="Drives" value={String(planningSummary.totalDrives)} />
+          <SummaryCard label="Overcommitted" value={String(planningSummary.overcommittedCount)} />
+          <SummaryCard label="Unknown impact" value={String(planningSummary.unknownImpactCount)} />
+          <SummaryCard label="Reserved incoming" value={formatBytes(planningSummary.totalReservedIncomingBytes)} />
+        </div>
+      ) : null}
+
       {isCreateOpen ? (
         <CreateDriveForm
           form={driveForm}
@@ -146,7 +168,7 @@ export function DrivesPage() {
         <div className="grid gap-5 lg:grid-cols-2" aria-busy="true" aria-label="Loading drives">
           {[0, 1, 2, 3].map((i) => <DriveCardSkeleton key={i} />)}
         </div>
-      ) : drives.length === 0 ? (
+      ) : planningRows.length === 0 ? (
         <EmptyState
           title="No drives in catalog"
           description="Add a manual drive to start planning storage, or run a scan to index a connected volume."
@@ -162,16 +184,26 @@ export function DrivesPage() {
         />
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
-          {drives.map((drive) => (
+          {planningRows.map((row) => (
             <DriveCard
-              key={drive.id}
-              drive={drive}
-              projectCount={projectCounts[drive.id] ?? 0}
-              scanSession={getDriveScanSession(drive, scanSessions)}
+              key={row.drive.id}
+              drive={row.drive}
+              projectCount={projectCounts[row.drive.id] ?? 0}
+              scanSession={getDriveScanSession(row.drive, scanSessions)}
+              health={row.health}
             />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
+      <p className="mt-0.5 text-[18px] font-semibold tabular-nums" style={{ color: "var(--color-text)" }}>{value}</p>
     </div>
   );
 }
@@ -183,11 +215,13 @@ export function DrivesPage() {
 function DriveCard({
   drive,
   projectCount,
-  scanSession
+  scanSession,
+  health
 }: {
   drive: Drive;
   projectCount: number;
   scanSession: ScanSessionSnapshot | null;
+  health?: DriveHealthState;
 }) {
   const volumeInfo = useVolumeInfo(scanSession?.rootPath);
   const isScanning = scanSession?.status === "running";
@@ -223,9 +257,14 @@ function DriveCard({
 
       <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
         <div className="min-w-0 flex-1">
-          <h4 className="truncate text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
-            {drive.displayName}
-          </h4>
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="truncate text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
+              {drive.displayName}
+            </h4>
+            {health && health !== "healthy" ? (
+              <StatusBadge label={getDriveHealthLabel(health)} />
+            ) : null}
+          </div>
           <div className="mt-0.5 flex items-center gap-1.5 text-[12px]" style={{ color: "var(--color-text-soft)" }}>
             {drive.volumeName !== drive.displayName ? <span>{drive.volumeName}</span> : null}
             {drive.createdManually ? <span>Manual</span> : null}

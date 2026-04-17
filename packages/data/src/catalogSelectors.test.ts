@@ -5,7 +5,7 @@ import {
   filterProjects,
   getDriveNameFromMap
 } from "./catalogSelectors";
-import { mockCatalogSnapshot, mockDrives, mockProjects } from "./mockData";
+import { mockCatalogSnapshot, mockDrives, mockProjects } from "./testing/mockData";
 
 describe("catalogSelectors", () => {
   it("uses persisted scan sessions for recent dashboard scans", () => {

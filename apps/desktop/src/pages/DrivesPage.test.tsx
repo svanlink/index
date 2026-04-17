@@ -29,7 +29,7 @@ type DriveCreateBehaviour =
 let driveCreateBehaviour: DriveCreateBehaviour = { kind: "pass-through" };
 
 vi.mock("../app/catalogRepository", async () => {
-  const { MockCatalogRepository } = await import("@drive-project-catalog/data");
+  const { MockCatalogRepository } = await import("@drive-project-catalog/data/testing");
   const base = new MockCatalogRepository();
   const realCreate = base.createDrive.bind(base);
   base.createDrive = async (input) => {

@@ -6,9 +6,8 @@ import type { CatalogSnapshot } from "./localPersistence";
 // Minimal hand-rolled snapshot fixtures. These tests exercise the pure
 // helpers in isolation — cross-adapter parity is proven by the shared
 // contract suite in `localPersistenceContract.ts`, which runs the
-// identical fixture through `InMemoryLocalPersistence`,
-// `StorageLocalPersistence`, and `SqliteLocalPersistence`. The unit tests
-// here focus on:
+// identical fixture through `InMemoryLocalPersistence` and
+// `SqliteLocalPersistence`. The unit tests here focus on:
 //
 //   - the exact snapshot transform the helpers produce
 //   - stable-reference semantics for unmutated rows

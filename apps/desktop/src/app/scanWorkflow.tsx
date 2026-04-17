@@ -30,7 +30,6 @@ const POLL_INTERVAL_MS = 900;
 
 interface ScanWorkflowContextValue {
   isDesktopScanAvailable: boolean;
-  isPanelOpen: boolean;
   draftRootPath: string;
   selectedDriveId: string;
   isPickingDirectory: boolean;
@@ -39,8 +38,6 @@ interface ScanWorkflowContextValue {
   latestCompletedSession: ScanSessionSnapshot | null;
   latestTerminalSession: ScanSessionSnapshot | null;
   lastError: string | null;
-  openPanel(): void;
-  closePanel(): void;
   setDraftRootPath(path: string): void;
   setSelectedDriveId(driveId: string): void;
   chooseDirectory(): Promise<void>;
@@ -52,7 +49,6 @@ const ScanWorkflowContext = createContext<ScanWorkflowContextValue | null>(null)
 
 export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
   const { repository, refresh, scanSessions, drives } = useCatalogStore();
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [draftRootPath, setDraftRootPath] = useState("");
   const [selectedDriveId, setSelectedDriveId] = useState("");
   const [isPickingDirectory, setIsPickingDirectory] = useState(false);
@@ -160,7 +156,6 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
 
       requestedDriveIdRef.current = requestedDriveId;
       setActiveScanId(response.scanId);
-      setIsPanelOpen(true);
       setLastError(null);
       await refresh();
       await pollScan(response.scanId, requestedDriveId);
@@ -242,7 +237,6 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ScanWorkflowContextValue>(() => ({
     isDesktopScanAvailable: desktopAvailable,
-    isPanelOpen,
     draftRootPath,
     selectedDriveId,
     isPickingDirectory,
@@ -251,8 +245,6 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
     latestCompletedSession,
     latestTerminalSession,
     lastError,
-    openPanel: () => setIsPanelOpen(true),
-    closePanel: () => setIsPanelOpen(false),
     setDraftRootPath,
     setSelectedDriveId,
     chooseDirectory,
@@ -266,7 +258,6 @@ export function ScanWorkflowProvider({ children }: { children: ReactNode }) {
     desktopAvailable,
     draftRootPath,
     isPickingDirectory,
-    isPanelOpen,
     lastError,
     latestCompletedSession,
     latestTerminalSession,

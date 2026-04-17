@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mockDrives, mockProjects, mockScanSessions } from "./mockData";
+import { mockDrives, mockProjects, mockScanSessions } from "./testing/mockData";
 import { findCatalogProjectForScanRecord } from "./projectLinkingSelectors";
 
 describe("projectLinkingSelectors", () => {
