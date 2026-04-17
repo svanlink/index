@@ -1,7 +1,7 @@
 export const folderTypeValues = ["client", "personal_project", "personal_folder"] as const;
 export type FolderType = (typeof folderTypeValues)[number];
 
-export const categoryValues = ["photo", "video", "design", "mixed", "personal"] as const;
+export const categoryValues = ["photo", "video", "design", "personal"] as const;
 export type Category = (typeof categoryValues)[number];
 
 export const sizeStatusValues = ["unknown", "pending", "ready", "failed"] as const;

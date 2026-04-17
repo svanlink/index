@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import {
@@ -11,13 +11,8 @@ import { useVolumeInfo } from "../app/scanCommands";
 import { useShortcut } from "../app/useShortcut";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate } from "./dashboardHelpers";
+import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { DriveCardSkeleton, EmptyState, FeedbackNotice, StatusBadge } from "./pagePrimitives";
-
-type FeedbackState = {
-  tone: "success" | "warning" | "error" | "info";
-  title: string;
-  messages: string[];
-} | null;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -85,13 +80,8 @@ export function DrivesPage() {
   // Cmd+N — toggle create form
   useShortcut({ key: "n", meta: true, onTrigger: () => setIsCreateOpen((c) => !c), enabled: !isMutating });
 
-  // S6/M7 — auto-dismiss feedback. Cleanup clears the prior timer on every
-  // feedback change, so rapidly-changing notices never stack.
-  useEffect(() => {
-    if (!feedback) return;
-    const timeoutId = window.setTimeout(() => setFeedback(null), 2800);
-    return () => window.clearTimeout(timeoutId);
-  }, [feedback]);
+  // S6/M7 — auto-dismiss feedback after 2.8s (shared hook; matches DriveDetailPage).
+  useFeedbackDismiss(feedback, setFeedback);
 
   // S6/H11 — createDrive errors are surfaced via feedback instead of being
   // silently swallowed. Validation errors (e.g. empty volume name) now

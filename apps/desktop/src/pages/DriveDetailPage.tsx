@@ -7,13 +7,8 @@ import { useVolumeInfo } from "../app/scanCommands";
 import { useCatalogStore } from "../app/providers";
 import { useScanWorkflow } from "../app/scanWorkflow";
 import { formatBytes, formatDate, formatParsedDate, getProjectName, getProjectStatusBadges } from "./dashboardHelpers";
+import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, FeedbackNotice, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
-
-type FeedbackState = {
-  tone: "success" | "warning" | "error" | "info";
-  title: string;
-  messages: string[];
-} | null;
 
 // ---------------------------------------------------------------------------
 // DriveDetailPage
@@ -86,13 +81,8 @@ export function DriveDetailPage() {
     }
   }, [driveId, driveRootPath, draftRootPath, setSelectedDriveId, setDraftRootPath]);
 
-  // Auto-dismiss feedback after 2.8s. Matches the pattern used across pages so
-  // transient notices never stack and the surface stays calm.
-  useEffect(() => {
-    if (!feedback) return;
-    const timeoutId = window.setTimeout(() => setFeedback(null), 2800);
-    return () => window.clearTimeout(timeoutId);
-  }, [feedback]);
+  // Auto-dismiss feedback after 2.8s (shared hook; matches DrivesPage).
+  useFeedbackDismiss(feedback, setFeedback);
 
   if (isLoading) {
     return <LoadingState label="Loading drive detail" />;

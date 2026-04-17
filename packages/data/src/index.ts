@@ -4,7 +4,6 @@ export * from "./inMemoryLocalPersistence";
 export * from "./inMemorySyncAdapter";
 export * from "./localCatalogRepository";
 export * from "./localPersistence";
-export * from "./projectLinkingSelectors";
 export * from "./projectListSelectors";
 export * from "./remoteSyncMerge";
 export * from "./repository";

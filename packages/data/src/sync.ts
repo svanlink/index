@@ -198,13 +198,3 @@ export function getDefaultSyncState(): SyncState {
   };
 }
 
-export function resolveSyncConflictByUpdatedAt(params: {
-  localUpdatedAt: string;
-  remoteUpdatedAt: string;
-}): "keep-local" | "accept-remote" {
-  if (params.remoteUpdatedAt > params.localUpdatedAt) {
-    return "accept-remote";
-  }
-
-  return "keep-local";
-}

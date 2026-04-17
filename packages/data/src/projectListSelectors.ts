@@ -7,7 +7,6 @@ import { buildDriveNameMap, getDriveNameFromMap, sortProjects } from "./catalogS
  * against a single source of truth instead of rebuilding the magic string.
  */
 export const UNASSIGNED_DRIVE_FILTER_VALUE = "__unassigned__" as const;
-export type UnassignedDriveFilterValue = typeof UNASSIGNED_DRIVE_FILTER_VALUE;
 
 export interface ProjectCatalogFilters {
   search?: string;
