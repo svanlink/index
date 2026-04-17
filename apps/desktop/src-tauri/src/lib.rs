@@ -1,9 +1,11 @@
 mod scan_engine;
+mod volume_import;
 mod volume_info;
 
 use scan_engine::{
     cancel_scan, get_scan_snapshot, list_scan_snapshots, start_scan, AppScanState,
 };
+use volume_import::enumerate_volume_folders;
 use volume_info::get_volume_info;
 use serde::Serialize;
 
@@ -36,7 +38,8 @@ pub fn run() {
             cancel_scan,
             get_scan_snapshot,
             list_scan_snapshots,
-            get_volume_info
+            get_volume_info,
+            enumerate_volume_folders
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

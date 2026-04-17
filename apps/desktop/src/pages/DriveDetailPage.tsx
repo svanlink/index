@@ -3,11 +3,17 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Project } from "@drive-project-catalog/domain";
 import { getScanStatusLabel, getScanStatusMessage } from "@drive-project-catalog/data";
 
-import { useVolumeInfo } from "../app/scanCommands";
+import { isDesktopScanAvailable, useVolumeInfo } from "../app/scanCommands";
+import {
+  enumerateVolumeFolders,
+  pickVolumeRoot,
+  type VolumeFolderEntry
+} from "../app/volumeImportCommands";
 import { useCatalogStore } from "../app/providers";
 import { useScanWorkflow } from "../app/scanWorkflow";
 import { formatBytes, formatDate, formatParsedDate, getProjectName, getProjectStatusBadges } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
+import { ImportFoldersDialog } from "./ImportFoldersDialog";
 import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, FeedbackNotice, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
 
 // ---------------------------------------------------------------------------
@@ -24,9 +30,17 @@ import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, FeedbackNotice, 
 export function DriveDetailPage() {
   const { driveId = "" } = useParams();
   const navigate = useNavigate();
-  const { isLoading, isMutating, getDriveDetailView, selectDrive, deleteDrive, scanSessions } = useCatalogStore();
   const {
-    isDesktopScanAvailable,
+    isLoading,
+    isMutating,
+    getDriveDetailView,
+    selectDrive,
+    deleteDrive,
+    importFoldersFromVolume,
+    scanSessions
+  } = useCatalogStore();
+  const {
+    isDesktopScanAvailable: isScanAvailable,
     draftRootPath,
     isPickingDirectory,
     activeSession: workflowActiveSession,
@@ -39,6 +53,18 @@ export function DriveDetailPage() {
   } = useScanWorkflow();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
+
+  // Import-from-volume flow state. The three fields form a small state machine:
+  //   - idle:        importSourcePath === null
+  //   - enumerating: isPickingImport === true  (native picker open, or Rust
+  //                  call in flight — same UX because both block the same
+  //                  section of the UI)
+  //   - preview:     importSourcePath !== null && importFolders !== null
+  //   - importing:   isImporting === true       (repository call in flight)
+  const [importSourcePath, setImportSourcePath] = useState<string | null>(null);
+  const [importFolders, setImportFolders] = useState<VolumeFolderEntry[] | null>(null);
+  const [isPickingImport, setIsPickingImport] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Most recent session for this drive drives two things: the volume info
   // lookup (which needs a valid rootPath) and the default target path we seed
@@ -84,11 +110,29 @@ export function DriveDetailPage() {
   // Auto-dismiss feedback after 2.8s (shared hook; matches DrivesPage).
   useFeedbackDismiss(feedback, setFeedback);
 
+  // Compute detail *before* the early returns so all hooks below run on every
+  // render. Moving this out of the "post-return" zone is what lets us keep
+  // `existingProjectPathsOnDrive` as a `useMemo` without tripping Rules of
+  // Hooks on the initial `isLoading` render.
+  const detail = getDriveDetailView(driveId);
+
+  // Stable set of folderPaths already associated with this drive. Pass this
+  // into the preview modal so it can mark duplicates — the repository's dedup
+  // keys on exactly this same (driveId, folderPath) pair, so the UI's
+  // "already in catalog" labels can never drift from what actually gets
+  // persisted.
+  const existingProjectPathsOnDrive = useMemo(() => {
+    const paths = new Set<string>();
+    if (!detail) return paths;
+    for (const project of detail.projects) {
+      if (project.folderPath) paths.add(project.folderPath);
+    }
+    return paths;
+  }, [detail]);
+
   if (isLoading) {
     return <LoadingState label="Loading drive detail" />;
   }
-
-  const detail = getDriveDetailView(driveId);
 
   if (!detail) {
     return <EmptyState title="Drive not found" description="The requested drive is not available in the current local catalog." />;
@@ -114,7 +158,93 @@ export function DriveDetailPage() {
     }
   }
 
-  const canStartScan = isDesktopScanAvailable && !activeSession && Boolean(draftRootPath.trim());
+  // Default the native picker to the drive's known root path (last scanned
+  // path, falling back to the conventional `/Volumes/<volumeName>`). Users
+  // almost always want to pick the same volume this page represents, so
+  // starting there saves clicks — they can still navigate elsewhere.
+  const importPickerDefaultPath =
+    driveRootPath ?? (drive.volumeName ? `/Volumes/${drive.volumeName}` : null);
+
+  // Plain async function — no memoization needed since its only consumers
+  // are inline event handlers that re-create every render anyway. Declaring
+  // this via `useCallback` after the early-return block above would violate
+  // Rules of Hooks on the initial `isLoading` render.
+  async function runImportPicker() {
+    setIsPickingImport(true);
+    try {
+      const selection = await pickVolumeRoot(importPickerDefaultPath);
+      if (!selection) {
+        // User cancelled the native dialog — leave any prior preview state
+        // intact so "Pick different folder" → cancel → back to original
+        // preview works without re-enumerating.
+        return;
+      }
+      const folders = await enumerateVolumeFolders(selection);
+      setImportSourcePath(selection);
+      setImportFolders(folders);
+    } catch (error) {
+      setImportSourcePath(null);
+      setImportFolders(null);
+      setFeedback({
+        tone: "error",
+        title: "Could not read folders",
+        messages: [error instanceof Error ? error.message : "The selected location could not be read."]
+      });
+    } finally {
+      setIsPickingImport(false);
+    }
+  }
+
+  function closeImportDialog() {
+    setImportSourcePath(null);
+    setImportFolders(null);
+  }
+
+  async function handleConfirmImport() {
+    if (!importSourcePath || !importFolders) return;
+    setIsImporting(true);
+    try {
+      const result = await importFoldersFromVolume({
+        driveId,
+        sourcePath: importSourcePath,
+        folders: importFolders
+      });
+      closeImportDialog();
+      if (result.importedCount === 0) {
+        setFeedback({
+          tone: "info",
+          title: "No new folders imported",
+          messages: [
+            result.skippedCount > 0
+              ? `${result.skippedCount} folder${result.skippedCount === 1 ? " was" : "s were"} already in the catalog and skipped.`
+              : "The selected location had no importable folders."
+          ]
+        });
+      } else {
+        const parts = [
+          `${result.importedCount} folder${result.importedCount === 1 ? "" : "s"} added to "${drive.displayName}".`
+        ];
+        if (result.skippedCount > 0) {
+          parts.push(`${result.skippedCount} already in catalog were skipped.`);
+        }
+        setFeedback({
+          tone: "success",
+          title: "Folders imported",
+          messages: parts
+        });
+      }
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        title: "Import failed",
+        messages: [error instanceof Error ? error.message : "The folders could not be imported."]
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  const canStartScan = isScanAvailable && !activeSession && Boolean(draftRootPath.trim());
   const scanPlaceholder = drive.volumeName ? `/Volumes/${drive.volumeName}` : "/Volumes/…";
 
   return (
@@ -127,6 +257,18 @@ export function DriveDetailPage() {
           onConfirm={() => void handleDeleteDrive()}
           onCancel={() => setShowDeleteConfirm(false)}
           isLoading={isMutating}
+        />
+      ) : null}
+
+      {importSourcePath && importFolders ? (
+        <ImportFoldersDialog
+          sourcePath={importSourcePath}
+          folders={importFolders}
+          existingPathsOnDrive={existingProjectPathsOnDrive}
+          isImporting={isImporting}
+          onConfirm={() => void handleConfirmImport()}
+          onCancel={closeImportDialog}
+          onPickAgain={() => void runImportPicker()}
         />
       ) : null}
 
@@ -214,14 +356,14 @@ export function DriveDetailPage() {
                 type="button"
                 className="button-secondary shrink-0"
                 onClick={() => void chooseDirectory()}
-                disabled={!isDesktopScanAvailable || isPickingDirectory || Boolean(activeSession)}
+                disabled={!isScanAvailable || isPickingDirectory || Boolean(activeSession)}
               >
                 {isPickingDirectory ? "Opening..." : "Browse"}
               </button>
             </div>
           </label>
 
-          {!isDesktopScanAvailable ? (
+          {!isScanAvailable ? (
             <FeedbackNotice
               tone="warning"
               title="Desktop scan only"
@@ -274,6 +416,36 @@ export function DriveDetailPage() {
             </div>
           ) : null}
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Import folders from volume"
+        description="Browse a connected volume and add its top-level folders as projects on this drive without running a full scan. Names are classified automatically; nothing on disk is changed."
+        action={
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => void runImportPicker()}
+            disabled={!isDesktopScanAvailable() || isPickingImport || isImporting}
+          >
+            {isPickingImport ? "Opening…" : "Choose folder…"}
+          </button>
+        }
+      >
+        {!isDesktopScanAvailable() ? (
+          <FeedbackNotice
+            tone="warning"
+            title="Desktop only"
+            messages={["Importing folders requires the native desktop app. The native picker and filesystem read are not available in the browser."]}
+          />
+        ) : (
+          <p className="text-[13px]" style={{ color: "var(--color-text-muted)" }}>
+            Pick a volume or subfolder — you'll get a preview of its top-level
+            folder names before anything is added to the catalog. Hidden files
+            and system folders are filtered automatically, and folders that
+            already exist on this drive are skipped.
+          </p>
+        )}
       </SectionCard>
 
       <section className="grid gap-6 xl:grid-cols-3">

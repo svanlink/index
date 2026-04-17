@@ -74,6 +74,45 @@ export interface CreateDriveInput {
 }
 
 /**
+ * One folder the user chose to import from an external volume. `path` is the
+ * absolute on-disk path — it becomes the stored `folderPath` on the created
+ * Project and is the stable key we dedup on.
+ */
+export interface ImportVolumeFolderInput {
+  name: string;
+  path: string;
+}
+
+export interface ImportFoldersFromVolumeInput {
+  /** The catalog drive these folders belong to. */
+  driveId: string;
+  /**
+   * The absolute root path the user selected in the native picker (the parent
+   * of every entry in `folders`). Purely informational on the input — the
+   * repository stores each folder's own absolute path via `folderPath`, which
+   * already encodes full provenance on a stable per-record key. UI layers pass
+   * this through so future provenance features (e.g. an "imported from" label
+   * on project detail) have a single source of truth without a schema change.
+   */
+  sourcePath: string;
+  folders: ImportVolumeFolderInput[];
+}
+
+/**
+ * Result of a volume-import batch.
+ *
+ * Imports are dedup'd per drive on `folderPath`: if a project with the same
+ * `currentDriveId` and `folderPath` already exists, it is preserved untouched
+ * and counted in `skippedCount`. Only genuinely new folders produce Project
+ * rows and contribute to `importedCount`.
+ */
+export interface ImportFoldersFromVolumeResult {
+  importedCount: number;
+  skippedCount: number;
+  importedProjectIds: string[];
+}
+
+/**
  * Result of the one-shot "reclassify legacy folder types" maintenance action
  * (S9 / H12). The action walks non-manual projects whose `folderType` is
  * `personal_folder` and promotes them to `client` or `personal_project` when
@@ -115,6 +154,7 @@ export interface CatalogRepository {
   updateProjectMetadata(input: UpdateProjectMetadataInput): Promise<Project>;
   createProject(input: CreateProjectInput): Promise<Project>;
   createDrive(input: CreateDriveInput): Promise<Drive>;
+  importFoldersFromVolume(input: ImportFoldersFromVolumeInput): Promise<ImportFoldersFromVolumeResult>;
   planProjectMove(projectId: string, targetDriveId: string): Promise<Project>;
   confirmProjectMove(projectId: string): Promise<Project>;
   cancelProjectMove(projectId: string): Promise<Project>;

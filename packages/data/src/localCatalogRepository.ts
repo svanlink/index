@@ -1,4 +1,12 @@
-import { applyDerivedProjectStates, classifyFolderName, type Drive, type Project, type ProjectScanEvent, type ScanRecord, type ScanSessionSnapshot } from "@drive-project-catalog/domain";
+import {
+  applyDerivedProjectStates,
+  classifyFolderName,
+  type Drive,
+  type Project,
+  type ProjectScanEvent,
+  type ScanRecord,
+  type ScanSessionSnapshot
+} from "@drive-project-catalog/domain";
 import {
   computeDriveCascadeIds,
   computeProjectCascadeIds,
@@ -20,6 +28,8 @@ import type {
   CreateProjectInput,
   DashboardSnapshot,
   DriveUpsert,
+  ImportFoldersFromVolumeInput,
+  ImportFoldersFromVolumeResult,
   ProjectListFilters,
   ProjectUpsert,
   ReclassifyLegacyFolderTypesResult,
@@ -261,6 +271,119 @@ export class LocalCatalogRepository implements CatalogRepository {
     };
 
     return this.saveDrive(drive);
+  }
+
+  /**
+   * VOLUME IMPORT FLOW — read-only with respect to the filesystem.
+   *
+   * Given a list of folders enumerated from an external volume (via the
+   * desktop Tauri command `enumerate_volume_folders`), this creates a
+   * `Project` row per folder and ties it to the supplied `driveId`. The
+   * backend enumeration is the sole filesystem touch; this method only
+   * writes database metadata. No folder on disk is renamed, moved, copied,
+   * or deleted.
+   *
+   * Dedup contract:
+   *   - Stable key is `(currentDriveId, folderPath)`. A folder that already
+   *     exists under the same drive with the same absolute path is skipped
+   *     (not updated) and counted in `skippedCount`. This is intentionally
+   *     stricter than scan ingestion's parsed-name match so a re-import
+   *     never mutates user edits on an already-catalog'd folder.
+   *   - Within the current batch, a later folder with a duplicate path is
+   *     also skipped, so the method is idempotent against caller mistakes.
+   *
+   * Classification:
+   *   - Each folder name runs through `classifyFolderName` — the same
+   *     deterministic port of the Rust classifier used everywhere else in
+   *     this package. Structured names produce `client` / `personal_project`
+   *     projects; anything else becomes `personal_folder`.
+   *
+   * Provenance: imported rows carry `isManual: true` so the reclassify
+   * action in `reclassifyLegacyFolderTypes` leaves them alone (users
+   * explicitly asked for these, do not auto-rewalk). Every row is
+   * upserted through `saveProject` so derived-state computation, sync
+   * enqueue, and `updatedAt` bookkeeping match the rest of the write
+   * surface.
+   */
+  async importFoldersFromVolume(
+    input: ImportFoldersFromVolumeInput
+  ): Promise<ImportFoldersFromVolumeResult> {
+    if (!input.driveId) {
+      throw new Error("importFoldersFromVolume requires a driveId.");
+    }
+
+    const drive = await this.persistence.getDriveById(input.driveId);
+    if (!drive) {
+      throw new Error(`Drive ${input.driveId} was not found.`);
+    }
+
+    const existingProjects = await this.persistence.listProjects();
+    const existingPathsOnDrive = new Set(
+      existingProjects
+        .filter((project) => project.currentDriveId === input.driveId && project.folderPath !== null)
+        .map((project) => project.folderPath as string)
+    );
+
+    const result: ImportFoldersFromVolumeResult = {
+      importedCount: 0,
+      skippedCount: 0,
+      importedProjectIds: []
+    };
+
+    const seenPathsThisBatch = new Set<string>();
+    const now = new Date().toISOString();
+
+    for (const folder of input.folders) {
+      const trimmedName = folder.name.trim();
+      const trimmedPath = folder.path.trim();
+      if (!trimmedName || !trimmedPath) {
+        // Defensive: the Rust enumerator never emits empties, but a caller
+        // passing a bad list should not corrupt the catalog.
+        result.skippedCount += 1;
+        continue;
+      }
+
+      if (existingPathsOnDrive.has(trimmedPath) || seenPathsThisBatch.has(trimmedPath)) {
+        result.skippedCount += 1;
+        continue;
+      }
+      seenPathsThisBatch.add(trimmedPath);
+
+      const classification = classifyFolderName(trimmedName);
+      const project: Project = {
+        id: `project-import-${slugify(trimmedName)}-${crypto.randomUUID().slice(0, 8)}`,
+        folderType: classification.folderType,
+        isStandardized: classification.folderType !== "personal_folder",
+        folderName: trimmedName,
+        folderPath: trimmedPath,
+        parsedDate: classification.parsedDate,
+        parsedClient: classification.parsedClient,
+        parsedProject: classification.parsedProject,
+        correctedDate: null,
+        correctedClient: null,
+        correctedProject: null,
+        category: null,
+        sizeBytes: null,
+        sizeStatus: "unknown",
+        currentDriveId: input.driveId,
+        targetDriveId: null,
+        moveStatus: "none",
+        missingStatus: "normal",
+        duplicateStatus: "normal",
+        isUnassigned: false,
+        isManual: true,
+        lastSeenAt: now,
+        lastScannedAt: null,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      await this.saveProject(project);
+      result.importedCount += 1;
+      result.importedProjectIds.push(project.id);
+    }
+
+    return result;
   }
 
   async planProjectMove(projectId: string, targetDriveId: string): Promise<Project> {
