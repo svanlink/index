@@ -1,5 +1,10 @@
 import { applyDerivedProjectStates, classifyFolderName, type Drive, type Project, type ProjectScanEvent, type ScanRecord, type ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import {
+  computeDriveCascadeIds,
+  computeProjectCascadeIds,
+  type CatalogCascadeIds
+} from "./cascadeIds";
+import {
   buildDashboardSnapshot,
   buildDriveDetailView,
   decorateDrivesWithCapacity,
@@ -21,7 +26,15 @@ import type {
   UpdateProjectMetadataInput
 } from "./repository";
 import { ingestScanSessionSnapshot } from "./scanIngestionService";
-import type { StartupSyncResult, SyncAdapter, SyncCycleResult, SyncMutationSource, SyncOperationType, SyncState } from "./sync";
+import type {
+  StartupSyncResult,
+  SyncAdapter,
+  SyncChangeKind,
+  SyncCycleResult,
+  SyncMutationSource,
+  SyncOperationType,
+  SyncState
+} from "./sync";
 
 const clone = <T>(value: T): T => structuredClone(value);
 
@@ -415,58 +428,103 @@ export class LocalCatalogRepository implements CatalogRepository {
   }
 
   async deleteProject(projectId: string): Promise<void> {
+    // F7 — enumerate the cascade BEFORE persistence.deleteProject mutates
+    // the local state. `deleteProject` cascades projectScanEvents whose
+    // `projectId` matches; those child upserts (if queued) would otherwise
+    // be pushed on the next flush against a now-missing parent.
+    const snapshot = await this.persistence.readSnapshot();
+    const cascade = computeProjectCascadeIds(snapshot, projectId);
+
     await this.persistence.deleteProject(projectId);
-    // Remove any pending upsert operations for this record so they cannot
-    // re-create the project on the remote after it has been deleted locally.
-    // Full delete propagation to the remote requires a "delete" sync operation
-    // type which is not yet implemented — for now, deletions remain local-only.
-    // TODO: implement a project.delete SyncOperationType to propagate deletions.
-    await this.cancelPendingQueueEntriesForRecord("project", projectId);
+
+    // F8 (Pass 5) — cancel pending child AND parent upserts via the Pass 3
+    // primitive `SyncAdapter.cancelPendingForRecord`. The primitive is a
+    // pure local filter on the adapter's queue: it removes non-in-flight
+    // entries matching (entity, recordId) without ever touching the
+    // remote. See `syncQueue.ts` `cancelPendingSyncOperationsForRecord`
+    // for the underlying filter and the Pass 5 report for why the prior
+    // `flush()`-based helper was replaced (it pushed unrelated queue
+    // entries to the remote as a side-effect of every delete, and erased
+    // retry/error history by re-enqueueing survivors).
+    //
+    // Child-first ordering is still required so that if the parent cancel
+    // ever races with a concurrent enqueue for the same record, we have
+    // already resolved the cascade ids from the pre-mutation snapshot.
+    await this.cancelPendingChildUpserts(cascade);
+
+    // F1 — outbound delete propagation.
+    //
+    // Order matters: first drop any pending upsert for this record so the
+    // queue cannot push a resurrected copy just before the delete lands, then
+    // enqueue the delete itself. The compactor keys on (entity, recordId,
+    // change), so a delete is never merged into an upsert — but clearing the
+    // queue first keeps the common case to a single trailing delete op,
+    // which is what the Supabase adapter expects to batch via
+    // `DELETE …?id=in.(…)`.
+    //
+    // In-flight upserts are intentionally not cancelled here (the primitive
+    // preserves them). Worst case, the in-flight upsert is accepted
+    // remote-side and the subsequent delete immediately removes it — a
+    // brief reanimation on another device, not data loss.
+    await this.sync.cancelPendingForRecord("project", projectId);
+    await this.enqueueDelete("project.delete", projectId);
   }
 
   async deleteDrive(driveId: string): Promise<void> {
+    // F7 — enumerate the cascade BEFORE persistence.deleteDrive mutates
+    // the local state. `deleteDrive` cascades scans, scanSessions, and
+    // projectScanEvents (see the identical cascade rules in
+    // `inMemoryLocalPersistence`, `storageLocalPersistence`, and
+    // `sqliteLocalPersistence`). Any of those child entities may have a
+    // pending outbound upsert in the queue (e.g. from a recent scan
+    // ingestion). Without cancelling those upserts, the next flush would
+    // push them against a `drive_id` / `scan_id` that no longer exists,
+    // producing either an orphaned remote row (no FK), a silent CASCADE
+    // on the remote, or a hard RESTRICT error — none of which match the
+    // local intent.
+    const snapshot = await this.persistence.readSnapshot();
+    const cascade = computeDriveCascadeIds(snapshot, driveId);
+
     await this.persistence.deleteDrive(driveId);
-    // Same as deleteProject: remove stale upserts so the deleted drive cannot
-    // be re-created remotely. Delete propagation is not yet implemented.
-    // TODO: implement a drive.delete SyncOperationType to propagate deletions.
-    await this.cancelPendingQueueEntriesForRecord("drive", driveId);
+
+    // F8 (Pass 5) — see deleteProject for the rationale. Child cancel uses
+    // the same Pass 3 primitive as the parent cancel; both are pure local
+    // filters with no remote push.
+    await this.cancelPendingChildUpserts(cascade);
+
+    await this.sync.cancelPendingForRecord("drive", driveId);
+    await this.enqueueDelete("drive.delete", driveId);
   }
 
   /**
-   * Remove all pending (non-in-flight) sync queue entries for a given record.
+   * F7 — cancel pending (non-in-flight) outbound upsert entries for the
+   * child ids a parent delete just cascaded locally.
    *
-   * This is a best-effort cleanup: it prevents stale upsert operations from
-   * re-creating a locally deleted record on the remote. In-flight entries are
-   * left intact — they will either be accepted by the remote (where the
-   * subsequent delete propagation, once implemented, will undo them) or fail
-   * on their own.
+   * Uses `SyncAdapter.cancelPendingForRecord` — the Pass 3 primitive that
+   * mutates the queue locally without pushing to the remote. In-flight
+   * entries are preserved (they are already in transit; the worst case
+   * is a brief reanimation on the remote, matching Pass 1's acknowledged
+   * outbound-delete limitation). Pass 5 extended use of the same
+   * primitive to the parent delete, so this helper and the parent
+   * `sync.cancelPendingForRecord` call share identical semantics and
+   * ordering between them is load-bearing only for pre-mutation cascade
+   * enumeration, not for flush isolation.
    *
-   * Implementation note: SyncAdapter does not expose a per-record removal API,
-   * so we read the current queue, filter out the target entries, and re-hydrate
-   * the adapter by flushing the old queue and re-enqueueing the survivors. This
-   * is safe because flush() only removes dispatchable (pending/failed) entries
-   * anyway — in-flight entries are preserved by the adapter implementations.
+   * Called by both the outbound delete path (`deleteDrive`,
+   * `deleteProject`) and the inbound merge path (`runSyncCycle` F7 loop
+   * via the extended `appliedDeletes` handshake).
    */
-  private async cancelPendingQueueEntriesForRecord(
-    entity: "project" | "drive",
-    recordId: string
-  ): Promise<void> {
-    const queue = await this.sync.listQueue();
-    const toRequeue = queue.filter(
-      (op) => !(op.entity === entity && op.recordId === recordId && op.status !== "in-flight")
-    );
-
-    if (toRequeue.length === queue.length) {
-      // Nothing to remove.
-      return;
+  private async cancelPendingChildUpserts(cascade: CatalogCascadeIds): Promise<void> {
+    for (const scanId of cascade.scans) {
+      await this.sync.cancelPendingForRecord("scan", scanId);
     }
-
-    // Flush removes all dispatchable entries from the adapter's internal queue.
-    await this.sync.flush();
-
-    // Re-enqueue the entries we want to keep.
-    for (const op of toRequeue) {
-      await this.sync.enqueue(op);
+    for (const scanId of cascade.scanSessions) {
+      // scanSession records are keyed by `scanId` in the sync layer — see
+      // `getSyncRecordDescriptor` for "scanSession.upsert".
+      await this.sync.cancelPendingForRecord("scanSession", scanId);
+    }
+    for (const eventId of cascade.projectScanEvents) {
+      await this.sync.cancelPendingForRecord("projectScanEvent", eventId);
     }
   }
 
@@ -575,7 +633,7 @@ export class LocalCatalogRepository implements CatalogRepository {
       type,
       entity: descriptor.entity,
       recordId: descriptor.recordId,
-      change: "upsert",
+      change: descriptor.change,
       occurredAt: new Date().toISOString(),
       recordUpdatedAt: descriptor.recordUpdatedAt,
       payload,
@@ -585,6 +643,18 @@ export class LocalCatalogRepository implements CatalogRepository {
       lastAttemptAt: null,
       lastError: null
     });
+  }
+
+  /**
+   * Enqueue a delete sync operation. The payload intentionally carries only
+   * the primary key + a wall-clock stamp — the Supabase adapter needs only the
+   * id (for the `…?pk=in.(…)` filter) and the compactor + descriptor paths
+   * need `updatedAt`. No domain payload is attached because the record is
+   * already gone locally.
+   */
+  private async enqueueDelete(type: "drive.delete" | "project.delete", recordId: string) {
+    const now = new Date().toISOString();
+    await this.enqueue(type, { id: recordId, updatedAt: now }, "manual");
   }
 
   private async runSyncCycle(): Promise<SyncCycleResult> {
@@ -614,6 +684,50 @@ export class LocalCatalogRepository implements CatalogRepository {
         persistence: this.persistence,
         changes: pullResult.changes
       });
+
+      // F5 — inbound-delete / outbound-queue coordination.
+      //
+      // For every record whose inbound delete was just applied locally,
+      // drop any stale pending outbound upsert from the queue. Without
+      // this, the NEXT cycle's flush would push that upsert and
+      // resurrect the just-deleted record on the remote.
+      //
+      // `cancelPendingForRecord` is the surgical primitive: it only
+      // touches non-in-flight entries and NEVER pushes to the remote.
+      // An in-flight upsert here is left alone — it's already in transit
+      // and may briefly resurrect the record remotely, matching the Pass 1
+      // acknowledged limitation for outbound deletes. Pass 5 made this
+      // primitive the sole queue-cancellation path for drive/project
+      // deletes on both the outbound (`deleteDrive`/`deleteProject`) and
+      // inbound sides; there is no longer a flush-based fallback.
+      //
+      // LWW is preserved because `appliedDeletes` is populated only for
+      // inbound deletes where the merge's per-record LWW check passed.
+      // A stale inbound delete rejected by LWW never reaches this loop.
+      for (const driveId of mergeResult.appliedDeletes.drives) {
+        await this.sync.cancelPendingForRecord("drive", driveId);
+      }
+      for (const projectId of mergeResult.appliedDeletes.projects) {
+        await this.sync.cancelPendingForRecord("project", projectId);
+      }
+
+      // F7 (Pass 4) — extend F5 to the cascade. `persistence.deleteDrive`
+      // and `persistence.deleteProject` cascade children locally; the
+      // merge module populates `appliedDeletes.{scans,scanSessions,
+      // projectScanEvents}` from the pre-merge snapshot so we can drop
+      // the matching pending outbound upserts here. Today this path is
+      // latent in production — `supabaseSyncAdapter.mapRowsToRemoteChanges`
+      // never emits inbound `.delete` variants — but the symmetry with the
+      // outbound cascade cleanup in `deleteDrive` / `deleteProject` keeps
+      // the invariant "a locally-deleted record never has a surviving
+      // pending upsert" true regardless of which side originated the
+      // delete.
+      await this.cancelPendingChildUpserts({
+        scans: mergeResult.appliedDeletes.scans,
+        scanSessions: mergeResult.appliedDeletes.scanSessions,
+        projectScanEvents: mergeResult.appliedDeletes.projectScanEvents
+      });
+
       const state = await this.sync.getState();
 
       return {
@@ -685,27 +799,44 @@ function serializeComparable(value: unknown) {
   return JSON.stringify(value ?? null);
 }
 
-function getSyncRecordDescriptor(type: SyncOperationType, payload: object) {
+interface SyncRecordDescriptor {
+  entity: "drive" | "project" | "scan" | "scanSession" | "projectScanEvent";
+  recordId: string;
+  recordUpdatedAt: string;
+  change: SyncChangeKind;
+}
+
+function getSyncRecordDescriptor(type: SyncOperationType, payload: object): SyncRecordDescriptor {
   if (type === "drive.upsert") {
     const drive = payload as Drive;
-    return { entity: "drive" as const, recordId: drive.id, recordUpdatedAt: drive.updatedAt };
+    return { entity: "drive", recordId: drive.id, recordUpdatedAt: drive.updatedAt, change: "upsert" };
+  }
+
+  if (type === "drive.delete") {
+    const stub = payload as { id: string; updatedAt: string };
+    return { entity: "drive", recordId: stub.id, recordUpdatedAt: stub.updatedAt, change: "delete" };
   }
 
   if (type === "project.upsert") {
     const project = payload as Project;
-    return { entity: "project" as const, recordId: project.id, recordUpdatedAt: project.updatedAt };
+    return { entity: "project", recordId: project.id, recordUpdatedAt: project.updatedAt, change: "upsert" };
+  }
+
+  if (type === "project.delete") {
+    const stub = payload as { id: string; updatedAt: string };
+    return { entity: "project", recordId: stub.id, recordUpdatedAt: stub.updatedAt, change: "delete" };
   }
 
   if (type === "scan.upsert") {
     const scan = payload as ScanRecord;
-    return { entity: "scan" as const, recordId: scan.id, recordUpdatedAt: scan.updatedAt };
+    return { entity: "scan", recordId: scan.id, recordUpdatedAt: scan.updatedAt, change: "upsert" };
   }
 
   if (type === "scanSession.upsert") {
     const session = payload as ScanSessionSnapshot;
-    return { entity: "scanSession" as const, recordId: session.scanId, recordUpdatedAt: session.updatedAt };
+    return { entity: "scanSession", recordId: session.scanId, recordUpdatedAt: session.updatedAt, change: "upsert" };
   }
 
   const event = payload as ProjectScanEvent;
-  return { entity: "projectScanEvent" as const, recordId: event.id, recordUpdatedAt: event.updatedAt };
+  return { entity: "projectScanEvent", recordId: event.id, recordUpdatedAt: event.updatedAt, change: "upsert" };
 }

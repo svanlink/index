@@ -9,3 +9,6 @@ apps/desktop/src-tauri/target
 apps/desktop/src-tauri/gen
 *.log
 
+# Claude Code tool cache — worktree metadata, session state, agent artifacts.
+# Never commit: contains local tool state that must not ship to the repo.
+.claude/

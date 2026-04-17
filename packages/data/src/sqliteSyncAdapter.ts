@@ -2,6 +2,7 @@ import type { SqlDatabase } from "./sqliteLocalPersistence";
 import {
   getDefaultSyncState,
   type RemoteSyncAdapter,
+  type SyncableCatalogEntity,
   type SyncAdapter,
   type SyncOperation,
   type SyncRecoveryResult,
@@ -9,6 +10,7 @@ import {
   type SyncState
 } from "./sync";
 import {
+  cancelPendingSyncOperationsForRecord,
   compactSyncQueue,
   getSyncStateForQueue,
   listDispatchableSyncOperations,
@@ -207,6 +209,28 @@ export class SqliteSyncAdapter implements SyncAdapter {
   async getState(): Promise<SyncState> {
     const database = await this.#ensureReady();
     return this.#readState(database);
+  }
+
+  async cancelPendingForRecord(entity: SyncableCatalogEntity, recordId: string): Promise<number> {
+    const database = await this.#ensureReady();
+    const queue = await this.#listQueue(database);
+    const { queue: nextQueue, cancelledCount } = cancelPendingSyncOperationsForRecord(
+      queue,
+      entity,
+      recordId
+    );
+    if (cancelledCount === 0) {
+      return 0;
+    }
+    await this.#writeQueue(database, nextQueue);
+    await this.#writeState(database, async (current) =>
+      getSyncStateForQueue({
+        queue: nextQueue,
+        remoteEnabled: Boolean(this.#remote),
+        previous: current
+      })
+    );
+    return cancelledCount;
   }
 
   async recoverInterruptedState(): Promise<SyncRecoveryResult> {

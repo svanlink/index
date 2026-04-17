@@ -20,6 +20,7 @@ import {
 import type {
   RemoteSyncAdapter,
   RemoteSyncChange,
+  SyncOperation,
   SyncPullRequest,
   SyncPullResult,
   SyncPushRequest,
@@ -69,25 +70,18 @@ export class SupabaseSyncAdapter implements RemoteSyncAdapter {
         continue;
       }
 
-      for (const chunk of chunkArray(operations, PUSH_BATCH_SIZE)) {
-        const rows = chunk.map((operation) => mapOperationPayloadToRow(entity, operation.payload));
-        const response = await this.#fetch(this.#buildTableUrl(resolveTableName(entity), buildUpsertQuery(entity)), {
-          method: "POST",
-          headers: this.#headers({
-            "Content-Type": "application/json",
-            Prefer: "resolution=merge-duplicates,return=minimal"
-          }),
-          body: JSON.stringify(rows)
-        });
+      // F1 — route operations by change kind. Upserts go out first (they
+      // create the rows a later delete might otherwise race), deletes last.
+      // In practice the repository's `deleteDrive` / `deleteProject` call
+      // `SyncAdapter.cancelPendingForRecord` to drop prior upserts for a
+      // record before enqueueing a delete, so a single delete arriving
+      // alone is the common case; the explicit ordering here is defensive
+      // for future callers that enqueue mixed pairs directly.
+      const upserts = operations.filter((operation) => operation.change === "upsert");
+      const deletes = operations.filter((operation) => operation.change === "delete");
 
-        if (response.ok) {
-          acceptedOperationIds.push(...chunk.map((operation) => operation.id));
-          continue;
-        }
-
-        const reason = await this.#readErrorMessage(response, `Supabase push failed for ${entity}.`);
-        rejected.push(...chunk.map((operation) => ({ operationId: operation.id, reason })));
-      }
+      await this.#pushUpsertBatches(entity, upserts, acceptedOperationIds, rejected);
+      await this.#pushDeleteBatches(entity, deletes, acceptedOperationIds, rejected);
     }
 
     return {
@@ -95,6 +89,67 @@ export class SupabaseSyncAdapter implements RemoteSyncAdapter {
       rejected,
       remoteCursor: null
     };
+  }
+
+  async #pushUpsertBatches(
+    entity: SyncableCatalogEntity,
+    upserts: SyncOperation[],
+    acceptedOperationIds: string[],
+    rejected: Array<{ operationId: string; reason: string }>
+  ) {
+    for (const chunk of chunkArray(upserts, PUSH_BATCH_SIZE)) {
+      const rows = chunk.map((operation) => mapOperationPayloadToRow(entity, operation.payload));
+      const response = await this.#fetch(this.#buildTableUrl(resolveTableName(entity), buildUpsertQuery(entity)), {
+        method: "POST",
+        headers: this.#headers({
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal"
+        }),
+        body: JSON.stringify(rows)
+      });
+
+      if (response.ok) {
+        acceptedOperationIds.push(...chunk.map((operation) => operation.id));
+        continue;
+      }
+
+      const reason = await this.#readErrorMessage(response, `Supabase push failed for ${entity}.`);
+      rejected.push(...chunk.map((operation) => ({ operationId: operation.id, reason })));
+    }
+  }
+
+  async #pushDeleteBatches(
+    entity: SyncableCatalogEntity,
+    deletes: SyncOperation[],
+    acceptedOperationIds: string[],
+    rejected: Array<{ operationId: string; reason: string }>
+  ) {
+    if (deletes.length === 0) {
+      return;
+    }
+    const primaryKey = resolvePrimaryKey(entity);
+    for (const chunk of chunkArray(deletes, PUSH_BATCH_SIZE)) {
+      const query = new URLSearchParams();
+      // PostgREST `in.(…)` accepts quoted comma-separated values; the quote
+      // helper handles embedded double-quotes (see `buildPullQuery`).
+      const encodedIds = chunk.map((operation) => quoteFilterValue(operation.recordId)).join(",");
+      query.set(primaryKey, `in.(${encodedIds})`);
+
+      const response = await this.#fetch(this.#buildTableUrl(resolveTableName(entity), query), {
+        method: "DELETE",
+        headers: this.#headers({
+          Prefer: "return=minimal"
+        })
+      });
+
+      if (response.ok) {
+        acceptedOperationIds.push(...chunk.map((operation) => operation.id));
+        continue;
+      }
+
+      const reason = await this.#readErrorMessage(response, `Supabase delete failed for ${entity}.`);
+      rejected.push(...chunk.map((operation) => ({ operationId: operation.id, reason })));
+    }
   }
 
   async pullChanges(request: SyncPullRequest): Promise<SyncPullResult> {

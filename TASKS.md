@@ -3,7 +3,6 @@
 ## Phase 1 — Foundation
 - Initialize monorepo
 - Create desktop app scaffold with Tauri
-- Create web app scaffold
 - Add React + TypeScript + Tailwind
 - Create shared packages for domain + UI + data
 - Add mock data and static shell

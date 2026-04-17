@@ -44,7 +44,7 @@ The primary user is a solo creative professional managing many hard drives conta
 ## Platforms
 
 ### macOS desktop app
-This is the main app and must contain full functionality:
+This is the product and must contain full functionality:
 - drive scanning
 - project editing
 - drive editing
@@ -53,18 +53,7 @@ This is the main app and must contain full functionality:
 - dashboard
 - manual project creation
 
-### Web app
-Read/write metadata and planning:
-- browse projects and drives
-- edit metadata
-- assign drives
-- manage move workflow
-- search catalog
-
-### Mobile
-For now mobile is read-oriented:
-- view/search/check only
-- no scanning
+Web and mobile companion surfaces are out of scope for the current build. The local-first / sync boundary is preserved so future companion surfaces remain possible without re-architecting the catalog.
 
 ## Technology Stack
 

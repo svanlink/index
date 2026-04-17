@@ -1,3 +1,7 @@
+import {
+  applyDriveDeleteToSnapshot,
+  applyProjectDeleteToSnapshot
+} from "./cascadeDelete";
 import type { CatalogSnapshot, LocalPersistenceAdapter } from "./localPersistence";
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -112,33 +116,18 @@ export class InMemoryLocalPersistence implements LocalPersistenceAdapter {
   }
 
   async deleteProject(projectId: string) {
-    this.#snapshot.projects = this.#snapshot.projects.filter((p) => p.id !== projectId);
-    this.#snapshot.projectScanEvents = this.#snapshot.projectScanEvents.filter((e) => e.projectId !== projectId);
+    // Cascade spec: see `cascadeDelete.ts#applyProjectDeleteToSnapshot`.
+    // The shared contract test in `localPersistenceContract.ts` locks this
+    // path, the Storage path, and the SQLite path to identical behavior.
+    this.#snapshot = applyProjectDeleteToSnapshot(this.#snapshot, projectId);
   }
 
   async deleteDrive(driveId: string) {
-    // Nullify drive references on projects (projects survive drive deletion).
-    this.#snapshot.projects = this.#snapshot.projects.map((p) => {
-      const updates: Partial<typeof p> = {};
-      if (p.currentDriveId === driveId) updates.currentDriveId = null;
-      if (p.targetDriveId === driveId) updates.targetDriveId = null;
-      return Object.keys(updates).length > 0 ? { ...p, ...updates } : p;
-    });
-
-    // Cascade scans: drop projectScanEvents whose scan belongs to this drive, then the scans.
-    this.#snapshot.projectScanEvents = this.#snapshot.projectScanEvents.filter(
-      (e) => !this.#snapshot.scans.some((s) => s.driveId === driveId && s.id === e.scanId)
-    );
-    this.#snapshot.scans = this.#snapshot.scans.filter((s) => s.driveId !== driveId);
-
-    // Cascade scan sessions: drop sessions whose requestedDriveId matches this drive. Their
-    // embedded `projects` arrays (the scan_session_projects analog) go with them. Parity with
-    // SqliteLocalPersistence.deleteDrive — see H3.
-    this.#snapshot.scanSessions = this.#snapshot.scanSessions.filter(
-      (session) => session.requestedDriveId !== driveId
-    );
-
-    // Finally, drop the drive itself.
-    this.#snapshot.drives = this.#snapshot.drives.filter((d) => d.id !== driveId);
+    // Cascade spec: see `cascadeDelete.ts#applyDriveDeleteToSnapshot`.
+    // The shared contract test in `localPersistenceContract.ts` locks this
+    // path, the Storage path, and the SQLite path to identical behavior
+    // (H3 parity — sessions with `requestedDriveId === null` are
+    // preserved, projects are nullified rather than deleted).
+    this.#snapshot = applyDriveDeleteToSnapshot(this.#snapshot, driveId);
   }
 }

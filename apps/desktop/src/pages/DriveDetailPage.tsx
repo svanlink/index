@@ -5,13 +5,20 @@ import type { Project } from "@drive-project-catalog/domain";
 import { useVolumeInfo } from "../app/scanCommands";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate, formatParsedDate, getProjectName, getProjectStatusBadges } from "./dashboardHelpers";
-import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
+import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, FeedbackNotice, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
+
+type FeedbackState = {
+  tone: "success" | "warning" | "error" | "info";
+  title: string;
+  messages: string[];
+} | null;
 
 export function DriveDetailPage() {
   const { driveId = "" } = useParams();
   const navigate = useNavigate();
   const { isLoading, isMutating, getDriveDetailView, selectDrive, deleteDrive, scanSessions } = useCatalogStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState>(null);
 
   const driveRootPath = scanSessions
     .filter((s) => s.requestedDriveId === driveId)
@@ -30,6 +37,14 @@ export function DriveDetailPage() {
     };
   }, [driveId, selectDrive]);
 
+  // Auto-dismiss feedback after 2.8s. Matches the pattern used across pages so
+  // transient notices never stack and the surface stays calm.
+  useEffect(() => {
+    if (!feedback) return;
+    const timeoutId = window.setTimeout(() => setFeedback(null), 2800);
+    return () => window.clearTimeout(timeoutId);
+  }, [feedback]);
+
   if (isLoading) {
     return <LoadingState label="Loading drive detail" />;
   }
@@ -42,12 +57,21 @@ export function DriveDetailPage() {
 
   const { drive, projects, incomingProjects, missingProjects } = detail;
 
+  // S6/H11 — deleteDrive errors must surface to the user. Previously the
+  // catch silently closed the modal, which read as "deleted successfully"
+  // even when the delete failed. Now we close the modal and raise a visible
+  // error notice so the user knows to retry or investigate.
   async function handleDeleteDrive() {
     try {
       await deleteDrive(driveId);
       navigate("/drives");
-    } catch {
+    } catch (error) {
       setShowDeleteConfirm(false);
+      setFeedback({
+        tone: "error",
+        title: "Could not delete drive",
+        messages: [error instanceof Error ? error.message : "The drive could not be deleted."]
+      });
     }
   }
 
@@ -68,6 +92,14 @@ export function DriveDetailPage() {
         <div />
         <Link to="/drives" className="button-secondary">Back</Link>
       </div>
+
+      {feedback ? (
+        <FeedbackNotice
+          tone={feedback.tone}
+          title={feedback.title}
+          messages={feedback.messages}
+        />
+      ) : null}
 
       <SectionCard title="Drive summary" description="Capacity and reservation data stays local-first and updates as move plans change.">
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">

@@ -1,8 +1,6 @@
 # macOS Signing and Release Operations
 
-This document is now a future/optional path for a real signed macOS release of Drive Project Catalog. It remains useful for later notarized distribution, but it is not the recommended free public release path.
-
-For the recommended public release path right now, see [WEB_RELEASE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/WEB_RELEASE.md).
+This document is a future/optional path for a real signed and notarized macOS release of Drive Project Catalog. The current release path is the unsigned Tauri build for local/personal use; the signing/notarization work captured here is not on the current critical path.
 
 ## What is ready inside the repo
 
@@ -16,8 +14,7 @@ For the recommended public release path right now, see [WEB_RELEASE.md](/Users/v
 
 ## Current strategy note
 
-- local unsigned desktop builds are fine for personal/internal use
-- public release should currently happen through the web build
+- local unsigned desktop builds are the current release path for personal/internal use
 - Apple paid signing/notarization work is postponed
 
 ## What still remains outside the repo
@@ -49,7 +46,7 @@ Optional packaged-build sync inputs:
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_SUPABASE_SCHEMA`
 
-See [.env.release.example](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/.env.release.example) for a safe template.
+See [.env.release.example](.env.release.example) for a safe template.
 
 ## Conservative macOS release flow
 
@@ -71,7 +68,6 @@ corepack pnpm release:check:rc v1.0.0-rc1
 corepack pnpm install
 corepack pnpm test
 corepack pnpm typecheck
-corepack pnpm build:web
 corepack pnpm build:desktop
 ```
 

@@ -288,7 +288,7 @@ Must include:
 ## 14. Platforms
 
 ### macOS app
-Main application. Full functionality:
+The product. Full functionality:
 - scan
 - edit
 - search
@@ -296,21 +296,7 @@ Main application. Full functionality:
 - create manual projects
 - create manual drives
 
-### Web app
-Read/write metadata and planning:
-- browse
-- search
-- edit
-- assign
-- plan moves
-
-### Mobile
-Read-oriented:
-- search
-- check status
-- check location
-
-No scanning in mobile.
+Web and mobile companion surfaces are out of scope for the current build. The local-first / sync boundary is intentionally preserved so future read-only or read/write companion surfaces remain possible without re-architecting the catalog.
 
 ---
 

@@ -1,5 +1,19 @@
-import { getDefaultSyncState, type SyncAdapter, type SyncOperation, type SyncRecoveryResult, type SyncResult, type SyncState } from "./sync";
-import { compactSyncQueue, getSyncStateForQueue, listDispatchableSyncOperations, normalizeSyncOperation } from "./syncQueue";
+import {
+  getDefaultSyncState,
+  type SyncableCatalogEntity,
+  type SyncAdapter,
+  type SyncOperation,
+  type SyncRecoveryResult,
+  type SyncResult,
+  type SyncState
+} from "./sync";
+import {
+  cancelPendingSyncOperationsForRecord,
+  compactSyncQueue,
+  getSyncStateForQueue,
+  listDispatchableSyncOperations,
+  normalizeSyncOperation
+} from "./syncQueue";
 
 const clone = <T>(value: T): T => structuredClone(value);
 
@@ -62,6 +76,24 @@ export class InMemorySyncAdapter implements SyncAdapter {
         previous: this.#state
       })
     );
+  }
+
+  async cancelPendingForRecord(entity: SyncableCatalogEntity, recordId: string): Promise<number> {
+    const { queue: nextQueue, cancelledCount } = cancelPendingSyncOperationsForRecord(
+      this.#pending,
+      entity,
+      recordId
+    );
+    if (cancelledCount === 0) {
+      return 0;
+    }
+    this.#pending = nextQueue;
+    this.#state = getSyncStateForQueue({
+      queue: this.#pending,
+      remoteEnabled: false,
+      previous: this.#state
+    });
+    return cancelledCount;
   }
 
   async recoverInterruptedState(): Promise<SyncRecoveryResult> {

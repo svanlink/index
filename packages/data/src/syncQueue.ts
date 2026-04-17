@@ -122,6 +122,50 @@ export function reconcileInFlightSyncOperations(
   return { queue: nextQueue, recoveredCount };
 }
 
+/**
+ * Surgically remove pending / failed queue entries matching
+ * (entity, recordId). In-flight entries are preserved — a push is already
+ * underway for them and we have no way to unsend it.
+ *
+ * This is the primitive that `SyncAdapter.cancelPendingForRecord` implementations
+ * wrap. It is a pure local filter and never touches the remote.
+ *
+ * That purity is load-bearing:
+ *
+ *  - Inbound-delete coordination (F5 / Pass 3): when the merge applies a
+ *    remote delete for a record that still has a pending outbound upsert
+ *    locally, cancelling through any push-first path would re-send the
+ *    upsert and resurrect the record on the remote — the exact echo loop
+ *    Pass 3 exists to prevent.
+ *  - Outbound delete (F8 / Pass 5): `deleteDrive` / `deleteProject` now
+ *    call `cancelPendingForRecord` directly for both the parent and its
+ *    cascaded children. The previous flush-based helper pushed unrelated
+ *    queue entries to the remote as a side-effect of every delete and
+ *    erased retry/error state by re-enqueueing survivors; this pure
+ *    filter avoids both failure modes.
+ */
+export function cancelPendingSyncOperationsForRecord(
+  queue: SyncOperation[],
+  entity: SyncOperation["entity"],
+  recordId: string
+): { queue: SyncOperation[]; cancelledCount: number } {
+  let cancelledCount = 0;
+  const nextQueue: SyncOperation[] = [];
+  for (const operation of queue) {
+    const normalized = normalizeSyncOperation(operation);
+    if (
+      normalized.entity === entity &&
+      normalized.recordId === recordId &&
+      normalized.status !== "in-flight"
+    ) {
+      cancelledCount += 1;
+      continue;
+    }
+    nextQueue.push(normalized);
+  }
+  return { queue: nextQueue, cancelledCount };
+}
+
 export function settleSyncQueue(params: {
   queue: SyncOperation[];
   acceptedOperationIds: string[];
@@ -168,10 +212,19 @@ function findCompactionCandidateIndex(queue: SyncOperation[], incoming: SyncOper
 function mergeSyncOperations(previous: SyncOperation, incoming: SyncOperation): SyncOperation {
   const takeIncoming = shouldPreferIncoming(previous, incoming);
 
+  // `occurredAt` tracks when the merged operation was most recently mutated
+  // from the caller's perspective, so we keep the later of the two stamps.
+  // The operation id and enqueue-order position are preserved from `previous`
+  // (see the spread) — only the wall-clock marker advances. Listing/ordering
+  // via `listDispatchableSyncOperations` uses `occurredAt`, so carrying the
+  // older stamp would make a just-edited record appear to have stale activity.
+  const occurredAt =
+    incoming.occurredAt > previous.occurredAt ? incoming.occurredAt : previous.occurredAt;
+
   return {
     ...previous,
     type: incoming.type,
-    occurredAt: previous.occurredAt,
+    occurredAt,
     recordUpdatedAt: takeIncoming ? incoming.recordUpdatedAt : previous.recordUpdatedAt,
     payload: takeIncoming ? incoming.payload : previous.payload,
     source: takeIncoming ? incoming.source : previous.source,

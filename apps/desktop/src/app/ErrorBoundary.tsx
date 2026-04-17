@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { FullScreenErrorPanel } from "./FullScreenErrorPanel";
 
 // ---------------------------------------------------------------------------
 // ErrorBoundary — S6/H9
@@ -84,35 +85,13 @@ function DefaultErrorFallback({ error, onReset }: DefaultErrorFallbackProps) {
   const message = error.message || "An unexpected error occurred.";
 
   return (
-    <div
-      role="alert"
-      aria-live="assertive"
-      className="flex min-h-screen items-center justify-center p-6"
-      style={{ background: "var(--color-surface)" }}
-    >
-      <div className="app-panel w-full max-w-md space-y-4 px-6 py-6">
-        <div className="space-y-1">
-          <p
-            className="text-[11px] font-semibold uppercase tracking-[0.16em]"
-            style={{ color: "var(--color-danger)" }}
-          >
-            Something went wrong
-          </p>
-          <h1 className="text-[16px] font-semibold" style={{ color: "var(--color-text)" }}>
-            The catalog hit an unexpected error
-          </h1>
-        </div>
-
-        <p className="text-[13px]" style={{ color: "var(--color-text-soft)" }}>
-          {message}
-        </p>
-
-        <p className="text-[12px]" style={{ color: "var(--color-text-soft)" }}>
-          Your data is safe. You can try recovering this view, or reload the window if the
-          problem persists.
-        </p>
-
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+    <FullScreenErrorPanel
+      eyebrow="Something went wrong"
+      title="The catalog hit an unexpected error"
+      description="Your data is safe. You can try recovering this view, or reload the window if the problem persists."
+      detail={message}
+      actions={
+        <>
           <button type="button" className="button-secondary" onClick={onReset}>
             Try again
           </button>
@@ -123,8 +102,8 @@ function DefaultErrorFallback({ error, onReset }: DefaultErrorFallbackProps) {
           >
             Reload window
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }

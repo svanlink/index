@@ -181,6 +181,109 @@ describe("SupabaseSyncAdapter", () => {
     ]);
   });
 
+  // F1 — outbound delete propagation. `pushChanges` must issue DELETE with a
+  // PostgREST `?id=in.(…)` filter for delete ops, and route upserts and
+  // deletes independently within a single batch.
+  it("issues DELETE requests for delete operations against the right table and filter", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    const adapter = new SupabaseSyncAdapter({
+      url: "https://example.supabase.co",
+      anonKey: "anon-key",
+      fetch: fetchMock
+    });
+
+    const result = await adapter.pushChanges({
+      conflictPolicy: "updated-at-last-write-wins-local-tie-break",
+      operations: [
+        buildDeleteOperation("project", "project.delete", "project-42"),
+        buildDeleteOperation("project", "project.delete", "project-99"),
+        buildDeleteOperation("drive", "drive.delete", "drive-7")
+      ]
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const driveCall = fetchMock.mock.calls.find(([input]) => String(input).includes("/drives"));
+    const projectCall = fetchMock.mock.calls.find(([input]) => String(input).includes("/projects"));
+    expect(driveCall).toBeDefined();
+    expect(projectCall).toBeDefined();
+
+    const driveInit = driveCall![1] as RequestInit;
+    const projectInit = projectCall![1] as RequestInit;
+    expect(driveInit.method).toBe("DELETE");
+    expect(projectInit.method).toBe("DELETE");
+
+    // Project delete URL filters by both ids using the quoted `in.(…)` form.
+    const projectUrl = new URL(String(projectCall![0]));
+    expect(projectUrl.searchParams.get("id")).toBe('in.("project-42","project-99")');
+    expect(driveInit.body, "DELETE requests carry no body").toBeUndefined();
+
+    expect(result.acceptedOperationIds.sort()).toEqual(
+      ["op-drive-7", "op-project-42", "op-project-99"].sort()
+    );
+    expect(result.rejected).toEqual([]);
+  });
+
+  it("routes upserts before deletes when both are queued for the same entity", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    const adapter = new SupabaseSyncAdapter({
+      url: "https://example.supabase.co",
+      anonKey: "anon-key",
+      fetch: fetchMock
+    });
+
+    await adapter.pushChanges({
+      conflictPolicy: "updated-at-last-write-wins-local-tie-break",
+      operations: [
+        buildOperation("project", "project.upsert", "project-keep"),
+        buildDeleteOperation("project", "project.delete", "project-drop")
+      ]
+    });
+
+    // Two calls, in order: upsert (POST) then delete (DELETE).
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstInit = fetchMock.mock.calls[0]![1] as RequestInit;
+    const secondInit = fetchMock.mock.calls[1]![1] as RequestInit;
+    expect(firstInit.method).toBe("POST");
+    expect(secondInit.method).toBe("DELETE");
+  });
+
+  it("reports a rejected delete with the remote error message", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "violates foreign key constraint" }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" }
+        })
+      );
+
+    const adapter = new SupabaseSyncAdapter({
+      url: "https://example.supabase.co",
+      anonKey: "anon-key",
+      fetch: fetchMock
+    });
+
+    const result = await adapter.pushChanges({
+      conflictPolicy: "updated-at-last-write-wins-local-tie-break",
+      operations: [buildDeleteOperation("project", "project.delete", "project-locked")]
+    });
+
+    expect(result.acceptedOperationIds).toEqual([]);
+    expect(result.rejected).toEqual([
+      {
+        operationId: "op-project-locked",
+        reason: expect.stringContaining("violates foreign key constraint")
+      }
+    ]);
+  });
+
   it("paginates pull results and emits a robust per-entity cursor", async () => {
     const fetchMock = vi.fn<typeof fetch>((input) => {
       const url = new URL(String(input));
@@ -340,6 +443,29 @@ function buildOperation(entity: "drive" | "project", type: "drive.upsert" | "pro
             createdAt: baseTime,
             updatedAt: baseTime
           },
+    source: "manual" as const,
+    status: "pending" as const,
+    attempts: 0,
+    lastAttemptAt: null,
+    lastError: null
+  };
+}
+
+function buildDeleteOperation(
+  entity: "drive" | "project",
+  type: "drive.delete" | "project.delete",
+  recordId: string
+) {
+  const baseTime = "2026-04-06T10:00:00.000Z";
+  return {
+    id: `op-${recordId}`,
+    type,
+    entity,
+    recordId,
+    change: "delete" as const,
+    occurredAt: baseTime,
+    recordUpdatedAt: baseTime,
+    payload: { id: recordId, updatedAt: baseTime },
     source: "manual" as const,
     status: "pending" as const,
     attempts: 0,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cancelPendingSyncOperationsForRecord,
   compactSyncQueue,
   listDispatchableSyncOperations,
   markSyncOperationsInFlight,
@@ -43,6 +44,52 @@ describe("syncQueue", () => {
 
     expect(queue).toHaveLength(2);
     expect(listDispatchableSyncOperations(queue).map((operation) => operation.id)).toEqual(["op-2"]);
+  });
+
+  // F2 — mergeSyncOperations must preserve the latest occurredAt. A stale
+  // occurredAt would mis-sort this op in listDispatchableSyncOperations and
+  // make a just-touched record look older than a quieter peer.
+  it("preserves the latest occurredAt when compacting repeated upserts", () => {
+    const queue = compactSyncQueue(
+      [
+        createOperation({
+          id: "op-1",
+          occurredAt: "2026-04-06T12:00:00.000Z",
+          recordUpdatedAt: "2026-04-06T12:00:00.000Z"
+        })
+      ],
+      createOperation({
+        id: "op-2",
+        occurredAt: "2026-04-06T12:05:00.000Z",
+        recordUpdatedAt: "2026-04-06T12:05:00.000Z"
+      })
+    );
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.id).toBe("op-1");
+    expect(queue[0]?.occurredAt).toBe("2026-04-06T12:05:00.000Z");
+  });
+
+  it("keeps the earlier occurredAt when the incoming op is older", () => {
+    // Out-of-order enqueue (e.g. retry of a stale event): the merged op should
+    // still reflect the most-recent activity, i.e. the existing `previous`.
+    const queue = compactSyncQueue(
+      [
+        createOperation({
+          id: "op-1",
+          occurredAt: "2026-04-06T12:10:00.000Z",
+          recordUpdatedAt: "2026-04-06T12:10:00.000Z"
+        })
+      ],
+      createOperation({
+        id: "op-2",
+        occurredAt: "2026-04-06T12:05:00.000Z",
+        recordUpdatedAt: "2026-04-06T12:05:00.000Z"
+      })
+    );
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.occurredAt).toBe("2026-04-06T12:10:00.000Z");
   });
 });
 
@@ -128,6 +175,91 @@ describe("S4/H4 — reconcileInFlightSyncOperations", () => {
     const result = reconcileInFlightSyncOperations([], "stranded fallback");
     expect(result.recoveredCount).toBe(0);
     expect(result.queue).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F5 — cancelPendingSyncOperationsForRecord
+//
+// The primitive behind SyncAdapter.cancelPendingForRecord. Pure filter; must
+// preserve in-flight entries (they're in transit and cannot be interrupted)
+// and must never mutate input in place.
+// ---------------------------------------------------------------------------
+
+describe("F5 — cancelPendingSyncOperationsForRecord", () => {
+  it("removes pending entries matching (entity, recordId) and returns the cancelled count", () => {
+    const queue: SyncOperation[] = [
+      createOperation({ id: "op-keep-other", recordId: "project-2" }),
+      createOperation({ id: "op-cancel-1", recordId: "project-1" }),
+      createOperation({ id: "op-cancel-2", recordId: "project-1", change: "delete" })
+    ];
+
+    const result = cancelPendingSyncOperationsForRecord(queue, "project", "project-1");
+
+    expect(result.cancelledCount).toBe(2);
+    expect(result.queue.map((op) => op.id)).toEqual(["op-keep-other"]);
+  });
+
+  it("leaves in-flight entries intact even when (entity, recordId) matches", () => {
+    // H4 invariant — in-flight ops are already being pushed; cancelling one
+    // would leave the push unresolved. The pending entry in the same batch
+    // is still dropped.
+    const inFlight = markSyncOperationsInFlight(
+      [createOperation({ id: "op-in-flight" })],
+      ["op-in-flight"],
+      "2026-04-06T12:02:00.000Z"
+    );
+    const queue: SyncOperation[] = [
+      ...inFlight,
+      createOperation({ id: "op-pending", occurredAt: "2026-04-06T12:05:00.000Z" })
+    ];
+
+    const result = cancelPendingSyncOperationsForRecord(queue, "project", "project-1");
+
+    expect(result.cancelledCount).toBe(1);
+    expect(result.queue).toHaveLength(1);
+    expect(result.queue[0]!.id).toBe("op-in-flight");
+    expect(result.queue[0]!.status).toBe("in-flight");
+  });
+
+  it("also cancels failed (dispatchable) entries — they would otherwise be retried", () => {
+    // `failed` is a dispatchable status (see listDispatchableSyncOperations),
+    // meaning the next flush would pick it up and push it. A failed upsert
+    // for a record we just deleted must not be retried.
+    const queue: SyncOperation[] = [
+      { ...createOperation({ id: "op-failed" }), status: "failed", lastError: "prior rejection" }
+    ];
+
+    const result = cancelPendingSyncOperationsForRecord(queue, "project", "project-1");
+
+    expect(result.cancelledCount).toBe(1);
+    expect(result.queue).toEqual([]);
+  });
+
+  it("returns a zero count and the original queue when nothing matches", () => {
+    const queue: SyncOperation[] = [
+      createOperation({ id: "op-other-entity", entity: "drive", recordId: "project-1" }),
+      createOperation({ id: "op-other-record", recordId: "project-2" })
+    ];
+
+    const result = cancelPendingSyncOperationsForRecord(queue, "project", "project-1");
+
+    expect(result.cancelledCount).toBe(0);
+    expect(result.queue.map((op) => op.id).sort()).toEqual(["op-other-entity", "op-other-record"]);
+  });
+
+  it("does not mutate the input queue", () => {
+    const queue: SyncOperation[] = [createOperation({ id: "op-1", recordId: "project-1" })];
+    const snapshot = queue.map((op) => op.id);
+
+    cancelPendingSyncOperationsForRecord(queue, "project", "project-1");
+
+    expect(queue.map((op) => op.id)).toEqual(snapshot);
+  });
+
+  it("handles an empty queue without throwing", () => {
+    const result = cancelPendingSyncOperationsForRecord([], "project", "project-1");
+    expect(result).toEqual({ queue: [], cancelledCount: 0 });
   });
 });
 

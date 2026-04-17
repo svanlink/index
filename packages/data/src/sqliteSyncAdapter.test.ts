@@ -307,6 +307,125 @@ describe("SqliteSyncAdapter", () => {
     expect(queue[0]?.status).toBe("failed");
     expect(queue[0]?.lastError).toContain("interrupted");
   });
+
+  it("F5 — cancelPendingForRecord removes matching pending entries without pushing to remote", async () => {
+    // Mirror of the storage adapter's F5 test — verifies the new primitive
+    // does NOT call into the remote. A naive implementation that reused the
+    // flush()-then-requeue strategy would push op-target here and resurrect
+    // the just-deleted record on the remote, re-creating the exact echo loop
+    // Pass 3 exists to prevent.
+    const databasePath = createTempDatabasePath();
+    const pushes: string[][] = [];
+    const remote: RemoteSyncAdapter = {
+      mode: "remote-ready",
+      async pushChanges(request) {
+        pushes.push(request.operations.map((op) => op.id));
+        return {
+          acceptedOperationIds: request.operations.map((op) => op.id),
+          rejected: [],
+          remoteCursor: "cursor-after-push"
+        };
+      },
+      async pullChanges() {
+        return { changes: [], remoteCursor: null };
+      }
+    };
+    const adapter = new SqliteSyncAdapter({
+      loadDatabase: async () => openNodeSqlDatabase(databasePath),
+      remote
+    });
+
+    await adapter.enqueue({
+      id: "op-target",
+      type: "project.upsert",
+      entity: "project",
+      recordId: "project-target",
+      change: "upsert",
+      occurredAt: "2026-04-06T12:00:00.000Z",
+      recordUpdatedAt: "2026-04-06T12:00:00.000Z",
+      payload: { id: "project-target" },
+      source: "manual",
+      status: "pending",
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null
+    });
+    await adapter.enqueue({
+      id: "op-keep",
+      type: "drive.upsert",
+      entity: "drive",
+      recordId: "drive-keep",
+      change: "upsert",
+      occurredAt: "2026-04-06T12:00:05.000Z",
+      recordUpdatedAt: "2026-04-06T12:00:05.000Z",
+      payload: { id: "drive-keep" },
+      source: "manual",
+      status: "pending",
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null
+    });
+
+    const cancelled = await adapter.cancelPendingForRecord("project", "project-target");
+
+    expect(cancelled).toBe(1);
+    expect(pushes).toHaveLength(0);
+    const queue = await adapter.listQueue();
+    expect(queue.map((op) => op.id)).toEqual(["op-keep"]);
+    expect((await adapter.getState()).queuedCount).toBe(1);
+  });
+
+  it("F5 — cancelPendingForRecord preserves in-flight entries even when (entity, recordId) matches", async () => {
+    const databasePath = createTempDatabasePath();
+    const adapter = new SqliteSyncAdapter({
+      loadDatabase: async () => openNodeSqlDatabase(databasePath)
+    });
+
+    await adapter.enqueue({
+      id: "op-pending",
+      type: "project.upsert",
+      entity: "project",
+      recordId: "project-target",
+      change: "upsert",
+      occurredAt: "2026-04-06T12:00:00.000Z",
+      recordUpdatedAt: "2026-04-06T12:00:00.000Z",
+      payload: { id: "project-target" },
+      source: "manual",
+      status: "pending",
+      attempts: 0,
+      lastAttemptAt: null,
+      lastError: null
+    });
+
+    // Flip the row to in-flight via direct SQL — the adapter does not expose
+    // a way to mark a single operation in-flight without invoking flush().
+    const database = openNodeSqlDatabase(databasePath);
+    await database.execute(
+      "INSERT INTO sync_queue (id, type, entity, record_id, change_kind, occurred_at, record_updated_at, payload_json, source, status, attempts, last_attempt_at, last_error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        "op-in-flight",
+        "project.upsert",
+        "project",
+        "project-target",
+        "upsert",
+        "2026-04-06T11:00:00.000Z",
+        "2026-04-06T11:00:00.000Z",
+        JSON.stringify({ id: "project-target" }),
+        "manual",
+        "in-flight",
+        1,
+        "2026-04-06T11:01:00.000Z",
+        null
+      ]
+    );
+
+    const cancelled = await adapter.cancelPendingForRecord("project", "project-target");
+
+    expect(cancelled).toBe(1);
+    const queue = await adapter.listQueue();
+    expect(queue.map((op) => op.id)).toEqual(["op-in-flight"]);
+    expect(queue[0]!.status).toBe("in-flight");
+  });
 });
 
 function createTempDatabasePath() {

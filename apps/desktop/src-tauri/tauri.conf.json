@@ -4,8 +4,8 @@
   "version": "1.0.0-rc1",
   "identifier": "com.driveprojectcatalog.app",
   "build": {
-    "beforeDevCommand": "corepack pnpm dev:web",
-    "beforeBuildCommand": "corepack pnpm build:web",
+    "beforeDevCommand": "corepack pnpm dev:frontend",
+    "beforeBuildCommand": "corepack pnpm build:frontend",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
@@ -17,7 +17,9 @@
         "height": 960,
         "minWidth": 1180,
         "minHeight": 760,
-        "resizable": true
+        "resizable": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {

@@ -3,7 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
     <title>Drive Project Catalog</title>
+    <!--
+      First-paint background — matches --color-canvas in globals.css.
+      Inlined here so the cold-launch frame uses the app canvas color
+      instead of the default browser white, which is especially visible
+      with the macOS "Overlay" title bar style where no native chrome
+      masks the transition.
+    -->
+    <style>
+      html,
+      body {
+        background: #fafafa;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

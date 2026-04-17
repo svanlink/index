@@ -15,14 +15,33 @@ export const localOnlyCatalogFields = {
 
 export const syncOperationTypes = [
   "drive.upsert",
+  "drive.delete",
   "project.upsert",
+  "project.delete",
   "scan.upsert",
   "scanSession.upsert",
   "projectScanEvent.upsert"
 ] as const;
 
 export type SyncOperationType = (typeof syncOperationTypes)[number];
-export type SyncChangeKind = "upsert";
+/**
+ * Kind of change the queue entry represents.
+ *
+ *  - `upsert` — insert-or-update with the full record payload. Idempotent
+ *    on the remote via PostgREST `Prefer: resolution=merge-duplicates`.
+ *  - `delete` — remove the record by id on the remote. Payload only needs
+ *    to carry the primary key (+ recordUpdatedAt for diagnostics); the
+ *    Supabase adapter does not read any other field for delete ops.
+ *
+ * The queue compactor (`findCompactionCandidateIndex` in `syncQueue.ts`)
+ * never merges across change kinds, so a pending `upsert` and a later
+ * `delete` for the same record remain independent entries. In practice
+ * the repository layer calls `SyncAdapter.cancelPendingForRecord` before
+ * enqueueing a delete, which removes prior upserts for the same record —
+ * so the ordered queue typically ends with a single delete op, not a
+ * mixed pair.
+ */
+export type SyncChangeKind = "upsert" | "delete";
 export type SyncMutationSource = "manual" | "batch" | "scan" | "system";
 export type SyncMode = "local-only" | "remote-ready" | "syncing";
 export type SyncConflictPolicy = "updated-at-last-write-wins-local-tie-break";
@@ -144,6 +163,22 @@ export interface SyncAdapter {
   pull(): Promise<SyncPullResult>;
   getState(): Promise<SyncState>;
   recoverInterruptedState(): Promise<SyncRecoveryResult>;
+  /**
+   * F5 — surgical cancellation of pending / failed queue entries for a given
+   * (entity, recordId). In-flight entries MUST be preserved by every
+   * implementation — they are already being pushed and cannot be cleanly
+   * interrupted.
+   *
+   * Unlike `flush`, this method must NEVER push to the remote. The queue is
+   * mutated locally only. Returns the number of entries cancelled (for
+   * telemetry and test assertions). A zero return is a valid "nothing to
+   * cancel" outcome and must not throw.
+   *
+   * Intended caller: `LocalCatalogRepository.runSyncCycle` after an inbound
+   * delete is applied, to prevent a stale pending upsert from resurrecting
+   * the just-deleted record on the remote on the next cycle.
+   */
+  cancelPendingForRecord(entity: SyncableCatalogEntity, recordId: string): Promise<number>;
 }
 
 export function getDefaultSyncState(): SyncState {

@@ -1,14 +1,12 @@
 # Desktop Release Guide
 
-This document now covers the desktop app as a local or personal-use build. Public distribution should currently use the web deployment path instead of a signed macOS release.
-
-For the recommended public release path, see [WEB_RELEASE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/WEB_RELEASE.md).
+This document covers the macOS desktop app. The current release path is the unsigned Tauri build for local/personal use. Signed and notarized public distribution is future/optional and remains manual outside the repo — see [MACOS_RELEASE_OPERATIONS.md](MACOS_RELEASE_OPERATIONS.md) for operator inputs.
 
 ## Current desktop position
 
 - Desktop packaging is ready for local/internal use.
 - Signed and notarized public macOS distribution is postponed.
-- The desktop app remains the place where scan commands and local SQLite behavior are available.
+- The desktop app is the product: scan commands and local SQLite behavior live here.
 
 ## In-repo readiness
 
@@ -18,7 +16,6 @@ Before creating a distributable build, verify:
 corepack pnpm install
 corepack pnpm test
 corepack pnpm typecheck
-corepack pnpm build:web
 corepack pnpm build:desktop
 corepack pnpm release:check:macos
 corepack pnpm release:check:rc v1.0.0-rc1
@@ -58,7 +55,7 @@ Run the packaged `.app` and verify:
 
 ## Future macOS signing and notarization inputs
 
-For the fuller operator process, see [MACOS_RELEASE_OPERATIONS.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/MACOS_RELEASE_OPERATIONS.md).
+For the fuller operator process, see [MACOS_RELEASE_OPERATIONS.md](MACOS_RELEASE_OPERATIONS.md).
 
 These steps are future/optional and remain manual outside the repo:
 
@@ -78,7 +75,7 @@ Typical values you will need:
 
 Exact CI or local secret handling is intentionally not hardcoded in this repo yet.
 
-You can use [.env.release.example](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/.env.release.example) as a safe template for local or CI secret setup.
+You can use [.env.release.example](.env.release.example) as a safe template for local or CI secret setup.
 
 ## Notes on entitlements and capabilities
 
@@ -100,7 +97,7 @@ No special macOS entitlement file is committed yet because the current desktop b
    - `apps/desktop/src-tauri/tauri.conf.json`
 3. Run `corepack pnpm release:check:rc <tag>` and confirm the version matches the intended release candidate or final tag.
 4. Confirm `tauri.conf.json` product name, identifier, and icons are correct.
-5. Prepare release environment variables from [.env.release.example](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/.env.release.example).
+5. Prepare release environment variables from [.env.release.example](.env.release.example).
 6. Run `corepack pnpm release:check:macos`.
 7. Build the desktop bundle from a clean working tree.
 8. Smoke test the packaged app on the release machine.
@@ -108,7 +105,7 @@ No special macOS entitlement file is committed yet because the current desktop b
 10. Submit for notarization.
 11. Staple the notarization ticket to the final app and distributable archive if applicable.
 12. Validate the signed and stapled build on a clean macOS machine.
-13. Cut release notes from [RELEASE_NOTES_TEMPLATE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/RELEASE_NOTES_TEMPLATE.md).
+13. Cut release notes from [RELEASE_NOTES_TEMPLATE.md](RELEASE_NOTES_TEMPLATE.md).
 14. Archive the exact build artifact, notes, and final tag together.
 
 ## Artifact naming and release expectations
@@ -118,11 +115,3 @@ No special macOS entitlement file is committed yet because the current desktop b
 - Release candidates should use tags like `v1.0.0-rc1`.
 - Final releases should use tags like `v1.0.0`.
 - Release notes should explicitly record whether the `.app` and `.dmg` were signed, notarized, and stapled.
-
-## Free release recommendation
-
-If you want a shareable public release today, deploy the web build instead of the packaged macOS app:
-
-- run `corepack pnpm build:web`
-- deploy `apps/desktop/dist`
-- use [WEB_RELEASE.md](/Users/vaneickelen/Desktop/01%20-%20Projects/Index/WEB_RELEASE.md) for hosting guidance

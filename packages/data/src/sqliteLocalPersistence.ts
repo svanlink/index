@@ -661,6 +661,17 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
     });
   }
 
+  /**
+   * Cascade spec: see `cascadeDelete.ts#applyProjectDeleteToSnapshot`.
+   *
+   * The SQL below is a SQLite-efficient translation of that pure helper:
+   * row-level DELETE statements keyed on `project_id` avoid loading the
+   * snapshot into process memory on the hot path. Both paths are locked
+   * to identical observable behavior by the shared contract test in
+   * `localPersistenceContract.ts` (Pass 7); any divergence between this
+   * adapter and the pure helper surfaces as a cross-adapter parity
+   * failure there.
+   */
   async deleteProject(projectId: string): Promise<void> {
     const database = await this.#ensureReady();
     await withTransaction(database, async () => {
@@ -669,6 +680,33 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
     });
   }
 
+  /**
+   * Cascade spec: see `cascadeDelete.ts#applyDriveDeleteToSnapshot`.
+   *
+   * The ordered SQL below is a SQLite-efficient translation of that pure
+   * helper. Subquery joins on `scans.drive_id` and
+   * `scan_sessions.requested_drive_id` let SQLite cascade without
+   * materializing child-id lists in the host process — important because
+   * a drive with many scans can produce id lists that exceed SQLite's
+   * default 999-parameter limit for `IN (?, ?, …)` bindings.
+   *
+   * Both paths are locked to identical observable behavior by the shared
+   * contract test in `localPersistenceContract.ts` (Pass 7). The H3
+   * cascade regression block there exercises this SQL against the same
+   * fixture as the InMemory and Storage adapters' delegating
+   * implementations.
+   *
+   * Ordering matters:
+   *   1. Nullify `projects.current_drive_id` / `projects.target_drive_id`
+   *      — projects survive drive deletion.
+   *   2. Delete `project_scan_events` via the scan-level join, THEN the
+   *      `scans` rows themselves (child before parent, since no FK
+   *      constraint is declared — see Pass 6 audit).
+   *   3. Delete `scan_session_projects` via the session-level join, THEN
+   *      the `scan_sessions` rows themselves. Sessions with
+   *      `requested_drive_id IS NULL` are preserved by the WHERE clause.
+   *   4. Finally, the drive row.
+   */
   async deleteDrive(driveId: string): Promise<void> {
     const database = await this.#ensureReady();
     await withTransaction(database, async () => {
@@ -707,6 +745,34 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
     if (!this.#readyPromise) {
       this.#readyPromise = (async () => {
         const database = await this.#getDatabase();
+        // Pass 6 / Pass 8 note: this pragma is currently a NO-OP.
+        //
+        // SQLite's `foreign_keys` pragma only takes effect for constraints
+        // declared with `REFERENCES ... ON DELETE ...` in a CREATE TABLE
+        // statement. Our schema (see `migrations` above) declares no FK
+        // constraints on any table, so turning the pragma on has no
+        // behavioural consequence today.
+        //
+        // It is kept deliberately so that if a future migration adds
+        // `REFERENCES` clauses, the enforcement switch is already in the
+        // right position at connection open and we do not have to audit
+        // whether every code path re-enables it on reconnect.
+        //
+        // The live cascade contract is instead enforced in two layers:
+        //   1. `cascadeDelete.ts` — pure snapshot transforms that are the
+        //      single authoritative specification for `deleteDrive` /
+        //      `deleteProject` across the three adapters (Pass 7).
+        //   2. `localPersistenceContract.ts` — shared cross-adapter test
+        //      suite that runs the same delete-cascade fixture against
+        //      InMemory, Storage, and SQLite, so any drift between the
+        //      pure helper and this file's SQL translation surfaces
+        //      immediately.
+        //
+        // The remote tier (Supabase / Postgres) DOES enforce FKs; the
+        // rejection path is exercised in `supabaseSyncAdapter.test.ts`.
+        // Any local orphan introduced by a future regression would
+        // surface there as a push-time error rather than silently
+        // corrupting the remote.
         await database.execute("PRAGMA foreign_keys = ON");
         await this.#runMigrations(database);
 

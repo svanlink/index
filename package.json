@@ -5,10 +5,8 @@
   "packageManager": "pnpm@10.11.0",
   "scripts": {
     "dev": "corepack pnpm --filter @drive-project-catalog/desktop dev",
-    "dev:web": "corepack pnpm --filter @drive-project-catalog/desktop dev:web",
     "typecheck": "corepack pnpm -r typecheck",
     "test": "corepack pnpm -r test",
-    "build:web": "corepack pnpm --filter @drive-project-catalog/desktop build:web",
     "build:desktop": "corepack pnpm --filter @drive-project-catalog/desktop build:desktop",
     "release:check:macos": "./scripts/check-macos-release-env.sh",
     "release:check:rc": "./scripts/check-release-candidate.sh"

@@ -2,13 +2,7 @@
 
 ## 1. High-Level Architecture
 
-The system has three client surfaces:
-
-1. **macOS desktop app** — primary app, full functionality
-2. **Web app** — read/write catalog management
-3. **Mobile client** — read/search oriented
-
-The desktop app owns drive scanning. The web and mobile clients do not scan disks.
+The system is a **macOS desktop app** — a single client surface that owns the full catalog workflow, including drive scanning. Future companion surfaces (read-only mobile, browser-based viewers, etc.) are not on the current scope; the architecture preserves a clean local-first / sync boundary so they remain possible without blocking the macOS-first build.
 
 ---
 
@@ -39,7 +33,7 @@ Shared business rules for:
 This should be represented with shared TypeScript types on the frontend and equivalent Rust/domain structs as needed.
 
 ### C. Local Persistence Layer
-Offline-first storage used by desktop and later web/local cache layers.
+Offline-first storage used by the desktop app.
 
 Responsibilities:
 - store projects
@@ -47,6 +41,8 @@ Responsibilities:
 - store scans
 - queue sync operations
 - resolve local reads fast
+
+Three backends implement the `LocalPersistenceAdapter` contract: SQLite (desktop production), Storage-localStorage (fallback / non-Tauri runtime), and InMemory (tests). The contract test in `packages/data/src/localPersistenceContract.ts` locks them to identical behavior so the adapter layer stays swappable without coupling the UI to a specific backend.
 
 ### D. Sync Layer
 A sync-ready adapter around local data and cloud data.
@@ -71,14 +67,12 @@ Responsibilities:
 
 ---
 
-## 3. Recommended Monorepo Shape
+## 3. Monorepo Shape
 
-- `apps/desktop` — Tauri app
-- `apps/web` — web client
+- `apps/desktop` — Tauri app (React frontend + Rust scan engine)
 - `packages/ui` — shared UI components
 - `packages/domain` — types, status logic, helpers
 - `packages/data` — repositories, adapters, sync interface
-- `packages/config` — shared config if needed
 
 ---
 
@@ -151,4 +145,4 @@ The architecture should leave room for:
 - team collaboration
 - authentication
 - better sync conflict handling
-- mobile app beyond read-only
+- future companion surfaces (read-only mobile, browser-based viewers) if product direction reopens them

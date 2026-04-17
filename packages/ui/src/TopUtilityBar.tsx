@@ -24,6 +24,7 @@ export function TopUtilityBar({
 
   return (
     <header
+      data-tauri-drag-region
       className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b px-6 py-3"
       style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
     >

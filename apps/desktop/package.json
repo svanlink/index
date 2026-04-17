@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
-    "dev:web": "vite",
+    "dev:frontend": "vite",
     "build": "tauri build",
     "build:desktop": "tauri build",
-    "build:web": "tsc --noEmit -p tsconfig.json && vite build",
+    "build:frontend": "tsc --noEmit -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },

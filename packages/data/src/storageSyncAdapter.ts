@@ -2,6 +2,7 @@ import type { StorageLike } from "./storageLocalPersistence";
 import {
   getDefaultSyncState,
   type RemoteSyncAdapter,
+  type SyncableCatalogEntity,
   type SyncAdapter,
   type SyncOperation,
   type SyncRecoveryResult,
@@ -9,6 +10,7 @@ import {
   type SyncState
 } from "./sync";
 import {
+  cancelPendingSyncOperationsForRecord,
   compactSyncQueue,
   getSyncStateForQueue,
   listDispatchableSyncOperations,
@@ -186,6 +188,26 @@ export class StorageSyncAdapter implements SyncAdapter {
     });
     this.#writeEnvelope(envelope);
     return clone(envelope.state);
+  }
+
+  async cancelPendingForRecord(entity: SyncableCatalogEntity, recordId: string): Promise<number> {
+    const envelope = this.#readEnvelope();
+    const { queue: nextQueue, cancelledCount } = cancelPendingSyncOperationsForRecord(
+      envelope.queue,
+      entity,
+      recordId
+    );
+    if (cancelledCount === 0) {
+      return 0;
+    }
+    envelope.queue = nextQueue;
+    envelope.state = getSyncStateForQueue({
+      queue: envelope.queue,
+      remoteEnabled: Boolean(this.#remote),
+      previous: envelope.state
+    });
+    this.#writeEnvelope(envelope);
+    return cancelledCount;
   }
 
   async recoverInterruptedState(): Promise<SyncRecoveryResult> {

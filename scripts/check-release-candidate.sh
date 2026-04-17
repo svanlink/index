@@ -85,7 +85,6 @@ printf '%s\n' '----------------------------------'
 printf '%s\n' "corepack pnpm install"
 printf '%s\n' "corepack pnpm test"
 printf '%s\n' "corepack pnpm typecheck"
-printf '%s\n' "corepack pnpm build:web"
 printf '%s\n' "corepack pnpm build:desktop"
 printf '%s\n' "./scripts/check-macos-release-env.sh"
 

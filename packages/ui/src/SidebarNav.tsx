@@ -14,7 +14,8 @@ interface SidebarNavProps {
 export function SidebarNav({ items }: SidebarNavProps) {
   return (
     <aside
-      className="hidden h-screen w-[248px] shrink-0 flex-col border-r px-3 py-4 lg:flex sticky top-0 overflow-y-auto"
+      data-tauri-drag-region
+      className="hidden h-screen w-[248px] shrink-0 flex-col border-r px-3 pb-4 pt-10 lg:flex sticky top-0 overflow-y-auto"
       style={{ background: "var(--color-sidebar)", borderColor: "var(--color-sidebar-border)" }}
     >
       <div className="mb-6 px-2">

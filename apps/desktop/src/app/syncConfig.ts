@@ -23,7 +23,7 @@ export function getRuntimeEnvironmentDiagnostics() {
     isDesktop,
     isOnline,
     message: !isDesktop
-      ? "Browser mode supports the free public web release. Desktop scan commands and local SQLite are only available in the Tauri app."
+      ? "Desktop scan commands and local SQLite are only available in the native Tauri app. This runtime is read-only fallback."
       : isOnline
       ? "Desktop runtime is online and ready for local-first work with optional cloud sync."
       : "Desktop runtime is offline. Local-first work stays available and sync will wait until connectivity returns."
@@ -52,7 +52,7 @@ export function resolveSupabaseSyncConfig(env: Record<string, string | undefined
           usingPlaceholderValues
             ? "Replace the example VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY values with real project credentials, or remove them to stay fully local-only."
             : "Set both VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable cloud transport.",
-          "The app remains fully usable in local-first mode without these values, including the public web build."
+          "The app remains fully usable in local-first mode without these values."
         ]
       }
     };

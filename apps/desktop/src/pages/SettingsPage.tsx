@@ -211,8 +211,8 @@ export function SettingsPage() {
             title="Packaging notes"
             messages={[
               "The Tauri bundle is configured for desktop packaging with a product name, identifier, and icon asset.",
-              "Current release strategy: unsigned desktop for local/personal use, web deployment for the free public release path.",
-              "Use the README and WEB_RELEASE guides to confirm environment variables, deployment expectations, and desktop-only runtime behavior."
+              "Current release strategy: unsigned Tauri desktop build for local/personal use on macOS. Signed and notarized distribution is future/optional.",
+              "See the README and RELEASE_DESKTOP guides for environment variables, release-candidate discipline, and desktop-only runtime behavior."
             ]}
           />
         </div>

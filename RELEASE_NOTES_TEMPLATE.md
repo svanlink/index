@@ -22,7 +22,6 @@ Use this template for tagged desktop release candidates and signed releases.
 
 - `corepack pnpm test`
 - `corepack pnpm typecheck`
-- `corepack pnpm build:web`
 - `corepack pnpm build:desktop`
 - `corepack pnpm release:check:macos`
 - `corepack pnpm release:check:rc <tag>`
