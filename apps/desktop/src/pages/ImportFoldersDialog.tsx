@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { VolumeFolderEntry } from "../app/volumeImportCommands";
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,15 @@ export interface ImportFoldersDialogProps {
    * vs. cancel → reopen.
    */
   onPickAgain(): void;
+  /**
+   * Optional banner rendered between the source-path line and the import
+   * summary. The top-level "Import from mounted volume" flow uses this to
+   * tell the user which drive the folders will land on — whether it's an
+   * existing catalog entry or a new drive about to be created. Keeping this
+   * as a slot (rather than baking the drive concept into the dialog) lets
+   * the per-drive-detail flow stay context-free.
+   */
+  contextBanner?: ReactNode;
 }
 
 export function ImportFoldersDialog({
@@ -45,7 +54,8 @@ export function ImportFoldersDialog({
   isImporting,
   onConfirm,
   onCancel,
-  onPickAgain
+  onPickAgain,
+  contextBanner
 }: ImportFoldersDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -123,6 +133,7 @@ export function ImportFoldersDialog({
         >
           From <span className="font-medium" style={{ color: "var(--color-text)" }}>{sourcePath}</span>
         </p>
+        {contextBanner ? <div className="mt-2">{contextBanner}</div> : null}
         <p className="mt-2 text-[13px] leading-snug" style={{ color: "var(--color-text-muted)" }}>
           {importSummary}
         </p>

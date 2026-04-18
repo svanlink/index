@@ -7,11 +7,17 @@ import {
   getDriveHealthLabel,
   type DriveHealthState
 } from "@drive-project-catalog/data";
-import { useVolumeInfo } from "../app/scanCommands";
+import { getVolumeInfo, isDesktopScanAvailable, useVolumeInfo, type VolumeInfo } from "../app/scanCommands";
+import {
+  enumerateVolumeFolders,
+  pickVolumeRoot,
+  type VolumeFolderEntry
+} from "../app/volumeImportCommands";
 import { useShortcut } from "../app/useShortcut";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
+import { ImportFoldersDialog } from "./ImportFoldersDialog";
 import { DriveCardSkeleton, EmptyState, FeedbackNotice, StatusBadge } from "./pagePrimitives";
 
 // ---------------------------------------------------------------------------
@@ -64,11 +70,30 @@ const initialDriveForm: DriveFormState = { volumeName: "", displayName: "", capa
 
 export function DrivesPage() {
   const navigate = useNavigate();
-  const { drives, projects, scanSessions, isLoading, isMutating, createDrive } = useCatalogStore();
+  const { drives, projects, scanSessions, isLoading, isMutating, createDrive, importFoldersFromVolume } =
+    useCatalogStore();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [driveForm, setDriveForm] = useState<DriveFormState>(initialDriveForm);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const projectCounts = useDriveMetrics(projects);
+
+  // --- Import-from-mounted-volume flow ------------------------------------
+  //
+  // One-shot flow: pick a mounted volume → read its volume metadata + top-
+  // level folders in parallel → preview → confirm. On confirm, if no existing
+  // drive matches the picked volume (by OS volume name), we auto-create one
+  // so the user doesn't have to do a separate "Add drive" step first. This
+  // is the core shipping-it-in-one-click experience.
+  //
+  //   idle:        importSourcePath === null
+  //   enumerating: isPickingImport === true
+  //   preview:     importSourcePath && importFolders !== null
+  //   importing:   isImporting === true
+  const [importSourcePath, setImportSourcePath] = useState<string | null>(null);
+  const [importFolders, setImportFolders] = useState<VolumeFolderEntry[] | null>(null);
+  const [importVolumeInfo, setImportVolumeInfo] = useState<VolumeInfo | null>(null);
+  const [isPickingImport, setIsPickingImport] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Planning rows give us health-ranked ordering (overcommitted → near-capacity
   // → healthy) and portfolio-level totals. Previously these lived on a separate
@@ -114,17 +139,184 @@ export function DrivesPage() {
     }
   }
 
+  // Resolve which catalog drive a picked volume should land on. Match is
+  // exact-by-volumeName — that's the OS-canonical identifier, not the
+  // user-facing displayName, so two "Archive" drives on different
+  // filesystems won't collide. Returns null if the import should create a
+  // fresh drive record.
+  function matchExistingDrive(volumeInfo: VolumeInfo | null): Drive | null {
+    if (!volumeInfo) return null;
+    return drives.find((drive) => drive.volumeName === volumeInfo.volumeName) ?? null;
+  }
+
+  // Build the set of folderPaths already on the matched drive so the preview
+  // can grey out duplicates. Empty set when the import will create a new
+  // drive — nothing to collide with yet.
+  function pathsAlreadyOnDrive(matchedDrive: Drive | null): Set<string> {
+    if (!matchedDrive) return new Set<string>();
+    const set = new Set<string>();
+    for (const project of projects) {
+      if (project.currentDriveId === matchedDrive.id && project.folderPath) {
+        set.add(project.folderPath);
+      }
+    }
+    return set;
+  }
+
+  async function runImportFromVolume() {
+    setIsPickingImport(true);
+    try {
+      const selection = await pickVolumeRoot(null);
+      if (!selection) return; // User cancelled native picker.
+
+      // Parallel: volume metadata is best-effort (null on failure) and the
+      // folder list is authoritative. Doing them together keeps the modal
+      // opening in one round-trip rather than two.
+      const [volumeInfo, folders] = await Promise.all([
+        getVolumeInfo(selection),
+        enumerateVolumeFolders(selection)
+      ]);
+
+      setImportSourcePath(selection);
+      setImportFolders(folders);
+      setImportVolumeInfo(volumeInfo);
+    } catch (error) {
+      closeImportDialog();
+      setFeedback({
+        tone: "error",
+        title: "Could not read folders",
+        messages: [error instanceof Error ? error.message : "The selected location could not be read."]
+      });
+    } finally {
+      setIsPickingImport(false);
+    }
+  }
+
+  function closeImportDialog() {
+    setImportSourcePath(null);
+    setImportFolders(null);
+    setImportVolumeInfo(null);
+  }
+
+  async function handleConfirmImportFromVolume() {
+    if (!importSourcePath || !importFolders) return;
+    setIsImporting(true);
+    try {
+      // 1. Resolve target drive: either the existing drive that matches this
+      //    volume by OS name, or a freshly-created one named after the volume
+      //    (or the path's basename as a last-resort fallback). The create-
+      //    then-import sequence is two separate mutations — the sync queue
+      //    and optimistic refresh handle them individually, so a partial
+      //    failure leaves the drive intact and the user can retry the import
+      //    from the drive detail page.
+      const matched = matchExistingDrive(importVolumeInfo);
+      const driveToUse =
+        matched ??
+        (await createDrive({
+          volumeName: deriveVolumeName(importSourcePath, importVolumeInfo),
+          displayName: null,
+          totalCapacityBytes: importVolumeInfo?.totalBytes ?? null
+        }));
+
+      const result = await importFoldersFromVolume({
+        driveId: driveToUse.id,
+        sourcePath: importSourcePath,
+        folders: importFolders
+      });
+
+      closeImportDialog();
+
+      // Land the user on the drive detail page so they immediately see the
+      // imported folders in context and can run a full scan next if they
+      // want richer metadata.
+      navigate(`/drives/${driveToUse.id}`);
+
+      if (result.importedCount === 0) {
+        setFeedback({
+          tone: "info",
+          title: matched ? "No new folders imported" : "Drive added (no folders imported)",
+          messages: [
+            result.skippedCount > 0
+              ? `${result.skippedCount} folder${result.skippedCount === 1 ? " was" : "s were"} already in the catalog and skipped.`
+              : "The selected location had no importable folders."
+          ]
+        });
+      } else {
+        const parts = [
+          matched
+            ? `${result.importedCount} folder${result.importedCount === 1 ? "" : "s"} added to "${driveToUse.displayName}".`
+            : `Created "${driveToUse.displayName}" and imported ${result.importedCount} folder${result.importedCount === 1 ? "" : "s"}.`
+        ];
+        if (result.skippedCount > 0) {
+          parts.push(`${result.skippedCount} already in catalog were skipped.`);
+        }
+        setFeedback({
+          tone: "success",
+          title: matched ? "Folders imported" : "Drive imported",
+          messages: parts
+        });
+      }
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        title: "Import failed",
+        messages: [error instanceof Error ? error.message : "The folders could not be imported."]
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  const canUseImport = isDesktopScanAvailable();
+  const matchedDriveForPreview = matchExistingDrive(importVolumeInfo);
+  const previewExistingPaths = pathsAlreadyOnDrive(matchedDriveForPreview);
+  const previewDriveName = importVolumeInfo
+    ? importVolumeInfo.volumeName
+    : importSourcePath
+      ? deriveVolumeName(importSourcePath, null)
+      : "";
+
   return (
     <div className="space-y-5">
+      {importSourcePath && importFolders ? (
+        <ImportFoldersDialog
+          sourcePath={importSourcePath}
+          folders={importFolders}
+          existingPathsOnDrive={previewExistingPaths}
+          isImporting={isImporting}
+          onConfirm={() => void handleConfirmImportFromVolume()}
+          onCancel={closeImportDialog}
+          onPickAgain={() => void runImportFromVolume()}
+          contextBanner={
+            <ImportDriveBanner
+              matchedDrive={matchedDriveForPreview}
+              newDriveName={previewDriveName}
+              volumeInfo={importVolumeInfo}
+            />
+          }
+        />
+      ) : null}
+
       <div className="flex items-center justify-between">
         <div />
-        <button
-          type="button"
-          className="button-secondary"
-          onClick={() => setIsCreateOpen((c) => !c)}
-        >
-          {isCreateOpen ? "Discard" : "Add drive"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="button-primary"
+            onClick={() => void runImportFromVolume()}
+            disabled={!canUseImport || isPickingImport || isImporting || isMutating}
+            title={canUseImport ? undefined : "The native volume picker is only available in the desktop app."}
+          >
+            {isPickingImport ? "Opening…" : "Import from mounted volume"}
+          </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => setIsCreateOpen((c) => !c)}
+          >
+            {isCreateOpen ? "Discard" : "Add drive"}
+          </button>
+        </div>
       </div>
 
       {feedback ? (
@@ -161,15 +353,25 @@ export function DrivesPage() {
       ) : planningRows.length === 0 ? (
         <EmptyState
           title="No drives in catalog"
-          description="Add a manual drive to start planning storage, or run a scan to index a connected volume."
+          description="Point the app at a mounted volume to create a drive and pull in its top-level folders in one step — or add a drive manually."
           action={
-            <button
-              type="button"
-              className="button-primary"
-              onClick={() => setIsCreateOpen(true)}
-            >
-              Add drive
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                className="button-primary"
+                onClick={() => void runImportFromVolume()}
+                disabled={!canUseImport || isPickingImport || isImporting || isMutating}
+              >
+                {isPickingImport ? "Opening…" : "Import from mounted volume"}
+              </button>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setIsCreateOpen(true)}
+              >
+                Add drive manually
+              </button>
+            </div>
           }
         />
       ) : (
@@ -438,6 +640,77 @@ function CreateDriveForm({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Volume-import helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive a drive volumeName when the OS volume info lookup fails (non-
+ * `/Volumes/...` paths on macOS, network mounts that don't expose StatFS
+ * metadata, etc.). Falls back to the last segment of the picked path so a
+ * user who picks `/Users/me/Archive Root` still ends up with a sensible
+ * drive name of "Archive Root".
+ */
+function deriveVolumeName(sourcePath: string, volumeInfo: VolumeInfo | null): string {
+  if (volumeInfo?.volumeName) return volumeInfo.volumeName;
+  const cleaned = sourcePath.replace(/\/+$/, "");
+  const lastSlash = cleaned.lastIndexOf("/");
+  const basename = lastSlash >= 0 ? cleaned.slice(lastSlash + 1) : cleaned;
+  return basename.trim() || "Imported volume";
+}
+
+// Slot content for the preview modal — tells the user whether their
+// confirmation will attach to an existing drive or spin up a new one, plus
+// the (best-effort) capacity pulled from the OS.
+function ImportDriveBanner({
+  matchedDrive,
+  newDriveName,
+  volumeInfo
+}: {
+  matchedDrive: Drive | null;
+  newDriveName: string;
+  volumeInfo: VolumeInfo | null;
+}) {
+  if (matchedDrive) {
+    return (
+      <div
+        className="rounded-md border px-3 py-2 text-[12px]"
+        style={{
+          borderColor: "var(--color-border)",
+          background: "var(--color-surface)",
+          color: "var(--color-text-muted)"
+        }}
+      >
+        Matches existing drive{" "}
+        <span className="font-medium" style={{ color: "var(--color-text)" }}>
+          {matchedDrive.displayName}
+        </span>
+        . Folders will be added to it.
+      </div>
+    );
+  }
+  return (
+    <div
+      className="rounded-md border px-3 py-2 text-[12px]"
+      style={{
+        borderColor: "var(--color-border)",
+        background: "var(--color-surface)",
+        color: "var(--color-text-muted)"
+      }}
+    >
+      A new drive{" "}
+      <span className="font-medium" style={{ color: "var(--color-text)" }}>
+        {newDriveName}
+      </span>{" "}
+      will be created for this volume
+      {volumeInfo?.totalBytes
+        ? ` (${formatBytes(volumeInfo.totalBytes)} capacity)`
+        : ""}
+      .
     </div>
   );
 }
