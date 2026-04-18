@@ -1,4 +1,5 @@
 import type { FormEvent, ReactNode } from "react";
+import { Icon } from "./Icon";
 
 interface TopUtilityBarProps {
   title: string;
@@ -9,6 +10,12 @@ interface TopUtilityBarProps {
   onSearchSubmit?(): void;
 }
 
+/**
+ * Slim top bar in the 2026 refresh. Title is smaller and recedes; the bar acts
+ * primarily as a drag region for Tauri's native window controls. An optional
+ * global search sits on the right for quick jumping to projects, and the
+ * caller can slot any page-level action beside it.
+ */
 export function TopUtilityBar({
   title,
   action,
@@ -25,12 +32,15 @@ export function TopUtilityBar({
   return (
     <header
       data-tauri-drag-region
-      className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b px-6 py-3"
-      style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}
+      className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b px-6 py-[10px]"
+      style={{
+        borderColor: "var(--hairline)",
+        background: "var(--surface)"
+      }}
     >
       <h2
-        className="text-[20px] font-semibold leading-none tracking-[-0.01em]"
-        style={{ color: "var(--color-text)" }}
+        className="text-[14px] font-semibold"
+        style={{ color: "var(--ink-2)", letterSpacing: "-0.005em" }}
       >
         {title}
       </h2>
@@ -39,28 +49,23 @@ export function TopUtilityBar({
         {onSearchChange ? (
           <form onSubmit={handleSubmit} className="min-w-0">
             <label
-              className="field-shell flex w-[200px] shrink-0 items-center gap-2 text-[13px]"
-              style={{ color: "var(--color-text-soft)" }}
+              className="field flex w-[220px] items-center"
+              style={{ height: 28 }}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                aria-hidden="true"
-                style={{ flexShrink: 0, color: "var(--color-text-soft)" }}
-              >
-                <circle cx="6.5" cy="6.5" r="4.75" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-              <span className="sr-only">Search the catalog from anywhere</span>
+              <Icon name="search" size={13} color="var(--ink-3)" />
+              <span className="sr-only">{searchPlaceholder}</span>
               <input
                 type="text"
                 value={searchValue}
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder={searchPlaceholder}
                 aria-label={searchPlaceholder}
-                className="w-full bg-transparent text-[13px] text-[color:var(--color-text)] outline-none placeholder:text-[color:var(--color-text-soft)]"
+                className="w-full bg-transparent outline-none"
+                style={{
+                  fontSize: 12.5,
+                  marginLeft: 6,
+                  color: "var(--ink)"
+                }}
               />
             </label>
           </form>

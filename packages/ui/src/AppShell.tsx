@@ -5,6 +5,7 @@ import { TopUtilityBar } from "./TopUtilityBar";
 
 interface AppShellProps {
   navItems: NavItem[];
+  footerNavItems?: NavItem[];
   title: string;
   toolbarAction?: ReactNode;
   searchValue?: string;
@@ -16,6 +17,7 @@ interface AppShellProps {
 
 export function AppShell({
   navItems,
+  footerNavItems,
   title,
   toolbarAction,
   searchValue,
@@ -25,8 +27,8 @@ export function AppShell({
   children
 }: AppShellProps) {
   return (
-    <div className="flex h-screen bg-transparent text-[color:var(--color-text)]">
-      <SidebarNav items={navItems} />
+    <div className="flex h-screen bg-transparent text-[color:var(--ink)]">
+      <SidebarNav items={navItems} footerItems={footerNavItems} />
       <div className="flex h-screen min-w-0 flex-1 flex-col">
         <TopUtilityBar
           title={title}
@@ -36,8 +38,11 @@ export function AppShell({
           onSearchChange={onSearchChange}
           onSearchSubmit={onSearchSubmit}
         />
-        <main className="flex-1 overflow-y-auto px-6 py-5 pb-10">
-          <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+        <main
+          className="flex-1 overflow-y-auto"
+          style={{ background: "var(--surface)" }}
+        >
+          <div className="mx-auto w-full max-w-[1200px] px-8 py-6 pb-12">{children}</div>
         </main>
       </div>
     </div>

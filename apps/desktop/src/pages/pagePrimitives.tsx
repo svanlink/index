@@ -257,16 +257,16 @@ export function SectionCard({ title, description, children, action }: SectionCar
   );
 }
 
-type BadgeTone = "danger" | "warning" | "accent" | "success" | "info" | "neutral" | "muted";
+type BadgeTone = "danger" | "warn" | "accent" | "ok" | "info" | "neutral" | "muted";
 
-const TONE_CLASSES: Record<BadgeTone, string> = {
-  danger: "border-[color:var(--color-border-danger)] bg-[color:var(--color-danger-soft)] text-[color:var(--color-danger)]",
-  warning: "border-[color:var(--color-border-warning)] bg-[color:var(--color-warning-soft)] text-[color:var(--color-warning)]",
-  accent: "border-[color:var(--color-border-info)] bg-[color:var(--color-accent-soft)] text-[color:var(--color-accent)]",
-  success: "border-[color:var(--color-border-success)] bg-[color:var(--color-success-soft)] text-[color:var(--color-success-deep)]",
-  info: "border-[color:var(--color-border-info)] bg-[color:var(--color-info-soft)] text-[color:var(--color-info)]",
-  neutral: "border-[color:var(--color-border)] bg-[color:var(--color-surface-subtle)] text-[color:var(--color-text-muted)]",
-  muted: "border-[color:var(--color-border)] bg-[color:var(--color-surface-subtle)] text-[color:var(--color-text-soft)]",
+const TONE_CLASS: Record<BadgeTone, string> = {
+  danger: "chip chip-danger",
+  warn: "chip chip-warn",
+  accent: "chip chip-accent",
+  ok: "chip chip-ok",
+  info: "chip chip-info",
+  neutral: "chip",
+  muted: "chip chip-ghost"
 };
 
 const LABEL_TONE: Record<string, BadgeTone> = {
@@ -274,26 +274,47 @@ const LABEL_TONE: Record<string, BadgeTone> = {
   Failed: "danger",
   Interrupted: "danger",
   Overcommitted: "danger",
-  Duplicate: "warning",
-  "Move pending": "warning",
-  Cancelled: "warning",
-  "Near capacity": "warning",
+  Duplicate: "warn",
+  "Move pending": "warn",
+  Cancelled: "warn",
+  "Near capacity": "warn",
   Running: "accent",
   "Pending size": "accent",
   "Unknown size impact": "accent",
   "Personal project": "accent",
   Completed: "neutral",
   "Size ready": "neutral",
-  Healthy: "success",
-  Client: "success",
+  Healthy: "ok",
+  Client: "ok",
   "Unknown impact": "info",
   Unassigned: "info",
-  "Personal folder": "muted",
+  "Personal folder": "muted"
 };
 
+const LABEL_SHOWS_DOT: Record<string, boolean> = {
+  Missing: true,
+  Duplicate: true,
+  "Move pending": true,
+  Unassigned: true,
+  Overcommitted: true,
+  "Near capacity": true,
+  Running: true,
+  Healthy: true
+};
+
+/**
+ * Status pill in the 2026 refresh — a soft-toned chip with an optional leading
+ * dot for state-carrying labels. Chips with neutral/muted tones omit the dot.
+ */
 export function StatusBadge({ label }: { label: string }) {
-  const tone = TONE_CLASSES[LABEL_TONE[label] ?? "neutral"];
-  return <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${tone}`}>{label}</span>;
+  const tone = LABEL_TONE[label] ?? "neutral";
+  const showDot = LABEL_SHOWS_DOT[label] ?? false;
+  return (
+    <span className={TONE_CLASS[tone]}>
+      {showDot ? <span className="chip-dot" /> : null}
+      {label}
+    </span>
+  );
 }
 
 export function EmptyState({

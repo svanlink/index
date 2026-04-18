@@ -1,5 +1,6 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import { Icon } from "@drive-project-catalog/ui";
 import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import {
   buildStoragePlanningRows,
@@ -19,6 +20,7 @@ import { formatBytes, formatDate } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { ImportFoldersDialog } from "./ImportFoldersDialog";
 import { DriveCardSkeleton, EmptyState, FeedbackNotice, StatusBadge } from "./pagePrimitives";
+import { getDriveColor } from "./driveColor";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -297,24 +299,37 @@ export function DrivesPage() {
         />
       ) : null}
 
-      <div className="flex items-center justify-between">
-        <div />
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="eyebrow">Storage</div>
+          <h1 className="h-title mt-1">Drives</h1>
+          {drives.length > 0 ? (
+            <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+              {planningSummary.totalDrives} {planningSummary.totalDrives === 1 ? "drive" : "drives"}
+              {planningSummary.totalReservedIncomingBytes > 0
+                ? ` · ${formatBytes(planningSummary.totalReservedIncomingBytes)} reserved`
+                : ""}
+            </p>
+          ) : null}
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="button-primary"
+            className="btn btn-sm"
+            onClick={() => setIsCreateOpen((c) => !c)}
+          >
+            <Icon name="plus" size={12} />
+            {isCreateOpen ? "Discard" : "Add drive"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
             onClick={() => void runImportFromVolume()}
             disabled={!canUseImport || isPickingImport || isImporting || isMutating}
             title={canUseImport ? undefined : "The native volume picker is only available in the desktop app."}
           >
-            {isPickingImport ? "Opening…" : "Import from mounted volume"}
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => setIsCreateOpen((c) => !c)}
-          >
-            {isCreateOpen ? "Discard" : "Add drive"}
+            <Icon name="scan" size={12} color="#fff" />
+            {isPickingImport ? "Opening…" : "Scan connected drive"}
           </button>
         </div>
       </div>
@@ -328,11 +343,11 @@ export function DrivesPage() {
       ) : null}
 
       {!isLoading && drives.length > 0 ? (
-        <div className="flex items-center gap-8 border-b pb-4" style={{ borderColor: "var(--color-border)" }}>
+        <div className="flex items-center gap-8">
           <SummaryCard label="Drives" value={String(planningSummary.totalDrives)} />
           <SummaryCard label="Overcommitted" value={String(planningSummary.overcommittedCount)} />
           <SummaryCard label="Unknown impact" value={String(planningSummary.unknownImpactCount)} />
-          <SummaryCard label="Reserved incoming" value={formatBytes(planningSummary.totalReservedIncomingBytes)} />
+          <SummaryCard label="Reserved" value={formatBytes(planningSummary.totalReservedIncomingBytes)} />
         </div>
       ) : null}
 
@@ -358,15 +373,16 @@ export function DrivesPage() {
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
-                className="button-primary"
+                className="btn btn-sm btn-primary"
                 onClick={() => void runImportFromVolume()}
                 disabled={!canUseImport || isPickingImport || isImporting || isMutating}
               >
-                {isPickingImport ? "Opening…" : "Import from mounted volume"}
+                <Icon name="scan" size={12} color="#fff" />
+                {isPickingImport ? "Opening…" : "Scan connected drive"}
               </button>
               <button
                 type="button"
-                className="button-secondary"
+                className="btn btn-sm"
                 onClick={() => setIsCreateOpen(true)}
               >
                 Add drive manually
@@ -375,7 +391,7 @@ export function DrivesPage() {
           }
         />
       ) : (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           {planningRows.map((row) => (
             <DriveCard
               key={row.drive.id}
@@ -394,8 +410,8 @@ export function DrivesPage() {
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-0.5 text-[18px] font-semibold tabular-nums" style={{ color: "var(--color-text)" }}>{value}</p>
+      <p className="eyebrow">{label}</p>
+      <p className="mt-0.5 text-[18px] font-semibold tabular-nums" style={{ color: "var(--ink)" }}>{value}</p>
     </div>
   );
 }
@@ -415,10 +431,12 @@ function DriveCard({
   scanSession: ScanSessionSnapshot | null;
   health?: DriveHealthState;
 }) {
+  const navigate = useNavigate();
   const volumeInfo = useVolumeInfo(scanSession?.rootPath);
   const isScanning = scanSession?.status === "running";
   const scanFailed =
     scanSession?.status === "failed" || scanSession?.status === "interrupted";
+  const driveColor = getDriveColor(drive.id);
 
   // Prefer stored drive values; fall back to live OS volume info when null.
   const effectiveTotalBytes = drive.totalCapacityBytes ?? volumeInfo?.totalBytes ?? null;
@@ -431,149 +449,159 @@ function DriveCard({
 
   const hasCapacity = effectiveTotalBytes !== null && effectiveUsedBytes !== null;
   const usedPercent = hasCapacity
-    ? Math.max(4, (effectiveUsedBytes! / effectiveTotalBytes!) * 100)
+    ? Math.min(100, Math.max(2, (effectiveUsedBytes! / effectiveTotalBytes!) * 100))
+    : null;
+  const usedPercentInt = hasCapacity
+    ? Math.round((effectiveUsedBytes! / effectiveTotalBytes!) * 100)
     : null;
   const reservedPercent =
     hasCapacity && drive.reservedIncomingBytes > 0
-      ? Math.max(3, (drive.reservedIncomingBytes / effectiveTotalBytes!) * 100)
+      ? Math.min(100 - (usedPercent ?? 0), Math.max(1, (drive.reservedIncomingBytes / effectiveTotalBytes!) * 100))
       : null;
+
+  // Use --drive-color scoped to this card to colorize the capacity bar + dot
+  // + any chrome that should track the drive's identity color.
+  const cardStyle = { "--drive-color": driveColor } as CSSProperties;
+
+  const capacityFooter = hasCapacity
+    ? `${formatBytes(effectiveUsedBytes!)} of ${formatBytes(effectiveTotalBytes!)}`
+    : "Unknown capacity";
+
+  const lastScan = scanSession?.finishedAt ?? drive.lastScannedAt;
+  const lastScanLabel = isScanning
+    ? "Scanning…"
+    : lastScan
+      ? formatDate(lastScan)
+      : "Never";
 
   return (
     <article
-      className="app-panel flex flex-col overflow-hidden transition-transform duration-150 hover:-translate-y-px"
-      style={{ padding: 0 }}
+      className="card cursor-pointer p-[18px] transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-[var(--sh-2)]"
+      style={cardStyle}
+      onClick={() => navigate(`/drives/${drive.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          navigate(`/drives/${drive.id}`);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${drive.displayName}`}
     >
-      {isScanning ? (
-        <div className="h-0.5 w-full shrink-0" style={{ background: "var(--color-accent)" }} />
-      ) : null}
+      <div className="flex items-start gap-3">
+        {/* 40×40 icon tile with drive-color dot overlay */}
+        <div
+          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]"
+          style={{ background: "var(--surface-inset)" }}
+        >
+          <Icon name="hardDrive" size={20} color="var(--ink-2)" />
+          <span
+            className="absolute"
+            style={{
+              bottom: 6,
+              right: 6,
+              width: 7,
+              height: 7,
+              borderRadius: 4,
+              background: "var(--drive-color)",
+              border: "1.5px solid var(--surface)"
+            }}
+          />
+        </div>
 
-      <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h4 className="truncate text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
+            <h3
+              className="truncate text-[17px] font-semibold"
+              style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.01em", color: "var(--ink)" }}
+            >
               {drive.displayName}
-            </h4>
+            </h3>
             {health && health !== "healthy" ? (
               <StatusBadge label={getDriveHealthLabel(health)} />
             ) : null}
+            {isScanning ? <StatusBadge label="Running" /> : null}
+            {scanFailed && !isScanning ? <StatusBadge label="Failed" /> : null}
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[12px]" style={{ color: "var(--color-text-soft)" }}>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
             {drive.volumeName !== drive.displayName ? <span>{drive.volumeName}</span> : null}
+            {drive.volumeName !== drive.displayName && (drive.createdManually || volumeInfo) ? (
+              <span style={{ color: "var(--ink-4)" }}>·</span>
+            ) : null}
             {drive.createdManually ? <span>Manual</span> : null}
+            {!drive.createdManually && volumeInfo?.filesystemType ? <span>{volumeInfo.filesystemType}</span> : null}
           </div>
-          <ScanStatusLine drive={drive} scanSession={scanSession} />
         </div>
-        {isScanning ? (
-          <ScanStateIndicator state="scanning" />
-        ) : scanFailed ? (
-          <ScanStateIndicator state="failed" />
+
+        <Icon name="chevron" size={14} color="var(--ink-4)" />
+      </div>
+
+      {/* Capacity bar */}
+      <div
+        className="cap-bar lg mt-4"
+        role="progressbar"
+        aria-valuenow={usedPercentInt ?? undefined}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={
+          usedPercentInt !== null ? `${usedPercentInt}% storage used` : "Storage usage unknown"
+        }
+      >
+        {usedPercent !== null ? (
+          <div className="cap-used capacity-bar-fill" style={{ width: `${usedPercent}%` }} />
+        ) : (
+          <div className="cap-used opacity-20" style={{ width: "28%" }} />
+        )}
+        {reservedPercent !== null ? (
+          <div
+            className="cap-reserved"
+            style={{ left: `${usedPercent ?? 0}%`, width: `${reservedPercent}%` }}
+          />
         ) : null}
       </div>
 
-      <div className="px-4 pb-3">
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[11px]" style={{ color: "var(--color-text-soft)" }}>
-            {hasCapacity ? `${formatBytes(effectiveUsedBytes!)} used` : "Unknown capacity"}
-          </span>
-          {usedPercent !== null ? (
-            <span className="text-[11px] font-medium tabular-nums" style={{ color: "var(--color-text-muted)" }}>
-              {Math.round((effectiveUsedBytes! / effectiveTotalBytes!) * 100)}%
-            </span>
-          ) : null}
-        </div>
-        <div
-          className="overflow-hidden rounded-full"
-          style={{ height: 6, background: "var(--color-surface-subtle)" }}
-          role="progressbar"
-          aria-valuenow={usedPercent !== null ? Math.round((effectiveUsedBytes! / effectiveTotalBytes!) * 100) : undefined}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={hasCapacity ? `${Math.round((effectiveUsedBytes! / effectiveTotalBytes!) * 100)}% storage used` : "Storage usage unknown"}
-        >
-          {usedPercent !== null ? (
-            <div
-              className="capacity-bar-fill relative h-full rounded-full"
-              style={{ width: `${usedPercent}%`, background: "var(--color-accent)" }}
-            >
-              {reservedPercent !== null ? (
-                <div
-                  className="absolute right-0 top-0 h-full rounded-full"
-                  style={{ width: `${reservedPercent}%`, background: "var(--color-reserved)" }}
-                />
-              ) : null}
-            </div>
-          ) : (
-            <div className="h-full w-1/3 rounded-full opacity-25" style={{ background: "var(--color-border-strong)" }} />
-          )}
-        </div>
-        <div className="mt-1.5 flex gap-4 text-[11px]" style={{ color: "var(--color-text-soft)" }}>
-          <span>{effectiveFreeBytes !== null ? `${formatBytes(effectiveFreeBytes)} free` : "Unknown free"}</span>
-          <span>{projectCount} {projectCount === 1 ? "project" : "projects"}</span>
-          {volumeInfo ? <span>{volumeInfo.filesystemType}</span> : null}
-        </div>
+      <div className="mt-2.5 flex items-center gap-3 text-[11px]" style={{ color: "var(--ink-3)" }}>
+        <span className="tnum font-medium" style={{ color: "var(--ink-2)" }}>
+          {usedPercentInt !== null ? `${usedPercentInt}% used` : "Unknown"}
+        </span>
+        <span style={{ color: "var(--ink-4)" }}>·</span>
+        <span>{capacityFooter}</span>
       </div>
 
-      <div className="flex items-center gap-2 border-t px-4 py-2.5" style={{ borderColor: "var(--color-border)" }}>
-        <Link to={`/drives/${drive.id}`} className="text-[13px] font-medium hover:underline" style={{ color: "var(--color-accent)" }}>
-          Open
-        </Link>
-        <span style={{ color: "var(--color-border-strong)" }}>·</span>
-        <Link to={`/projects?drive=${drive.id}`} className="text-[13px] font-medium hover:underline" style={{ color: "var(--color-accent)" }}>
-          Projects
-        </Link>
+      {/* Stats row */}
+      <div
+        className="mt-4 flex gap-4 border-t pt-3 text-[11.5px]"
+        style={{ borderColor: "var(--hairline)" }}
+      >
+        <DriveStat label="Projects" value={String(projectCount)} />
+        <DriveStat
+          label="Free"
+          value={effectiveFreeBytes !== null ? formatBytes(effectiveFreeBytes) : "—"}
+        />
+        <DriveStat
+          label="Reserved"
+          value={drive.reservedIncomingBytes > 0 ? formatBytes(drive.reservedIncomingBytes) : "—"}
+        />
+        <DriveStat label="Last scan" value={lastScanLabel} />
       </div>
     </article>
   );
 }
 
-// ---------------------------------------------------------------------------
-// DriveCard sub-components
-// ---------------------------------------------------------------------------
-
-function ScanStatusLine({
-  drive,
-  scanSession
-}: {
-  drive: Drive;
-  scanSession: ScanSessionSnapshot | null;
-}) {
-  if (scanSession?.status === "running") {
-    return (
-      <p className="mt-1.5 text-[12px] font-medium" style={{ color: "var(--color-accent)" }}>
-        Scanning in progress…
-      </p>
-    );
-  }
-
-  const lastScan = scanSession?.finishedAt ?? drive.lastScannedAt;
-
+function DriveStat({ label, value }: { label: string; value: string }) {
   return (
-    <p className="mt-1.5 text-[12px]" style={{ color: "var(--color-text-soft)" }}>
-      {lastScan ? `Last indexed ${formatDate(lastScan)}` : "Not yet scanned"}
-    </p>
-  );
-}
-
-function ScanStateIndicator({ state }: { state: "scanning" | "failed" }) {
-  if (state === "scanning") {
-    return (
-      <span
-        className="flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium"
-        style={{ borderColor: "var(--color-accent-soft)", background: "var(--color-accent-soft)", color: "var(--color-accent)" }}
+    <div className="min-w-0 flex-1">
+      <div className="eyebrow" style={{ fontSize: 9.5 }}>
+        {label}
+      </div>
+      <div
+        className="tnum mt-0.5 truncate text-[12.5px] font-medium"
+        style={{ color: "var(--ink)" }}
       >
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--color-accent)" }} />
-        Scanning
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className="rounded border px-1.5 py-0.5 text-[11px] font-medium"
-      style={{ borderColor: "#dcc6c0", background: "var(--color-danger-soft)", color: "var(--color-danger)" }}
-    >
-      Failed
-    </span>
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -596,10 +624,8 @@ function CreateDriveForm({
   isMutating: boolean;
 }) {
   return (
-    <div className="app-panel px-4 py-4">
-      <p className="mb-3 text-[13px] font-semibold" style={{ color: "var(--color-text)" }}>
-        Add manual drive
-      </p>
+    <div className="card p-4">
+      <p className="h-section mb-3">Add manual drive</p>
 
       <form className="grid gap-4 md:grid-cols-3" onSubmit={onSubmit}>
         <FormField label="Drive name" required>
@@ -607,7 +633,7 @@ function CreateDriveForm({
             required
             value={form.volumeName}
             onChange={(e) => onChange({ ...form, volumeName: e.target.value })}
-            className="field-shell w-full bg-transparent px-4 py-3 outline-none"
+            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
             placeholder="Archive Drive"
           />
         </FormField>
@@ -615,7 +641,7 @@ function CreateDriveForm({
           <input
             value={form.displayName}
             onChange={(e) => onChange({ ...form, displayName: e.target.value })}
-            className="field-shell w-full bg-transparent px-4 py-3 outline-none"
+            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
             placeholder="Studio Archive (optional)"
           />
         </FormField>
@@ -626,16 +652,16 @@ function CreateDriveForm({
             step="0.1"
             value={form.capacityTerabytes}
             onChange={(e) => onChange({ ...form, capacityTerabytes: e.target.value })}
-            className="field-shell w-full bg-transparent px-4 py-3 outline-none"
+            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
             placeholder="4"
           />
         </FormField>
 
-        <div className="flex items-center justify-end gap-3 pt-1 md:col-span-3">
-          <button type="button" className="button-secondary" onClick={onCancel}>
+        <div className="flex items-center justify-end gap-2 pt-1 md:col-span-3">
+          <button type="button" className="btn btn-sm" onClick={onCancel}>
             Discard
           </button>
-          <button type="submit" className="button-success" disabled={isMutating}>
+          <button type="submit" className="btn btn-sm btn-primary" disabled={isMutating}>
             {isMutating ? "Saving…" : "Create drive"}
           </button>
         </div>
@@ -678,15 +704,15 @@ function ImportDriveBanner({
   if (matchedDrive) {
     return (
       <div
-        className="rounded-md border px-3 py-2 text-[12px]"
+        className="rounded-[7px] border px-3 py-2 text-[12px]"
         style={{
-          borderColor: "var(--color-border)",
-          background: "var(--color-surface)",
-          color: "var(--color-text-muted)"
+          borderColor: "var(--hairline)",
+          background: "var(--surface-inset)",
+          color: "var(--ink-2)"
         }}
       >
         Matches existing drive{" "}
-        <span className="font-medium" style={{ color: "var(--color-text)" }}>
+        <span className="font-medium" style={{ color: "var(--ink)" }}>
           {matchedDrive.displayName}
         </span>
         . Folders will be added to it.
@@ -695,15 +721,15 @@ function ImportDriveBanner({
   }
   return (
     <div
-      className="rounded-md border px-3 py-2 text-[12px]"
+      className="rounded-[7px] border px-3 py-2 text-[12px]"
       style={{
-        borderColor: "var(--color-border)",
-        background: "var(--color-surface)",
-        color: "var(--color-text-muted)"
+        borderColor: "var(--hairline)",
+        background: "var(--surface-inset)",
+        color: "var(--ink-2)"
       }}
     >
       A new drive{" "}
-      <span className="font-medium" style={{ color: "var(--color-text)" }}>
+      <span className="font-medium" style={{ color: "var(--ink)" }}>
         {newDriveName}
       </span>{" "}
       will be created for this volume
@@ -725,14 +751,11 @@ function FormField({
   children: ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-2">
-      <span
-        className="text-[11px] font-semibold uppercase tracking-[0.16em]"
-        style={{ color: "var(--color-text-soft)" }}
-      >
+    <label className="flex flex-col gap-1.5">
+      <span className="eyebrow">
         {label}
         {required ? (
-          <span className="ml-1" style={{ color: "var(--color-danger)" }}>
+          <span className="ml-1" style={{ color: "var(--danger)" }}>
             *
           </span>
         ) : null}

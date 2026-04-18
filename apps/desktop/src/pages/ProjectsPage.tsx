@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Icon } from "@drive-project-catalog/ui";
 import { useShortcut } from "../app/useShortcut";
 import { buildProjectSearchSuggestions, filterProjectCatalog, UNASSIGNED_DRIVE_FILTER_VALUE } from "@drive-project-catalog/data";
 import {
@@ -21,6 +22,7 @@ import {
   getProjectStatusBadges
 } from "./dashboardHelpers";
 import { EmptyState, FeedbackNotice, ProjectRowSkeleton, SearchField, SectionCard, StatusBadge } from "./pagePrimitives";
+import { getDriveColor } from "./driveColor";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -266,13 +268,22 @@ export function ProjectsPage() {
   return (
     <div className="space-y-5">
       {/* ── Page header ── */}
-      <div className="flex items-center justify-between">
-        <div />
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="eyebrow">Catalog</div>
+          <h1 className="h-title mt-1">Projects</h1>
+          {!isLoading ? (
+            <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+              {projects.length} {projects.length === 1 ? "project" : "projects"} across {drives.length} {drives.length === 1 ? "drive" : "drives"}
+            </p>
+          ) : null}
+        </div>
         <button
           type="button"
-          className="button-secondary"
+          className="btn btn-sm"
           onClick={() => setIsCreateOpen((c) => !c)}
         >
+          <Icon name="plus" size={12} />
           {isCreateOpen ? "Discard" : "New project"}
         </button>
       </div>
@@ -294,7 +305,7 @@ export function ProjectsPage() {
       ) : null}
 
       {/* ── Toolbar: search, dropdowns, status pills — single visual unit ── */}
-      <div className="border-b pb-3" style={{ borderColor: "var(--color-border)" }}>
+      <div className="border-b pb-3" style={{ borderColor: "var(--hairline)" }}>
         <div className="flex flex-wrap items-center gap-2">
           {/* Search — takes available space */}
           <div className="min-w-[200px] flex-1">
@@ -309,7 +320,7 @@ export function ProjectsPage() {
           </div>
 
           {/* Divider */}
-          <div className="hidden h-7 w-px xl:block" style={{ background: "var(--color-border)" }} />
+          <div className="hidden h-7 w-px xl:block" style={{ background: "var(--hairline)" }} />
 
           {/* Dropdowns — compact inline */}
           <CompactSelect
@@ -347,7 +358,7 @@ export function ProjectsPage() {
           </CompactSelect>
 
           {/* Divider */}
-          <div className="hidden h-7 w-px xl:block" style={{ background: "var(--color-border)" }} />
+          <div className="hidden h-7 w-px xl:block" style={{ background: "var(--hairline)" }} />
 
           {/* Status pills — inline with everything else */}
           {STATUS_FILTERS.map((f) => {
@@ -361,12 +372,8 @@ export function ProjectsPage() {
                 key={f.key}
                 type="button"
                 onClick={() => toggleStatusFilter(f.param)}
-                className={`rounded border px-1.5 py-0.5 text-[11px] font-medium transition-colors ${active ? "" : "hover:bg-[color:var(--color-surface-subtle)]"}`}
-                style={
-                  active
-                    ? { borderColor: "var(--color-accent)", background: "var(--color-accent)", color: "#f7f8fa" }
-                    : { borderColor: "var(--color-border)", background: "var(--color-surface-subtle)", color: "var(--color-text-muted)" }
-                }
+                className={active ? "chip chip-accent" : "chip chip-ghost"}
+                style={{ cursor: "pointer" }}
               >
                 {f.label}
               </button>
@@ -377,8 +384,8 @@ export function ProjectsPage() {
             <button
               type="button"
               onClick={clearAllFilters}
-              className="ml-auto text-[12px] font-medium transition-colors hover:text-[color:var(--color-text)]"
-              style={{ color: "var(--color-text-soft)" }}
+              className="ml-auto text-[12px] font-medium transition-colors"
+              style={{ color: "var(--ink-3)" }}
             >
               Clear filters
             </button>
@@ -423,31 +430,31 @@ export function ProjectsPage() {
           <>
             {/* Table controls strip */}
             <div
-              className="flex items-center justify-between gap-4 border-b px-4 py-1.5"
-              style={{ borderColor: "var(--color-border)" }}
+              className="flex items-center justify-between gap-4 border-b px-2 py-2"
+              style={{ borderColor: "var(--hairline)" }}
             >
-              <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>
+              <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium" style={{ color: "var(--ink-3)" }}>
                 <input
                   type="checkbox"
                   checked={allVisibleSelected}
                   onChange={toggleAllVisible}
                   aria-label="Select all visible"
-                  className="accent-[color:var(--color-accent)]"
+                  className="accent-[color:var(--accent)]"
                 />
                 {allVisibleSelected ? "Deselect all" : "Select all"}
               </label>
-              <p className="text-[11px] tabular-nums" style={{ color: "var(--color-text-soft)" }}>
+              <p className="tnum text-[11px]" style={{ color: "var(--ink-3)" }}>
                 {hasActiveFilters || search.trim() ? (
                   <>
-                    <span className="font-semibold" style={{ color: "var(--color-text-muted)" }}>{filteredProjects.length}</span>
+                    <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{filteredProjects.length}</span>
                     {" of "}
-                    <span className="font-semibold" style={{ color: "var(--color-text-muted)" }}>{projects.length}</span>
+                    <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{projects.length}</span>
                     {" "}
                     {projects.length === 1 ? "project" : "projects"}
                   </>
                 ) : (
                   <>
-                    <span className="font-semibold" style={{ color: "var(--color-text-muted)" }}>{projects.length}</span>
+                    <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{projects.length}</span>
                     {" "}
                     {projects.length === 1 ? "project" : "projects"}
                   </>
@@ -455,20 +462,18 @@ export function ProjectsPage() {
               </p>
             </div>
 
-            {/* Headerless table — rows are self-describing */}
-            <table className="min-w-full text-left text-sm" role="grid">
-              <tbody>
-                {filteredProjects.map((project) => (
-                  <ProjectRow
-                    key={project.id}
-                    project={project}
-                    drives={drives}
-                    isSelected={selectedIds.includes(project.id)}
-                    onToggleSelected={toggleSelection}
-                  />
-                ))}
-              </tbody>
-            </table>
+            {/* Things-3 flat list — each row is a click target, checkbox reveals on hover */}
+            <div role="list">
+              {filteredProjects.map((project) => (
+                <ProjectRow
+                  key={project.id}
+                  project={project}
+                  drives={drives}
+                  isSelected={selectedIds.includes(project.id)}
+                  onToggleSelected={toggleSelection}
+                />
+              ))}
+            </div>
           </>
         )}
       </div>
@@ -497,149 +502,163 @@ function ProjectRow({
   const isPersonalFolder = project.folderType === "personal_folder";
   const statusBadges = getProjectStatusBadges(project).filter((b) => b !== "Normal");
   const driveName = getDriveName(drives, project.currentDriveId);
+  const driveColor = getDriveColor(project.currentDriveId);
+  const targetDrive = project.targetDriveId
+    ? drives.find((d) => d.id === project.targetDriveId)
+    : null;
+  const targetDriveName = targetDrive?.displayName ?? null;
+  const targetDriveColor = targetDrive ? getDriveColor(targetDrive.id) : null;
 
   const isMissing = project.missingStatus === "missing";
   const isDuplicate = project.duplicateStatus === "duplicate";
-  const statusBoxShadow = isMissing
-    ? "inset 3px 0 0 var(--color-danger)"
+  const statusAccent = isMissing
+    ? "inset 3px 0 0 var(--danger)"
     : isDuplicate
-      ? "inset 3px 0 0 var(--color-warning)"
+      ? "inset 3px 0 0 var(--warn)"
       : undefined;
 
+  // Primary line: `Client · Name` for structured entries, folder name for
+  // personal_folder. The primary line keeps the density users want in a
+  // flat list — one horizontal scan answers "what is this?"
+  const primaryLine = isPersonalFolder ? project.folderName : displayClient !== "—" ? displayClient : displayName;
+  const secondaryLine = isPersonalFolder
+    ? project.folderPath || ""
+    : displayClient !== "—"
+      ? displayName
+      : project.folderName !== displayName
+        ? project.folderName
+        : "";
+
+  // Cat/category accent color for the left avatar. Soft category colors so the
+  // primary drive-color dot stays the most saturated on the row.
+  const avatarPalette: Record<string, { bg: string; color: string }> = {
+    photo: { bg: "var(--info-soft)", color: "var(--info)" },
+    video: { bg: "var(--accent-soft)", color: "var(--accent-ink)" },
+    design: { bg: "var(--ok-soft)", color: "var(--ok)" },
+    mixed: { bg: "var(--warn-soft)", color: "var(--warn)" },
+    personal: { bg: "var(--danger-soft)", color: "var(--danger)" }
+  };
+  const avatar =
+    avatarPalette[project.category ?? ""] ?? {
+      bg: "var(--surface-inset)",
+      color: "var(--ink-3)"
+    };
+  const avatarLetter = (primaryLine || "?")[0]?.toUpperCase() ?? "?";
+
   return (
-    <tr
-      className={`group border-b transition duration-100 ${isSelected ? "bg-[color:var(--color-accent-soft)] hover:bg-[#dbe3ec]" : "hover:bg-[#f7f5f0] hover:-translate-y-px hover:shadow-[0_2px_6px_-1px_rgba(0,0,0,0.06)]"}`}
-      style={{ borderColor: "var(--color-border)", boxShadow: statusBoxShadow }}
+    <div
+      role="listitem"
+      className={`proj-row group grid items-center gap-4 border-b px-2 py-2.5 ${isSelected ? "bg-[color:var(--accent-soft)]" : ""}`}
+      style={{
+        gridTemplateColumns: "28px 1fr 220px 70px 140px 16px",
+        borderColor: "var(--hairline)",
+        boxShadow: statusAccent
+      }}
       aria-selected={isSelected}
     >
-      {/* Checkbox */}
-      <td className="w-10 py-2.5 pl-4 pr-1 align-middle">
+      {/* Checkbox column — shows on hover or when row is already selected */}
+      <div className="flex items-center justify-center">
         <input
           type="checkbox"
           checked={isSelected}
           onChange={() => onToggleSelected(project.id)}
           aria-label={`Select ${project.folderName}`}
-          className="accent-[color:var(--color-accent)]"
+          className={`accent-[color:var(--accent)] transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
         />
-      </td>
+      </div>
 
-      {/* Identity — name + type pill + secondary context */}
-      <td className="max-w-[320px] py-2.5 pl-2 pr-4 align-middle">
-        <div className="flex min-w-0 items-center gap-2">
-          <FolderTypePill folderType={project.folderType} />
-          <div className="min-w-0 flex-1">
-            <p className="min-w-0 truncate text-[13px] font-medium leading-snug" style={{ color: "var(--color-text)" }}>
-              {displayName}
-            </p>
-            {/* Secondary line: folder name if different, or folder path for personal_folder */}
-            {isPersonalFolder && project.folderPath ? (
-              <p className="mt-px truncate text-[11px] italic" style={{ color: "var(--color-text-soft)" }}>
-                {project.folderPath}
-              </p>
-            ) : displayName !== project.folderName ? (
-              <p className="mt-px truncate text-[11px]" style={{ color: "var(--color-text-soft)" }}>
-                {project.folderName}
-              </p>
+      {/* Project — avatar + title + subtitle */}
+      <Link
+        to={`/projects/${project.id}`}
+        className="flex min-w-0 items-center gap-3"
+        aria-label={`Open ${project.folderName}`}
+      >
+        <div
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11.5px] font-semibold"
+          style={{ background: avatar.bg, color: avatar.color }}
+        >
+          {avatarLetter}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div
+            className="truncate text-[13px] font-medium leading-snug"
+            style={{ color: "var(--ink)" }}
+          >
+            {primaryLine}
+            {!isPersonalFolder && displayClient !== "—" && displayName ? (
+              <span className="ml-1" style={{ color: "var(--ink-3)", fontWeight: 400 }}>
+                · {displayName}
+              </span>
             ) : null}
           </div>
+          {secondaryLine || displayDate !== "—" ? (
+            <div className="mt-0.5 flex gap-2 text-[11px]" style={{ color: "var(--ink-3)" }}>
+              {displayDate !== "—" ? (
+                <span className="tnum shrink-0">{displayDate}</span>
+              ) : null}
+              {displayDate !== "—" && secondaryLine ? (
+                <span style={{ color: "var(--ink-4)" }}>·</span>
+              ) : null}
+              {secondaryLine ? (
+                <span className="truncate">{secondaryLine}</span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-      </td>
+      </Link>
 
-      {/* Client — only meaningful for structured entries */}
-      <td className="w-[150px] px-3 py-2.5 align-middle">
-        {!isPersonalFolder && displayClient !== "—" ? (
-          <p className="truncate text-[13px]" style={{ color: "var(--color-text-muted)" }}>
-            {displayClient}
-          </p>
-        ) : null}
-      </td>
-
-      {/* Date */}
-      <td className="w-[90px] px-3 py-2.5 align-middle">
-        {displayDate !== "—" ? (
-          <p className="text-[12px] tabular-nums" style={{ color: "var(--color-text-soft)" }}>
-            {displayDate}
-          </p>
-        ) : null}
-      </td>
-
-      {/* Drive */}
-      <td className="w-[130px] px-3 py-2.5 align-middle">
-        <p className="truncate text-[12px]" style={{ color: project.currentDriveId ? "var(--color-text-muted)" : "var(--color-text-soft)" }}>
-          {driveName}
-        </p>
-        {project.targetDriveId && project.moveStatus === "pending" ? (
-          <p className="mt-px text-[11px]" style={{ color: "var(--color-warning)" }}>
-            → {getDriveName(drives, project.targetDriveId)}
-          </p>
-        ) : null}
-      </td>
-
-      {/* Size */}
-      <td className="w-[80px] px-3 py-2.5 align-middle text-right tabular-nums text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-        {formatBytes(project.sizeBytes)}
-      </td>
-
-      {/* Status badges */}
-      <td className="w-[140px] px-3 py-2.5 align-middle">
-        {statusBadges.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {statusBadges.map((b) => (
-              <StatusBadge key={b} label={b} />
-            ))}
+      {/* Drive — drive-dot + name, with optional "→ target" for pending moves */}
+      <div className="min-w-0 text-[12.5px]">
+        {project.currentDriveId ? (
+          <div className="flex items-center gap-2">
+            <span
+              className="drive-dot"
+              style={{ "--drive-color": driveColor, width: 8, height: 8 } as CSSProperties}
+            />
+            <span className="truncate" style={{ color: "var(--ink-2)" }}>
+              {driveName}
+            </span>
+            {targetDriveName && project.moveStatus === "pending" ? (
+              <>
+                <Icon name="arrowRight" size={10} color="var(--ink-4)" />
+                <span
+                  className="drive-dot"
+                  style={{ "--drive-color": targetDriveColor ?? "var(--ink-3)", width: 7, height: 7 } as CSSProperties}
+                />
+                <span className="truncate" style={{ color: "var(--ink-3)" }}>
+                  {targetDriveName}
+                </span>
+              </>
+            ) : null}
           </div>
-        ) : null}
-      </td>
+        ) : (
+          <span style={{ color: "var(--warn)" }}>Unassigned</span>
+        )}
+      </div>
 
-      {/* Open detail */}
-      {/* S6/M8 — reveal is driven by CSS `focus-visible:` and `group-hover:`
-          utilities instead of imperative `.style.opacity` mutations inside
-          onFocus/onBlur. Keyboard focus reveal is preserved via
-          `focus-visible:opacity-100`; hover reveal via `group-hover:`. */}
-      <td className="w-10 py-2.5 pl-1 pr-4 align-middle">
-        <Link
-          to={`/projects/${project.id}`}
-          className="link-card flex h-6 w-6 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:text-[color:var(--color-accent)]"
-          style={{ color: "var(--color-text-soft)" }}
-          aria-label={`Open ${project.folderName}`}
-        >
-          <ChevronRightIcon />
-        </Link>
-      </td>
-    </tr>
-  );
-}
+      {/* Size — right-aligned tabular numbers */}
+      <div className="tnum text-right text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+        {formatBytes(project.sizeBytes)}
+      </div>
 
-// ---------------------------------------------------------------------------
-// Folder type pill
-// ---------------------------------------------------------------------------
+      {/* Status chips — stack to the right */}
+      <div className="flex flex-wrap justify-end gap-1 overflow-hidden">
+        {statusBadges.map((b) => (
+          <StatusBadge key={b} label={b} />
+        ))}
+      </div>
 
-function FolderTypePill({ folderType }: { folderType: FolderType }) {
-  const styles: Record<FolderType, { border: string; bg: string; color: string }> = {
-    client: {
-      border: "var(--color-border-success)",
-      bg: "var(--color-success-soft)",
-      color: "var(--color-success-deep)"
-    },
-    personal_project: {
-      border: "var(--color-border-info)",
-      bg: "var(--color-accent-soft)",
-      color: "var(--color-accent)"
-    },
-    personal_folder: {
-      border: "var(--color-border)",
-      bg: "var(--color-surface-subtle)",
-      color: "var(--color-text-soft)"
-    }
-  };
-  const s = styles[folderType];
-  return (
-    <span
-      className="shrink-0 rounded border px-1.5 py-px text-[10px] font-medium"
-      style={{ borderColor: s.border, background: s.bg, color: s.color }}
-    >
-      {FOLDER_TYPE_LABELS[folderType]}
-    </span>
+      {/* Chevron */}
+      <Link
+        to={`/projects/${project.id}`}
+        className="link-card flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        style={{ color: "var(--ink-4)" }}
+        aria-label={`Open ${project.folderName}`}
+        tabIndex={-1}
+      >
+        <Icon name="chevron" size={12} />
+      </Link>
+    </div>
   );
 }
 
@@ -672,8 +691,8 @@ function BatchActionBar({
 }) {
   return (
     <div
-      className="app-panel overflow-hidden px-5 py-4"
-      style={{ borderColor: "var(--color-accent)", borderWidth: 1 }}
+      className="card overflow-hidden px-4 py-3"
+      style={{ borderColor: "var(--ink)" }}
     >
       {preview ? (
         <div className="space-y-3">
@@ -681,39 +700,39 @@ function BatchActionBar({
           {preview.warnings.length > 0 ? (
             <FeedbackNotice tone="warning" title="Review warnings" messages={preview.warnings} />
           ) : null}
-          <div className="flex flex-wrap gap-2.5">
-            <button type="button" className="button-success" disabled={isMutating} onClick={onConfirm}>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn btn-sm btn-primary" disabled={isMutating} onClick={onConfirm}>
               {isMutating ? "Applying…" : "Confirm action"}
             </button>
-            <button type="button" className="button-secondary" onClick={onCancelPreview}>
+            <button type="button" className="btn btn-sm" onClick={onCancelPreview}>
               Back
             </button>
           </div>
         </div>
       ) : (
-        <div className="flex min-w-0 flex-wrap items-end gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           {/* Selection count */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <span
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold text-white"
-              style={{ background: "var(--color-accent)" }}
+              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
+              style={{ background: "var(--ink)" }}
             >
               {selectedCount}
             </span>
-            <span className="text-sm font-medium" style={{ color: "var(--color-text)" }}>
+            <span className="text-[12.5px] font-medium" style={{ color: "var(--ink)" }}>
               selected
             </span>
             <button
               type="button"
-              className="text-[11px] uppercase tracking-[0.1em] transition hover:opacity-75"
-              style={{ color: "var(--color-text-soft)" }}
+              className="text-[11px] transition hover:opacity-75"
+              style={{ color: "var(--ink-3)" }}
               onClick={onClearSelection}
             >
               Clear
             </button>
           </div>
 
-          <div className="h-5 w-px" style={{ background: "var(--color-border)" }} />
+          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
 
           {/* Assign drive */}
           <BatchAction
@@ -724,15 +743,14 @@ function BatchActionBar({
             <select
               value={state.assignDriveId}
               onChange={(e) => onChange({ ...state, assignDriveId: e.target.value })}
-              className="field-shell bg-transparent py-2 text-sm outline-none"
-              style={{ paddingLeft: "0.75rem", paddingRight: "0.75rem" }}
+              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
             >
               <option value="">Unassigned</option>
               {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
             </select>
           </BatchAction>
 
-          <div className="h-5 w-px" style={{ background: "var(--color-border)" }} />
+          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
 
           {/* Set category */}
           <BatchAction
@@ -743,15 +761,14 @@ function BatchActionBar({
             <select
               value={state.category}
               onChange={(e) => onChange({ ...state, category: e.target.value as Category | "" })}
-              className="field-shell bg-transparent py-2 text-sm outline-none"
-              style={{ paddingLeft: "0.75rem", paddingRight: "0.75rem" }}
+              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
             >
               <option value="">Choose category</option>
               {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </BatchAction>
 
-          <div className="h-5 w-px" style={{ background: "var(--color-border)" }} />
+          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
 
           {/* Plan move */}
           <BatchAction
@@ -762,37 +779,25 @@ function BatchActionBar({
             <select
               value={state.targetDriveId}
               onChange={(e) => onChange({ ...state, targetDriveId: e.target.value })}
-              className="field-shell bg-transparent py-2 text-sm outline-none"
-              style={{ paddingLeft: "0.75rem", paddingRight: "0.75rem" }}
+              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
             >
               <option value="">Target drive</option>
               {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
             </select>
           </BatchAction>
 
-          <div className="h-5 w-px" style={{ background: "var(--color-border)" }} />
+          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
 
           {/* Delete — destructive standalone action, no parameter needed */}
-          <div className="flex flex-col gap-1.5">
-            <span
-              className="text-[10px] font-semibold uppercase tracking-[0.12em]"
-              style={{ color: "var(--color-danger, #b91c1c)" }}
-            >
-              Delete
-            </span>
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={() => onPreview("delete")}
-              disabled={isMutating}
-              style={{
-                borderColor: "var(--color-danger, #b91c1c)",
-                color: "var(--color-danger, #b91c1c)"
-              }}
-            >
-              Review deletion
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-danger"
+            onClick={() => onPreview("delete")}
+            disabled={isMutating}
+          >
+            <Icon name="trash" size={11} />
+            Delete
+          </button>
         </div>
       )}
     </div>
@@ -812,13 +817,13 @@ function BatchAction({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-soft)" }}>
+      <span className="text-[11px] font-medium" style={{ color: "var(--ink-3)" }}>
         {label}
       </span>
       {children}
       <button
         type="button"
-        className="button-secondary py-2 text-xs"
+        className="btn btn-sm"
         disabled={disabled}
         onClick={onReview}
       >
@@ -866,32 +871,32 @@ function CreateProjectForm({
       ) : null}
       <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={onSubmit}>
         <FormField label="Date (YYMMDD)">
-          <input required maxLength={6} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="240401" />
+          <input required maxLength={6} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="240401" />
         </FormField>
         <FormField label="Client">
-          <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="Apple" />
+          <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="Apple" />
         </FormField>
         <FormField label="Project">
-          <input required value={form.parsedProject} onChange={(e) => onChange({ ...form, parsedProject: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="ProductShoot" />
+          <input required value={form.parsedProject} onChange={(e) => onChange({ ...form, parsedProject: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="ProductShoot" />
         </FormField>
         <FormField label="Category">
-          <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value as Category | "" })} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
+          <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value as Category | "" })} className="field-shell w-full bg-transparent px-3 py-2 outline-none">
             <option value="">Choose category</option>
             {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </FormField>
         <FormField label="Size (GB)">
-          <input type="number" min="0" step="0.1" value={form.sizeGigabytes} onChange={(e) => onChange({ ...form, sizeGigabytes: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none" placeholder="120" />
+          <input type="number" min="0" step="0.1" value={form.sizeGigabytes} onChange={(e) => onChange({ ...form, sizeGigabytes: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="120" />
         </FormField>
         <FormField label="Drive">
-          <select value={form.currentDriveId} onChange={(e) => onChange({ ...form, currentDriveId: e.target.value })} className="field-shell w-full bg-transparent px-4 py-3 outline-none">
+          <select value={form.currentDriveId} onChange={(e) => onChange({ ...form, currentDriveId: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none">
             <option value="">Unassigned</option>
             {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
           </select>
         </FormField>
-        <div className="md:col-span-2 xl:col-span-3 flex items-center justify-end gap-3">
-          <button type="button" className="button-secondary" onClick={onCancel}>Discard</button>
-          <button type="submit" className="button-success" disabled={isMutating}>{isMutating ? "Saving…" : "Create project"}</button>
+        <div className="md:col-span-2 xl:col-span-3 flex items-center justify-end gap-2">
+          <button type="button" className="btn btn-sm" onClick={onCancel}>Discard</button>
+          <button type="submit" className="btn btn-sm btn-primary" disabled={isMutating}>{isMutating ? "Saving…" : "Create project"}</button>
         </div>
       </form>
     </SectionCard>
@@ -904,10 +909,8 @@ function CreateProjectForm({
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
-        {label}
-      </span>
+    <label className="flex flex-col gap-1.5">
+      <span className="eyebrow">{label}</span>
       {children}
     </label>
   );
@@ -929,11 +932,9 @@ function CompactSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`field-shell cursor-pointer bg-transparent py-2.5 text-sm outline-none${isActive ? " field-shell--active" : ""}`}
+      className={`field-shell cursor-pointer bg-transparent px-3 py-1.5 text-[12.5px] outline-none${isActive ? " field-shell--active" : ""}`}
       style={{
-        paddingLeft: "0.875rem",
-        paddingRight: "0.875rem",
-        color: isActive ? "var(--color-text)" : "var(--color-text-soft)"
+        color: isActive ? "var(--ink)" : "var(--ink-3)"
       }}
       aria-label={placeholder}
     >
@@ -942,10 +943,3 @@ function CompactSelect({
   );
 }
 
-function ChevronRightIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}

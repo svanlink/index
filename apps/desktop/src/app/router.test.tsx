@@ -13,11 +13,11 @@ vi.mock("./catalogRepository", async () => {
 
 describe("desktop routes", () => {
   it.each([
-    { path: "/", value: "Dashboard" },
+    { path: "/", value: "Inbox" },
     { path: "/projects", value: "Projects" },
     { path: "/drives", value: "Drives" },
-    { path: "/projects/project-240401-apple-shoot", value: "Project Detail" },
-    { path: "/drives/drive-a", value: "Drive Detail" }
+    { path: "/projects/project-240401-apple-shoot", value: "Project" },
+    { path: "/drives/drive-a", value: "Drive" }
   ])("renders $path", async ({ path, value }) => {
     const router = createTestRouter([path]);
 
@@ -43,7 +43,7 @@ describe("desktop routes", () => {
       </AppProviders>
     );
 
-    const [searchInput] = await screen.findAllByPlaceholderText("Search the catalog from anywhere");
+    const [searchInput] = await screen.findAllByPlaceholderText("Search projects…");
     fireEvent.change(searchInput, { target: { value: "adidas" } });
     fireEvent.submit(searchInput.closest("form") as HTMLFormElement);
 
