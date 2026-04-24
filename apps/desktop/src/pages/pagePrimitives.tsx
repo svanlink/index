@@ -3,6 +3,11 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 // ---------------------------------------------------------------------------
 // SearchField
 // ---------------------------------------------------------------------------
+// Big search surface used on the Projects list. DESIGN.md §4 puts the global
+// omnibox in the top nav, but the Projects page — the app's primary work
+// surface — also offers an inline search with suggestions. Hairline border,
+// flat surface, action-blue focus ring. No uppercase-tracked decoration.
+// ---------------------------------------------------------------------------
 
 export interface SearchSuggestionItem {
   key: string;
@@ -42,9 +47,9 @@ export function SearchField({
   const isActive = isFocused || value.length > 0;
   const showSuggestions = isFocused && value.trim().length > 0 && suggestions.length > 0;
   const showShortcutHint = !isActive;
-  const showResultCount = isActive && value.trim().length > 0 && resultCount !== undefined && !showSuggestions;
+  const showResultCount =
+    isActive && value.trim().length > 0 && resultCount !== undefined && !showSuggestions;
 
-  // `/` keyboard shortcut to focus search
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -76,13 +81,14 @@ export function SearchField({
 
   return (
     <div className={`relative ${className}`} role="search">
-      {/* Shell — surface shift: idle=subtle, focus=elevated */}
       <div
-        className="flex items-center gap-2 rounded-md border px-3 py-1.5"
+        className="flex items-center gap-2 rounded-lg border px-3"
         style={{
-          borderColor: isFocused ? "var(--color-accent)" : "var(--color-border)",
-          background: isFocused ? "var(--color-surface-elevated)" : "var(--color-surface-subtle)",
-          transition: "border-color 120ms ease, background 120ms ease"
+          height: 40,
+          borderColor: isFocused ? "var(--action)" : "var(--border-soft)",
+          background: "var(--surface)",
+          boxShadow: isFocused ? "0 0 0 2px var(--accent-soft)" : "none",
+          transition: "border-color 120ms ease, box-shadow 120ms ease"
         }}
       >
         <SearchFieldIcon active={isActive} />
@@ -98,48 +104,36 @@ export function SearchField({
           autoComplete="off"
           spellCheck={false}
           aria-label={placeholder}
-          className="min-w-0 flex-1 bg-transparent text-[13px] leading-normal outline-none placeholder:text-[color:var(--color-text-soft)] [&::-webkit-search-cancel-button]:hidden"
+          className="min-w-0 flex-1 bg-transparent text-[14px] leading-normal outline-none placeholder:text-[color:var(--ink-4)] [&::-webkit-search-cancel-button]:hidden"
           style={{
-            color: "var(--color-text)",
-            caretColor: "var(--color-accent)"
+            color: "var(--ink)",
+            caretColor: "var(--action)"
           }}
         />
 
-        {/* Live result count — quiet feedback while typing */}
         {showResultCount ? (
           <span
-            className="shrink-0 text-[11px] tabular-nums font-medium"
-            style={{ color: "var(--color-text-soft)" }}
+            className="tnum shrink-0 text-[12px] font-medium"
+            style={{ color: "var(--ink-3)" }}
             aria-live="polite"
           >
             {resultCount}
           </span>
         ) : null}
 
-        {/* Keyboard shortcut hint — idle state only */}
         {showShortcutHint ? (
-          <kbd
-            className="shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium leading-none"
-            style={{
-              borderColor: "var(--color-border)",
-              background: "var(--color-surface-elevated)",
-              color: "var(--color-text-soft)",
-              fontFamily: "inherit"
-            }}
-            aria-hidden="true"
-          >
+          <kbd className="kbd shrink-0" aria-hidden="true">
             /
           </kbd>
         ) : null}
 
-        {/* Clear button — visible when value exists */}
         {value ? (
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onChange("")}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-[color:var(--color-surface-subtle)]"
-            style={{ color: "var(--color-text-soft)" }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors"
+            style={{ color: "var(--ink-3)" }}
             aria-label="Clear search"
           >
             <XIcon />
@@ -147,28 +141,31 @@ export function SearchField({
         ) : null}
       </div>
 
-      {/* Suggestions dropdown */}
       {showSuggestions ? (
         <div
           className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 overflow-hidden rounded-lg border"
           style={{
-            borderColor: "var(--color-border)",
-            background: "var(--color-surface-elevated)"
+            borderColor: "var(--hairline)",
+            background: "var(--surface)",
+            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)"
           }}
         >
           {suggestions.map((group, gi) => (
             <div
               key={group.key}
               className="border-b last:border-b-0"
-              style={{ borderColor: "var(--color-border)" }}
+              style={{ borderColor: "var(--hairline)" }}
             >
               <p
-                className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em]"
-                style={{ color: "var(--color-text-soft)" }}
+                className="px-3 pt-2.5 pb-1 text-[12px] font-medium"
+                style={{ color: "var(--ink-3)" }}
               >
                 {group.label}
               </p>
-              <ul role="listbox" className={`px-1.5 ${gi === suggestions.length - 1 ? "pb-1.5" : "pb-1"}`}>
+              <ul
+                role="listbox"
+                className={`px-1.5 ${gi === suggestions.length - 1 ? "pb-1.5" : "pb-1"}`}
+              >
                 {group.suggestions.map((s) => (
                   <li key={s.key} role="option" aria-selected={false}>
                     <button
@@ -177,17 +174,13 @@ export function SearchField({
                         e.preventDefault();
                         handleSelect(s.value);
                       }}
-                      className="search-suggestion-item flex w-full items-center justify-between rounded-[8px] px-2.5 py-1.5 text-left text-[13px] transition-colors"
-                      style={{ color: "var(--color-text)" }}
+                      className="search-suggestion-item flex w-full items-center justify-between rounded-[8px] px-2.5 py-2 text-left text-[14px] transition-colors"
+                      style={{ color: "var(--ink)" }}
                     >
-                      <span className="font-medium">{s.label}</span>
+                      <span className="truncate font-medium">{s.label}</span>
                       <span
-                        className="ml-3 shrink-0 rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase tracking-[0.12em]"
-                        style={{
-                          borderColor: "var(--color-border)",
-                          background: "var(--color-surface-subtle)",
-                          color: "var(--color-text-soft)"
-                        }}
+                        className="ml-3 shrink-0 text-[12px]"
+                        style={{ color: "var(--ink-4)" }}
                       >
                         {s.matchType === "prefix" ? "starts with" : "contains"}
                       </span>
@@ -213,7 +206,7 @@ function SearchFieldIcon({ active }: { active: boolean }) {
       aria-hidden="true"
       style={{
         flexShrink: 0,
-        color: active ? "var(--color-accent)" : "var(--color-text-soft)",
+        color: active ? "var(--ink-2)" : "var(--ink-3)",
         transition: "color 140ms ease"
       }}
     >
@@ -232,7 +225,12 @@ function XIcon() {
 }
 
 // ---------------------------------------------------------------------------
-// SectionCard
+// SectionCard — DESIGN.md §6
+// ---------------------------------------------------------------------------
+// Flat `.card` surface with a hairline under the title row when a description
+// or action is present. No tinted header, no color-mix wash. Title uses
+// card-title weight in a conservative 16px on the list pages so it doesn't
+// overwhelm the content inside.
 // ---------------------------------------------------------------------------
 
 interface SectionCardProps {
@@ -243,19 +241,41 @@ interface SectionCardProps {
 }
 
 export function SectionCard({ title, description, children, action }: SectionCardProps) {
+  const hasHeaderDivider = Boolean(description || action);
   return (
-    <section>
-      <div className="flex items-center justify-between">
-        <div>
-          <h4 className="text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>{title}</h4>
-          {description ? <p className="mt-0.5 text-[12px] leading-snug" style={{ color: "var(--color-text-muted)" }}>{description}</p> : null}
+    <section className="card overflow-hidden">
+      <div
+        className="flex items-start justify-between gap-4 px-5 py-4"
+        style={{
+          borderBottom: hasHeaderDivider ? "1px solid var(--hairline)" : "none"
+        }}
+      >
+        <div className="min-w-0">
+          <h4
+            className="text-[16px] font-semibold"
+            style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.01em" }}
+          >
+            {title}
+          </h4>
+          {description ? (
+            <p
+              className="mt-1 max-w-[62ch] text-[14px] leading-[1.5]"
+              style={{ color: "var(--ink-3)", margin: "4px 0 0" }}
+            >
+              {description}
+            </p>
+          ) : null}
         </div>
-        {action ? <div>{action}</div> : null}
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="mt-3">{children}</div>
+      <div className="px-5 py-4">{children}</div>
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// StatusBadge — uses shared .chip classes from globals.css (DESIGN.md §6).
+// ---------------------------------------------------------------------------
 
 type BadgeTone = "danger" | "warn" | "accent" | "ok" | "info" | "neutral" | "muted";
 
@@ -302,10 +322,6 @@ const LABEL_SHOWS_DOT: Record<string, boolean> = {
   Healthy: true
 };
 
-/**
- * Status pill in the 2026 refresh — a soft-toned chip with an optional leading
- * dot for state-carrying labels. Chips with neutral/muted tones omit the dot.
- */
 export function StatusBadge({ label }: { label: string }) {
   const tone = LABEL_TONE[label] ?? "neutral";
   const showDot = LABEL_SHOWS_DOT[label] ?? false;
@@ -317,6 +333,11 @@ export function StatusBadge({ label }: { label: string }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// EmptyState — flat surface, hairline border. DESIGN.md §7 "hairlines not
+// shadows". No gradient, no decorative tint.
+// ---------------------------------------------------------------------------
+
 export function EmptyState({
   title,
   description,
@@ -327,10 +348,23 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed px-6 py-8 text-center" style={{ borderColor: "var(--color-border-strong)" }}>
-      <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{title}</p>
-      <p className="mt-1 text-[12px]" style={{ color: "var(--color-text-muted)" }}>{description}</p>
-      {action ? <div className="mt-4">{action}</div> : null}
+    <div
+      className="rounded-[12px] border px-5 py-6"
+      style={{
+        background: "var(--surface)",
+        borderColor: "var(--hairline)"
+      }}
+    >
+      <p className="text-[14px] font-semibold" style={{ color: "var(--ink)", margin: 0 }}>
+        {title}
+      </p>
+      <p
+        className="text-[14px] leading-[1.5]"
+        style={{ color: "var(--ink-3)", margin: "4px 0 0" }}
+      >
+        {description}
+      </p>
+      {action ? <div className="mt-3">{action}</div> : null}
     </div>
   );
 }
@@ -338,19 +372,24 @@ export function EmptyState({
 export function LoadingState({ label }: { label: string }) {
   return (
     <div className="py-6 text-center">
-      <p className="text-[13px]" style={{ color: "var(--color-text-muted)" }}>{label}</p>
+      <p className="text-[14px]" style={{ color: "var(--ink-3)", margin: 0 }}>
+        {label}
+      </p>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton loaders
+// Skeleton loaders — hairline bounded, no decorative tint.
 // ---------------------------------------------------------------------------
 
-/** Skeleton for a drive card (used in DrivesPage grid) */
 export function DriveCardSkeleton() {
   return (
-    <div className="app-panel flex flex-col overflow-hidden" style={{ padding: 0 }} aria-hidden="true">
+    <div
+      className="card flex flex-col overflow-hidden"
+      style={{ padding: 0 }}
+      aria-hidden="true"
+    >
       <div className="px-4 pt-4 pb-3">
         <div className="skeleton h-3.5 w-2/3 rounded" />
         <div className="skeleton mt-2 h-2.5 w-1/3 rounded" />
@@ -364,7 +403,10 @@ export function DriveCardSkeleton() {
           <div className="skeleton h-2 w-12 rounded" />
         </div>
       </div>
-      <div className="flex gap-3 border-t px-4 py-2.5" style={{ borderColor: "var(--color-border)" }}>
+      <div
+        className="flex gap-3 border-t px-4 py-2.5"
+        style={{ borderColor: "var(--hairline)" }}
+      >
         <div className="skeleton h-3 w-8 rounded" />
         <div className="skeleton h-3 w-12 rounded" />
       </div>
@@ -372,10 +414,13 @@ export function DriveCardSkeleton() {
   );
 }
 
-/** Skeleton for a project table row */
 export function ProjectRowSkeleton() {
   return (
-    <div className="flex items-center gap-3 border-b px-3 py-2.5" style={{ borderColor: "var(--color-border)" }} aria-hidden="true">
+    <div
+      className="flex items-center gap-3 border-b px-3 py-2.5"
+      style={{ borderColor: "var(--hairline)" }}
+      aria-hidden="true"
+    >
       <div className="skeleton h-3.5 w-3.5 shrink-0 rounded" />
       <div className="skeleton h-2.5 w-16 shrink-0 rounded" />
       <div className="skeleton h-2.5 w-24 shrink-0 rounded" />
@@ -387,7 +432,6 @@ export function ProjectRowSkeleton() {
   );
 }
 
-/** Skeleton for a metric card (label + value) */
 export function MetricCardSkeleton() {
   return (
     <div aria-hidden="true">
@@ -397,10 +441,13 @@ export function MetricCardSkeleton() {
   );
 }
 
-/** Skeleton for a scan list row */
 export function ScanRowSkeleton() {
   return (
-    <article className="border-b px-4 py-3" style={{ borderColor: "var(--color-border)" }} aria-hidden="true">
+    <article
+      className="border-b px-4 py-3"
+      style={{ borderColor: "var(--hairline)" }}
+      aria-hidden="true"
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="skeleton h-5 w-14 rounded" />
@@ -419,7 +466,12 @@ export function ScanRowSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// ConfirmModal
+// ConfirmModal — DESIGN.md §6
+// ---------------------------------------------------------------------------
+// The only dark surface in the app. Graphite (#1d1d1f), white text, hero
+// display title (56/600) — the single place hero-display lives. Destructive
+// variants use .btn-danger; non-destructive fall back to .btn-primary but
+// keep the graphite shell because that's how the modal is visually coded.
 // ---------------------------------------------------------------------------
 
 interface ConfirmModalProps {
@@ -443,7 +495,6 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Escape to close, Enter to confirm — scoped to the modal
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();
@@ -457,7 +508,6 @@ export function ConfirmModal({
     return () => dialog?.removeEventListener("keydown", handleKeyDown);
   }, [onCancel, onConfirm, isLoading]);
 
-  // Auto-focus the dialog so it receives keyboard events
   useEffect(() => {
     dialogRef.current?.focus();
   }, []);
@@ -465,44 +515,68 @@ export function ConfirmModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0, 0, 0, 0.2)" }}
+      style={{ background: "rgba(29, 29, 31, 0.48)" }}
       onClick={onCancel}
     >
       <div
         ref={dialogRef}
-        className="app-panel w-full max-w-sm p-5"
+        className="w-full max-w-[480px] rounded-[12px]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-modal-title"
         tabIndex={-1}
+        style={{
+          background: "var(--graphite)",
+          color: "#ffffff",
+          padding: 40,
+          boxShadow: "0 24px 56px rgba(0, 0, 0, 0.32)"
+        }}
       >
         <h3
           id="confirm-modal-title"
-          className="text-[15px] font-semibold"
-          style={{ color: "var(--color-text)" }}
+          style={{
+            margin: 0,
+            fontSize: 40,
+            fontWeight: 600,
+            lineHeight: 1.1,
+            letterSpacing: "-0.015em",
+            color: "#ffffff"
+          }}
         >
           {title}
         </h3>
-        <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
+        <p
+          style={{
+            margin: "16px 0 0",
+            fontSize: 17,
+            lineHeight: 1.47,
+            color: "rgba(255, 255, 255, 0.78)"
+          }}
+        >
           {description}
         </p>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-8 flex justify-end gap-2">
           <button
             type="button"
-            className="button-secondary"
+            className="btn"
             onClick={onCancel}
             disabled={isLoading}
+            style={{
+              background: "transparent",
+              borderColor: "rgba(255, 255, 255, 0.22)",
+              color: "#ffffff"
+            }}
           >
             Cancel
           </button>
           <button
             type="button"
-            className={isDestructive ? "button-danger" : "button-primary"}
+            className={isDestructive ? "btn btn-danger" : "btn btn-primary"}
             onClick={onConfirm}
             disabled={isLoading}
           >
-            {isLoading ? "Deleting…" : confirmLabel}
+            {isLoading ? "Working…" : confirmLabel}
           </button>
         </div>
       </div>
@@ -511,20 +585,37 @@ export function ConfirmModal({
 }
 
 // ---------------------------------------------------------------------------
-// MetricCard
+// MetricCard — DESIGN.md §3 type scale.
+// ---------------------------------------------------------------------------
+// Inline label + value. Label uses control-label (14/500 ink-3), value uses
+// body-primary tabular. No uppercase, no tiny 10.5px label.
 // ---------------------------------------------------------------------------
 
 export function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-0.5 text-[15px] font-semibold tabular-nums" style={{ color: "var(--color-text)" }}>{value}</p>
+    <div className="min-w-0">
+      <p
+        className="text-[14px] font-medium"
+        style={{ color: "var(--ink-3)", margin: 0, letterSpacing: 0 }}
+      >
+        {label}
+      </p>
+      <p
+        className="tnum truncate text-[17px]"
+        style={{ color: "var(--ink)", margin: "4px 0 0" }}
+      >
+        {value}
+      </p>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// CapacityBar
+// CapacityBar — DESIGN.md §6
+// ---------------------------------------------------------------------------
+// 6px track, fills with ink / warn (80-95%) / danger (>95%). Never blue.
+// Uses the canonical `.cap-bar` / `.cap-used[data-level]` classes from
+// globals.css so the level→color mapping stays in one place.
 // ---------------------------------------------------------------------------
 
 interface CapacityBarProps {
@@ -532,7 +623,12 @@ interface CapacityBarProps {
   totalBytes: number | null;
   reservedBytes?: number;
   overcommitted?: boolean;
-  height?: "sm" | "md";
+  /**
+   * Visual weight. Defaults to "md" (the canonical 6px). "lg" is 8px and
+   * accepted for back-compat on drive detail views. DESIGN.md §6 canonical
+   * is 6px — "lg" is a calibrated deviation for hero capacity visuals only.
+   */
+  height?: "sm" | "md" | "lg";
 }
 
 export function CapacityBar({
@@ -542,38 +638,41 @@ export function CapacityBar({
   overcommitted = false,
   height = "md"
 }: CapacityBarProps) {
-  const usedPct =
-    totalBytes && usedBytes !== null
-      ? `${Math.max(8, (usedBytes / totalBytes) * 100)}%`
-      : "28%";
-  const reservedPct =
-    totalBytes && reservedBytes > 0
-      ? `${Math.max(6, (reservedBytes / totalBytes) * 100)}%`
-      : undefined;
-  const h = height === "sm" ? "h-2.5" : "h-3";
+  const pct =
+    totalBytes && usedBytes !== null && totalBytes > 0
+      ? (usedBytes / totalBytes) * 100
+      : null;
+  const usedPctStr = pct !== null ? `${Math.max(1, pct)}%` : "28%";
+  const reservedPctStr =
+    totalBytes && reservedBytes > 0 ? `${(reservedBytes / totalBytes) * 100}%` : undefined;
 
-  const usedPctNum = totalBytes && usedBytes !== null ? Math.round((usedBytes / totalBytes) * 100) : null;
+  const level: "normal" | "warn" | "danger" =
+    pct !== null && pct > 95 ? "danger" : pct !== null && pct >= 80 ? "warn" : "normal";
+  const dataLevel = level === "normal" ? undefined : level;
+
+  const heightClass = height === "lg" ? "cap-bar lg" : "cap-bar";
 
   return (
     <div
-      className="overflow-hidden rounded-full"
-      style={{ background: "var(--color-progress-track)" }}
+      className={heightClass}
       role="progressbar"
-      aria-valuenow={usedPctNum ?? undefined}
+      aria-valuenow={pct !== null ? Math.round(pct) : undefined}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-label={usedPctNum !== null ? `Storage ${usedPctNum}% used` : "Storage usage unknown"}
+      aria-label={pct !== null ? `Storage ${Math.round(pct)}% used` : "Storage usage unknown"}
     >
       <div
-        className={`capacity-bar-fill relative ${h} rounded-full`}
-        style={{ width: usedPct, background: "var(--color-accent)" }}
+        className="cap-used capacity-bar-fill"
+        data-level={dataLevel}
+        style={{ width: usedPctStr }}
       >
-        {reservedPct ? (
+        {reservedPctStr ? (
           <div
-            className="absolute right-0 top-0 h-full rounded-full"
+            className="cap-reserved"
             style={{
-              width: reservedPct,
-              background: overcommitted ? "var(--color-danger)" : "var(--color-reserved)"
+              right: 0,
+              width: reservedPctStr,
+              background: overcommitted ? "var(--danger)" : undefined
             }}
           />
         ) : null}
@@ -583,7 +682,7 @@ export function CapacityBar({
 }
 
 // ---------------------------------------------------------------------------
-// CapacityLegend
+// CapacityLegend — quiet key for the capacity bar. Used dot is ink, not blue.
 // ---------------------------------------------------------------------------
 
 export function CapacityLegend({
@@ -596,24 +695,38 @@ export function CapacityLegend({
   freeLabel: string;
 }) {
   return (
-    <div className="mt-3 flex flex-wrap gap-3 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-soft)" }}>
-      <span className="inline-flex items-center gap-2">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--color-accent)" }} />
+    <div
+      className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px]"
+      style={{ color: "var(--ink-3)" }}
+    >
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full" style={{ background: "var(--ink)" }} />
         {usedLabel}
       </span>
       {reservedLabel ? (
-        <span className="inline-flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--color-reserved)" }} />
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{ background: "var(--ink-3)" }}
+          />
           {reservedLabel}
         </span>
       ) : null}
-      <span className="inline-flex items-center gap-2">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--color-free-indicator)" }} />
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full" style={{ background: "var(--ink-4)" }} />
         {freeLabel}
       </span>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// FeedbackNotice — DESIGN.md §6
+// ---------------------------------------------------------------------------
+// Flat surface. Error = danger-container fill with danger ink + icon. Other
+// tones use a neutral surface-container fill with semantic icon color so the
+// notice carries meaning via icon + text, not via gradient.
+// ---------------------------------------------------------------------------
 
 export function FeedbackNotice({
   tone,
@@ -628,29 +741,49 @@ export function FeedbackNotice({
     return null;
   }
 
-  const palette =
-    tone === "success"
-      ? { borderColor: "#c7d8cb", background: "#f3f8f3", color: "#345046" }
+  const iconColor =
+    tone === "error"
+      ? "var(--danger)"
       : tone === "warning"
-        ? { borderColor: "#ddcfb8", background: "var(--color-warning-soft)", color: "var(--color-warning)" }
-        : tone === "error"
-          ? { borderColor: "#dcc6c0", background: "var(--color-danger-soft)", color: "var(--color-danger)" }
-          : { borderColor: "#c9d5df", background: "var(--color-info-soft)", color: "var(--color-info)" };
+        ? "var(--warn)"
+        : tone === "success"
+          ? "var(--success, #1d7a4a)"
+          : "var(--action)";
+
+  const background = tone === "error" ? "var(--danger-container)" : "var(--surface-container)";
 
   return (
     <div
       role="status"
       aria-live="polite"
-      className="rounded-md border px-3 py-3"
-      style={palette}
+      className="rounded-[8px] border px-4 py-3"
+      style={{
+        background,
+        borderColor: "var(--hairline)",
+        color: "var(--ink)"
+      }}
     >
-      <div className="flex items-start gap-2">
-        <FeedbackIcon tone={tone} />
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-5 w-5 shrink-0 items-center justify-center"
+          style={{ color: iconColor }}
+          aria-hidden="true"
+        >
+          <FeedbackIcon tone={tone} />
+        </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-semibold">{title}</p>
-          <div className="mt-1.5 space-y-1">
+          <p className="text-[14px] font-semibold" style={{ color: "var(--ink)" }}>
+            {title}
+          </p>
+          <div className="mt-1 space-y-1">
             {messages.map((message) => (
-              <p key={message} className="text-[13px] leading-snug">{message}</p>
+              <p
+                key={message}
+                className="text-[14px] leading-[1.5]"
+                style={{ color: "var(--ink-2)" }}
+              >
+                {message}
+              </p>
             ))}
           </div>
         </div>
@@ -662,15 +795,21 @@ export function FeedbackNotice({
 function FeedbackIcon({ tone }: { tone: "success" | "warning" | "error" | "info" }) {
   if (tone === "success") {
     return (
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M5 8l2 2 4-4"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     );
   }
   if (tone === "warning") {
     return (
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
         <path d="M8 6.5V9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         <circle cx="8" cy="11.5" r="0.75" fill="currentColor" />
@@ -679,15 +818,20 @@ function FeedbackIcon({ tone }: { tone: "success" | "warning" | "error" | "info"
   }
   if (tone === "error") {
     return (
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path
+          d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
     );
   }
   // info
   return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
       <path d="M8 7.5V11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <circle cx="8" cy="5" r="0.75" fill="currentColor" />

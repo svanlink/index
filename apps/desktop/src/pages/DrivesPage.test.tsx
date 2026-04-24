@@ -55,8 +55,8 @@ function renderDrivesPage() {
 
 async function openCreateForm(): Promise<void> {
   // Wait for the page to mount.
-  await screen.findByRole("heading", { name: "Drives", level: 2 });
-  fireEvent.click(screen.getByRole("button", { name: "Add drive" }));
+  await screen.findByRole("heading", { name: "Drives", level: 1 });
+  fireEvent.click(screen.getByRole("button", { name: "Add manually" }));
   await screen.findByRole("button", { name: /create drive/i });
 }
 

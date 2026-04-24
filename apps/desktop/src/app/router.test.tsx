@@ -13,11 +13,11 @@ vi.mock("./catalogRepository", async () => {
 
 describe("desktop routes", () => {
   it.each([
-    { path: "/", value: "Inbox" },
+    { path: "/", value: "Overview" },
     { path: "/projects", value: "Projects" },
     { path: "/drives", value: "Drives" },
-    { path: "/projects/project-240401-apple-shoot", value: "Project" },
-    { path: "/drives/drive-a", value: "Drive" }
+    { path: "/projects/project-240401-apple-shoot", value: "Apple Product Shoot" },
+    { path: "/drives/drive-a", value: "Drive A" }
   ])("renders $path", async ({ path, value }) => {
     const router = createTestRouter([path]);
 
@@ -29,7 +29,7 @@ describe("desktop routes", () => {
       </AppProviders>
     );
 
-    expect(await screen.findByRole("heading", { name: value, level: 2 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: value, level: 1 })).toBeInTheDocument();
   });
 
   it("routes shell search into the projects page and keeps the query visible", async () => {
@@ -43,7 +43,7 @@ describe("desktop routes", () => {
       </AppProviders>
     );
 
-    const [searchInput] = await screen.findAllByPlaceholderText("Search projects…");
+    const searchInput = await screen.findByPlaceholderText("Search projects, drives, or folders");
     fireEvent.change(searchInput, { target: { value: "adidas" } });
     fireEvent.submit(searchInput.closest("form") as HTMLFormElement);
 
@@ -56,7 +56,7 @@ describe("desktop routes", () => {
     });
   });
 
-  it("combines page search with active filters and clears cleanly", async () => {
+  it("combines the omnibox search with active project filters and clears cleanly", async () => {
     const router = createTestRouter(["/projects?category=design"]);
 
     render(
@@ -67,8 +67,9 @@ describe("desktop routes", () => {
       </AppProviders>
     );
 
-    const pageSearch = await screen.findByPlaceholderText("Search by name, client, date, drive…");
-    fireEvent.change(pageSearch, { target: { value: "ad" } });
+    const searchInput = await screen.findByPlaceholderText("Search projects, drives, or folders");
+    fireEvent.change(searchInput, { target: { value: "ad" } });
+    fireEvent.submit(searchInput.closest("form") as HTMLFormElement);
 
     await waitFor(() => {
       expect(router.state.location.search).toContain("category=design");
@@ -77,7 +78,8 @@ describe("desktop routes", () => {
       expect(screen.queryAllByText("Apple Product Shoot")).toHaveLength(0);
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    fireEvent.change(searchInput, { target: { value: "" } });
+    fireEvent.submit(searchInput.closest("form") as HTMLFormElement);
 
     await waitFor(() => {
       expect(router.state.location.search).toBe("?category=design");
@@ -86,8 +88,8 @@ describe("desktop routes", () => {
     });
   });
 
-  it("shows suggestions that respect active filters", async () => {
-    const router = createTestRouter(["/projects?drive=__unassigned__&movePending=1"]);
+  it("shows breadcrumb context on project detail routes", async () => {
+    const router = createTestRouter(["/projects/project-240401-apple-shoot"]);
 
     render(
       <AppProviders>
@@ -97,16 +99,8 @@ describe("desktop routes", () => {
       </AppProviders>
     );
 
-    const pageSearch = await screen.findByPlaceholderText("Search by name, client, date, drive…");
-    fireEvent.focus(pageSearch);
-    fireEvent.change(pageSearch, { target: { value: "ad" } });
-
-    await waitFor(() => {
-      expect(screen.getAllByText("Clients").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("Projects").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("Adidas").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("Adidas Social").length).toBeGreaterThan(0);
-      expect(screen.queryByText("Apple")).not.toBeInTheDocument();
-    });
+    expect((await screen.findAllByText("Projects")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Apple Product Shoot")).length).toBeGreaterThan(0);
+    expect(router.state.location.pathname).toBe("/projects/project-240401-apple-shoot");
   });
 });

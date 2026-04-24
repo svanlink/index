@@ -1,101 +1,134 @@
+@import "@fontsource-variable/inter";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ──────────────────────────────────────────────────────────────
-   Drive Project Catalog — 2026 refresh
-   Minimal, Things-3 inspired. White canvas, restrained type,
-   subtle hairlines, no decorative gradients.
+   Drive Project Catalog — DESIGN.md source of truth
+   Cold-neutral canvas, Apple-blue action, Inter, dense transaction UI.
+   See /DESIGN.md at repo root. Do not tune values here without
+   updating DESIGN.md in the same commit.
+
+   Layer 1a: token retune. Names preserved for back-compat with
+   existing page code. Legacy `--color-*` aliases are marked
+   DEPRECATED and will be removed in Layer 1b after pages migrate.
    ────────────────────────────────────────────────────────────── */
 
 :root {
   /* ── Typography ── */
   --font-sans:
-    "SF Pro Text", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "Inter Variable", "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
     "Helvetica Neue", system-ui, sans-serif;
   --font-display:
-    "SF Pro Display", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "Inter Variable", "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
     system-ui, sans-serif;
   --font-mono:
-    ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* ── Neutrals — clean white + near-black ink ── */
-  --canvas: #ffffff;
+  /* ── Canvas & surfaces (DESIGN.md §2) ── */
+  --canvas: #f9f9f9;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-inset: #f6f6f5;
-  --surface-muted: #fafafa;
+  --surface-container-low: #f3f3f3;
+  --surface-container: #eeeeee;
+  --surface-container-high: #e8e8e8;
+  --surface-container-highest: #e2e2e2;
+  /* Legacy names — kept pointing at new values for back-compat */
+  --surface-inset: var(--surface-container-low);
+  --surface-muted: var(--surface-container);
 
-  --ink: #1a1a1a;
-  --ink-2: #45454a;
-  --ink-3: #7a7a80;
-  --ink-4: #a8a8ae;
+  /* ── Ink (DESIGN.md §2) ── */
+  --ink: #1d1d1f;
+  --ink-2: #424245;
+  --ink-3: #6e6e73;
+  --ink-4: #86868b;
 
-  --hairline: rgba(0, 0, 0, 0.08);
-  --hairline-strong: rgba(0, 0, 0, 0.14);
+  /* ── Borders / hairlines (DESIGN.md §2) ── */
+  --hairline: #e2e2e2;
+  --hairline-strong: #d2d2d7;
+  --border-soft: #d2d2d7;
+  --border-mid: #86868b;
 
-  /* ── Accent — graphite default ── */
-  --accent: #1a1a1a;
-  --accent-ink: #1a1a1a;
-  --accent-soft: #f0f0ef;
-  --accent-rgb: 26, 26, 26;
+  /* ── Action (Apple blue — DESIGN.md §2) ──
+     --accent / --accent-* retained so existing class definitions
+     still resolve. Semantically all of these are "action". */
+  --action: #0071e3;
+  --action-hover: #0066cc;
+  --action-soft: #2997ff;
+  --action-rgb: 0, 113, 227;
 
-  /* ── Status ── */
-  --ok: #2a8f4a;
-  --ok-soft: #e8f5ec;
-  --warn: #b8861a;
-  --warn-soft: #fbf3e0;
-  --danger: #c13d3d;
-  --danger-soft: #fbeaea;
-  --info: #2563a8;
-  --info-soft: #e8f0f9;
+  --accent: var(--action);
+  --accent-ink: var(--action-hover);
+  --accent-soft: #e8f3ff; /* 6% action-blue tint for hover/selected fills */
+  --accent-rgb: var(--action-rgb);
 
-  /* ── Elevation — subtle only ── */
+  /* ── Semantic ── */
+  --ok: #1d7a4a;
+  --ok-soft: #e6f4ec;
+  --warn: #8a5a00;
+  --warn-soft: #fbf3e3;
+  --danger: #ba1a1a;
+  --danger-soft: #ffdad6;
+  --danger-container: var(--danger-soft);
+  --info: var(--action);
+  --info-soft: var(--accent-soft);
+
+  /* ── Graphite — destructive-confirm modal only (DESIGN.md §6.ConfirmModal) ── */
+  --graphite: #1d1d1f;
+
+  /* ── Elevation — hairlines first, shadow only for floating ── */
   --sh-1: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --sh-2: 0 2px 6px rgba(0, 0, 0, 0.06);
-  --sh-3: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --sh-pop: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --sh-2: 0 12px 30px rgba(0, 0, 0, 0.06);
+  --sh-3: 0 20px 44px rgba(0, 0, 0, 0.08);
+  --sh-pop: 0 24px 52px rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.08);
 
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
 
-  /* ── Density ── */
-  --dens-row: 38px;
-  --dens-pad: 12px;
-  --dens-gap: 12px;
+  /* ── Radius (DESIGN.md §5) ── */
+  --radius: 4px;        /* default: inputs, small controls */
+  --radius-sm: 4px;     /* alias */
+  --radius-lg: 8px;     /* buttons, list rows */
+  --radius-xl: 12px;    /* cards, modals, bento tiles */
+  --radius-full: 9999px;
 
-  /* ── Sidebar ── */
-  --sidebar: #fafafa;
+  /* ── Density (DESIGN.md §4 — 44px default, 36px dense) ── */
+  --dens-row: 44px;
+  --dens-pad: 16px;
+  --dens-gap: 16px;
+
+  /* ── Shell (DESIGN.md §4) ── */
+  --sidebar: var(--surface);
+  --sidebar-width: 256px;
+  --topnav-height: 56px;
+  --container-max: 980px;
 
   /* ──────────────────────────────────────────────────────────────
-     Drive color palette — 6 muted hues assigned round-robin to
-     each drive by id hash. Used for the `drive-dot` + `cap-used`
-     accent on drive cards, project rows, and badges. The palette
-     is deliberately muted so it never competes with the UI accent.
+     Drive identity palette — six cool-neutral hues assigned
+     round-robin to each drive. Desaturated so they don't compete
+     with action blue. Used for `drive-dot` and the `cap-used`
+     fill on drive-scoped surfaces only.
      ────────────────────────────────────────────────────────────── */
-  --drive-a: #6a7d93; /* slate */
-  --drive-b: #8c7b5c; /* bronze */
-  --drive-c: #5f8470; /* sage */
-  --drive-d: #a06b4e; /* terracotta */
-  --drive-e: #7a6b8a; /* lavender */
-  --drive-f: #4f7a8a; /* teal */
+  --drive-a: #5b6b80; /* slate */
+  --drive-b: #6b7380; /* graphite */
+  --drive-c: #5f7a72; /* sage */
+  --drive-d: #7a6b68; /* umber */
+  --drive-e: #6a6880; /* iris */
+  --drive-f: #4f7282; /* marine */
 
   /* ──────────────────────────────────────────────────────────────
-     Backwards-compat aliases — old --color-* tokens used widely
-     in inline styles. These map to the new token system so the
-     visual refresh takes effect everywhere without per-line
-     edits to every page component.
+     DEPRECATED — legacy `--color-*` aliases. Used by ~10 page
+     files. Do not reference in new code. Scheduled for removal
+     in Layer 1b after page migration completes.
      ────────────────────────────────────────────────────────────── */
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-surface-elevated: var(--surface);
-  --color-surface-subtle: var(--surface-inset);
+  --color-surface-subtle: var(--surface-container-low);
 
   --color-sidebar: var(--sidebar);
-  --color-sidebar-hover: rgba(0, 0, 0, 0.035);
-  --color-sidebar-active: rgba(0, 0, 0, 0.05);
+  --color-sidebar-hover: var(--surface-container-low);
+  --color-sidebar-active: var(--surface-container);
   --color-sidebar-muted: var(--ink-3);
   --color-sidebar-border: var(--hairline);
 
@@ -105,7 +138,7 @@
   --color-text-muted: var(--ink-2);
   --color-text-soft: var(--ink-3);
 
-  --color-accent: var(--accent);
+  --color-accent: var(--action);
   --color-accent-soft: var(--accent-soft);
 
   --color-success: var(--ok);
@@ -118,98 +151,85 @@
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
 
-  --color-reserved: #b8861a;
-  --color-progress-track: var(--surface-inset);
+  --color-reserved: var(--warn);
+  --color-progress-track: var(--surface-container);
   --color-free-indicator: var(--ink-4);
-  --color-border-danger: rgba(193, 61, 61, 0.25);
-  --color-border-warning: rgba(184, 134, 26, 0.25);
-  --color-border-success: rgba(42, 143, 74, 0.22);
-  --color-border-info: rgba(37, 99, 168, 0.22);
+  --color-border-danger: #f2c7c3;
+  --color-border-warning: #e8d49a;
+  --color-border-success: #c3e0ce;
+  --color-border-info: #c8def5;
 
-  --shadow-soft: none;
-  --shadow-panel: none;
+  --shadow-soft: var(--sh-1);
+  --shadow-panel: var(--sh-2);
 
-  /* Animation tokens — preserved for existing users */
   --duration-instant: 80ms;
   --duration-fast: 150ms;
   --duration-normal: 300ms;
   --duration-slow: 400ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Skeleton */
-  --color-skeleton: var(--surface-inset);
+  --color-skeleton: var(--surface-container);
 
   color: var(--ink);
   background: var(--canvas);
   font-family: var(--font-sans);
 }
 
-/* ── Density variants ── */
+/* ──────────────────────────────────────────────────────────────
+   Density variants — preserved from prior system.
+   DESIGN.md §4: 44 default, 36 dense, 64 is wrong.
+   ────────────────────────────────────────────────────────────── */
 [data-density="compact"] {
-  --dens-row: 32px;
-  --dens-pad: 8px;
-  --dens-gap: 8px;
+  --dens-row: 36px;
+  --dens-pad: 12px;
+  --dens-gap: 12px;
 }
 [data-density="spacious"] {
-  --dens-row: 48px;
-  --dens-pad: 16px;
-  --dens-gap: 16px;
+  --dens-row: 52px;
+  --dens-pad: 20px;
+  --dens-gap: 20px;
 }
 
-/* ── Accents — toggled via data-accent on <html> ── */
-[data-accent="slate"] {
-  --accent: #445c78;
-  --accent-ink: #334661;
-  --accent-soft: #eef2f7;
-  --accent-rgb: 68, 92, 120;
-}
-[data-accent="ember"] {
-  --accent: #c85a2a;
-  --accent-ink: #a4471f;
-  --accent-soft: #fbede3;
-  --accent-rgb: 200, 90, 42;
-}
-[data-accent="forest"] {
-  --accent: #3a7a4f;
-  --accent-ink: #2d6040;
-  --accent-soft: #e8f2ec;
-  --accent-rgb: 58, 122, 79;
-}
-[data-accent="plum"] {
-  --accent: #784971;
-  --accent-ink: #5f3a59;
-  --accent-soft: #f3ebf2;
-  --accent-rgb: 120, 73, 113;
-}
-[data-accent="graphite"] {
-  --accent: #1a1a1a;
-  --accent-ink: #1a1a1a;
-  --accent-soft: #f0f0ef;
-  --accent-rgb: 26, 26, 26;
-}
+/* ──────────────────────────────────────────────────────────────
+   DELETED — `data-accent` theme variants (slate/ember/forest/
+   plum/graphite). DESIGN.md §1 Core Principle 2: "One accent
+   color." No multi-accent switching. If an element needs
+   variation, it picks from surface-container tiers, not from
+   a second hue.
+   ────────────────────────────────────────────────────────────── */
 
-/* ── Dark theme ── */
+/* ──────────────────────────────────────────────────────────────
+   Dark theme — retuned to match the cold palette. DESIGN.md
+   does not yet specify dark mode; these values are a pragmatic
+   inversion of the light tokens and will be re-spec'd when the
+   user decides whether the app ships with dark mode at all.
+   ────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --canvas: #111113;
-  --surface: #18181b;
-  --surface-raised: #1e1e22;
-  --surface-inset: #232327;
-  --surface-muted: #1a1a1d;
-  --sidebar: #141416;
-  --ink: #f5f5f4;
-  --ink-2: #c5c5c4;
-  --ink-3: #8a8a8e;
-  --ink-4: #5a5a5e;
-  --hairline: rgba(255, 255, 255, 0.09);
-  --hairline-strong: rgba(255, 255, 255, 0.16);
-  --accent-soft: rgba(255, 255, 255, 0.08);
-  /* Dark-mode drive palette — slightly higher chroma for visibility on near-black */
+  --canvas: #1d1d1f;
+  --surface: #2a2a2c;
+  --surface-raised: #2a2a2c;
+  --surface-container-low: #272729;
+  --surface-container: #333336;
+  --surface-container-high: #3a3a3d;
+  --surface-container-highest: #424245;
+  --surface-inset: var(--surface-container-low);
+  --surface-muted: var(--surface-container);
+  --sidebar: #1d1d1f;
+  --ink: #f5f5f7;
+  --ink-2: #d2d2d7;
+  --ink-3: #a1a1a6;
+  --ink-4: #86868b;
+  --hairline: #3a3a3d;
+  --hairline-strong: #48484b;
+  --border-soft: #48484b;
+  --border-mid: #6e6e73;
+  --accent-soft: rgba(0, 113, 227, 0.18);
   --drive-a: #8ea0b5;
-  --drive-b: #b49d79;
-  --drive-c: #82a693;
-  --drive-d: #c28b6c;
-  --drive-e: #9a89ad;
-  --drive-f: #7098aa;
+  --drive-b: #a4aab5;
+  --drive-c: #8aa69d;
+  --drive-d: #b09a93;
+  --drive-e: #9992ad;
+  --drive-f: #7a9cae;
 }
 
 /* ── Base ── */
@@ -218,7 +238,7 @@ html {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "cv11", "ss01", "kern";
+  font-feature-settings: "cv11", "ss01", "calt", "kern";
 }
 
 body {
@@ -228,8 +248,9 @@ body {
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.5;
+  /* DESIGN.md §3: body-primary is 17/400/1.47 */
+  font-size: 17px;
+  line-height: 1.47;
   /* Native desktop feel: no text selection drag, no bounce scroll */
   user-select: none;
   -webkit-user-select: none;
@@ -271,7 +292,8 @@ a {
 }
 
 ::selection {
-  background: rgba(var(--accent-rgb), 0.18);
+  background: var(--accent-soft);
+  color: var(--action-hover);
 }
 
 @layer base {
@@ -285,32 +307,41 @@ a {
   }
 }
 
-/* ── Typography primitives ── */
+/* ──────────────────────────────────────────────────────────────
+   Typography primitives — aligned to DESIGN.md §3 type scale.
+   Old primitives kept as aliases so page code keeps compiling.
+   ────────────────────────────────────────────────────────────── */
+
+/* product-heading: 40/600/1.1 */
 .h-display {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+/* card-title: 28/600/1.2 */
+.h-title {
   font-family: var(--font-display);
   font-size: 28px;
   font-weight: 600;
-  letter-spacing: -0.022em;
-  line-height: 1.15;
-  color: var(--ink);
-}
-.h-title {
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.018em;
+  letter-spacing: -0.01em;
   line-height: 1.2;
   color: var(--ink);
 }
+/* control-label: 14/500/1.3 */
 .h-section {
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.3;
   color: var(--ink);
 }
+/* utility-micro: 12/400/1.3, tracking 0.04 */
 .eyebrow {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -350,46 +381,46 @@ a {
 @layer components {
   /* ── Panels / cards ── */
   .app-panel {
-    @apply rounded-[10px] border bg-[color:var(--surface)];
+    @apply rounded-[12px] border bg-[color:var(--surface)];
     border-color: var(--hairline);
-    transition: border-color 140ms var(--ease);
+    box-shadow: none;
+    transition:
+      border-color 140ms var(--ease),
+      background 140ms var(--ease);
   }
   .app-panel-subtle {
-    @apply rounded-[10px] border bg-[color:var(--surface)];
+    @apply rounded-[12px] border bg-[color:var(--surface-container-low)];
     border-color: var(--hairline);
   }
   .card {
     background: var(--surface);
     border: 1px solid var(--hairline);
-    border-radius: var(--radius);
-    transition: border-color 140ms var(--ease);
+    border-radius: var(--radius-xl);
+    box-shadow: none;
+    transition:
+      border-color 140ms var(--ease),
+      background 140ms var(--ease);
   }
-  .card-raised {
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius);
-    box-shadow: var(--sh-1);
-  }
-  .card-inset {
-    background: var(--surface-inset);
-    border-radius: var(--radius);
-  }
-
   /* ── Fields ── */
   .field {
     display: inline-flex;
     align-items: center;
-    height: 30px;
-    padding: 0 10px;
-    background: var(--surface-inset);
-    border: 1px solid transparent;
-    border-radius: 7px;
-    font-size: 12.5px;
-    transition: background 120ms, border-color 120ms;
+    height: 36px;
+    padding: 0 12px;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font-size: 14px;
+    box-shadow: none;
+    transition:
+      background 120ms,
+      border-color 120ms,
+      box-shadow 120ms;
   }
   .field:focus-within {
     background: var(--surface);
-    border-color: var(--hairline-strong);
+    border-color: var(--action);
+    box-shadow: 0 0 0 2px var(--accent-soft);
   }
   .field input {
     flex: 1;
@@ -400,296 +431,384 @@ a {
   }
 
   .field-shell {
-    @apply rounded-[7px] border px-3 py-2;
-    background: var(--surface-inset);
-    border-color: transparent;
+    @apply rounded-[4px] border px-3 py-2;
+    background: var(--surface);
+    border-color: var(--border-soft);
+    box-shadow: none;
     transition:
       border-color 120ms ease,
-      background 120ms ease;
+      background 120ms ease,
+      box-shadow 120ms ease;
   }
   .field-shell:hover {
-    border-color: var(--hairline);
+    border-color: var(--border-mid);
   }
   .field-shell:focus-within {
     background: var(--surface);
-    border-color: var(--hairline-strong);
+    border-color: var(--action);
+    box-shadow: 0 0 0 2px var(--accent-soft);
     outline: none;
   }
   .field-shell--active {
     background: var(--surface);
-    border-color: var(--hairline-strong);
+    border-color: var(--action);
   }
 
-  /* ── Buttons (new Things-3 style) ── */
+  /* ──────────────────────────────────────────────────────────
+     Buttons — DESIGN.md §6.
+     Five canonical variants: .btn-primary, .btn-secondary,
+     .btn-ghost, .btn-danger, .btn-sm. The .btn base is shared.
+     Legacy `.button-*` aliases remain below for compat; they
+     mirror the new style and will be removed in Layer 1b.
+     ────────────────────────────────────────────────────────── */
   .btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 30px;
-    padding: 0 12px;
+    height: 36px;
+    padding: 0 16px;
     background: var(--surface);
-    border: 1px solid var(--hairline-strong);
-    border-radius: 7px;
-    font-size: 12.5px;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    font-size: 14px;
     font-weight: 500;
     color: var(--ink);
     cursor: pointer;
+    box-shadow: none;
     transition:
       background 120ms var(--ease),
-      border-color 120ms var(--ease);
+      border-color 120ms var(--ease),
+      color 120ms var(--ease);
     white-space: nowrap;
   }
   .btn:hover {
-    background: var(--surface-inset);
+    background: var(--surface-container-low);
+    border-color: var(--border-mid);
+    color: var(--ink);
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
   .btn-sm {
-    height: 26px;
-    padding: 0 9px;
+    height: 28px;
+    padding: 0 12px;
     font-size: 12px;
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
   }
   .btn-lg {
-    height: 36px;
-    padding: 0 16px;
-    font-size: 13px;
-    border-radius: 8px;
+    height: 40px;
+    padding: 0 20px;
+    font-size: 14px;
+    border-radius: var(--radius-lg);
   }
 
   .btn-primary {
-    background: var(--ink);
+    background: var(--action);
     color: #fff;
-    border-color: var(--ink);
+    border-color: var(--action);
   }
   .btn-primary:hover {
-    background: #000;
+    background: var(--action-hover);
+    border-color: var(--action-hover);
+    color: #fff;
   }
 
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--ink);
+    border-color: var(--border-soft);
+  }
+  .btn-secondary:hover {
+    background: var(--surface-container-low);
+    border-color: var(--border-mid);
+  }
+
+  /* .btn-accent retained as alias to .btn-primary. */
   .btn-accent {
-    background: var(--accent);
+    background: var(--action);
     color: #fff;
-    border-color: var(--accent);
+    border-color: var(--action);
+  }
+  .btn-accent:hover {
+    background: var(--action-hover);
+    border-color: var(--action-hover);
   }
 
   .btn-ghost {
     background: transparent;
     border-color: transparent;
     color: var(--ink-2);
+    box-shadow: none;
   }
   .btn-ghost:hover {
-    background: var(--surface-inset);
+    background: var(--surface-container-low);
     color: var(--ink);
   }
 
   .btn-danger {
-    color: var(--danger);
-    border-color: transparent;
-    background: transparent;
+    color: #fff;
+    border-color: var(--danger);
+    background: var(--danger);
+    box-shadow: none;
   }
   .btn-danger:hover {
-    background: var(--danger-soft);
+    background: #a41717;
+    border-color: #a41717;
   }
 
   .btn-icon {
     padding: 0;
-    width: 26px;
+    width: 36px;
     justify-content: center;
   }
   .btn-icon.btn-sm {
-    width: 24px;
+    width: 28px;
   }
 
-  /* ── Legacy button classes — retuned to 2026 palette ── */
+  /* ──────────────────────────────────────────────────────────
+     DEPRECATED — `.button-*` legacy aliases. Existing pages
+     call these. They mirror the new `.btn-*` family so the
+     visual output matches the new direction during migration.
+     Remove in Layer 1b.
+     ────────────────────────────────────────────────────────── */
   .button-secondary {
-    @apply rounded-[7px] border px-3 py-[7px] text-[12.5px] font-medium;
-    border-color: var(--hairline-strong);
+    @apply rounded-[8px] border px-4 py-[8px] text-[14px] font-medium;
+    border-color: var(--border-soft);
     background: var(--surface);
     color: var(--ink);
+    box-shadow: none;
     transition:
       background 120ms ease,
       border-color 120ms ease;
   }
   .button-secondary:hover {
-    background: var(--surface-inset);
+    background: var(--surface-container-low);
+    border-color: var(--border-mid);
   }
   .button-secondary:active {
-    background: var(--surface-inset);
+    background: var(--surface-container);
   }
   .button-secondary:focus-visible {
-    outline: 2px solid var(--ink);
-    outline-offset: 1px;
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
   }
 
   .button-primary {
-    @apply rounded-[7px] px-3 py-[7px] text-[12.5px] font-medium;
-    background: var(--ink);
+    @apply rounded-[8px] px-4 py-[8px] text-[14px] font-medium;
+    background: var(--action);
     color: #fff;
-    border: 1px solid var(--ink);
+    border: 1px solid var(--action);
     transition: background 120ms ease;
   }
   .button-primary:hover {
-    background: #000;
+    background: var(--action-hover);
+    border-color: var(--action-hover);
   }
   .button-primary:active {
-    background: #000;
+    background: var(--action-hover);
   }
   .button-primary:focus-visible {
-    outline: 2px solid var(--ink);
-    outline-offset: 1px;
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
   }
 
   .button-danger {
-    @apply rounded-[7px] border px-3 py-[7px] text-[12.5px] font-medium;
-    border-color: transparent;
-    background: var(--danger-soft);
-    color: var(--danger);
+    @apply rounded-[8px] border px-4 py-[8px] text-[14px] font-medium;
+    border-color: var(--danger);
+    background: var(--danger);
+    color: #fff;
     transition: background 120ms ease;
   }
   .button-danger:hover {
-    background: #f7d7d7;
+    background: #a41717;
+    border-color: #a41717;
   }
   .button-danger:active {
-    background: #f3caca;
+    background: #8f1414;
   }
   .button-danger:focus-visible {
     outline: 2px solid var(--danger);
-    outline-offset: 1px;
+    outline-offset: 2px;
   }
 
   .button-success {
-    @apply rounded-[7px] border px-3 py-[7px] text-[12.5px] font-medium;
-    border-color: transparent;
-    background: var(--ok-soft);
-    color: var(--ok);
+    @apply rounded-[8px] border px-4 py-[8px] text-[14px] font-medium;
+    border-color: var(--action);
+    background: var(--action);
+    color: #fff;
     transition: background 120ms ease;
   }
   .button-success:hover {
-    background: #d9efdf;
+    background: var(--action-hover);
+    border-color: var(--action-hover);
   }
   .button-success:active {
-    background: #caead1;
+    background: var(--action-hover);
   }
   .button-success:focus-visible {
-    outline: 2px solid var(--ok);
-    outline-offset: 1px;
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
   }
 
-  /* ── Chips (pill tags) ── */
+  /* ──────────────────────────────────────────────────────────
+     Chips — DESIGN.md §6.StatusBadge.
+     Height 20, padding 0 8, radius full, utility-micro text.
+     Neutral chip uses transparent background. Semantic variants
+     tint only when the state is beyond "idle / synced".
+     ────────────────────────────────────────────────────────── */
   .chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 22px;
+    height: 20px;
     padding: 0 8px;
-    background: var(--surface-inset);
-    border-radius: 11px;
-    font-size: 11.5px;
+    background: transparent;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-full);
+    font-size: 12px;
     font-weight: 500;
-    color: var(--ink-2);
+    color: var(--ink-3);
     white-space: nowrap;
   }
   .chip-dot {
     width: 6px;
     height: 6px;
-    border-radius: 3px;
+    border-radius: var(--radius-full);
     background: currentColor;
   }
   .chip-accent {
-    background: var(--accent-soft);
-    color: var(--accent-ink);
+    background: transparent;
+    color: var(--action);
+    border-color: transparent;
   }
   .chip-ok {
-    background: var(--ok-soft);
+    background: transparent;
     color: var(--ok);
+    border-color: transparent;
   }
   .chip-warn {
-    background: var(--warn-soft);
+    background: transparent;
     color: var(--warn);
+    border-color: transparent;
   }
   .chip-danger {
     background: var(--danger-soft);
     color: var(--danger);
+    border-color: transparent;
   }
   .chip-info {
-    background: var(--info-soft);
-    color: var(--info);
+    background: transparent;
+    color: var(--action);
+    border-color: transparent;
   }
   .chip-ghost {
-    background: transparent;
-    border: 1px solid var(--hairline-strong);
-    color: var(--ink-2);
+    background: var(--surface-container);
+    border: 1px solid transparent;
+    color: var(--ink-3);
   }
 
-  /* ── Sidebar nav items (Things-3 style) ── */
+  /* ──────────────────────────────────────────────────────────
+     Sidebar nav items — DESIGN.md §4.
+     14/500 ink-2, 8px radius hover fill surface-container-low,
+     selected state is action-blue text (no fill).
+     ────────────────────────────────────────────────────────── */
   .side-item {
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 13px;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-lg);
+    font-size: 14px;
     font-weight: 500;
     color: var(--ink-2);
     cursor: pointer;
     user-select: none;
     transition:
-      background 100ms,
-      color 100ms;
+      background 100ms var(--ease),
+      color 100ms var(--ease);
     position: relative;
+    text-align: left;
+    width: 100%;
+    background: transparent;
+    border: none;
   }
   .side-item:hover {
-    background: rgba(0, 0, 0, 0.035);
+    background: var(--surface-container-low);
     color: var(--ink);
   }
   .side-item.active {
-    background: rgba(0, 0, 0, 0.05);
-    color: var(--ink);
+    color: var(--action);
+    background: transparent;
   }
+  /* No rail bar. Active state is carried by the text color alone. */
   .side-item.active::before {
-    content: "";
-    position: absolute;
-    left: -4px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 14px;
-    border-radius: 2px;
-    background: var(--accent);
+    content: none;
   }
   .side-item .side-icon {
     flex-shrink: 0;
   }
   .side-item .side-count {
     margin-left: auto;
-    font-size: 11px;
+    font-size: 12px;
     color: var(--ink-4);
     font-variant-numeric: tabular-nums;
+    font-weight: 500;
   }
   .side-item.active .side-count {
-    color: var(--ink-3);
+    color: var(--action);
+  }
+  .side-item .side-shortcut {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--ink-4);
+    font-family: var(--font-mono);
+    letter-spacing: 0;
+    opacity: 0;
+    transition: opacity 120ms var(--ease);
+  }
+  .side-item:hover .side-shortcut,
+  .side-item:focus-visible .side-shortcut {
+    opacity: 1;
   }
 
-  /* ── Capacity bar ── */
+  /* ──────────────────────────────────────────────────────────
+     Capacity bar — DESIGN.md §6.CapacityBar.
+     6px height, full radius, track surface-container, fill
+     ink (<80%), warn (80-95%), danger (>95%). Never blue.
+     The `--drive-color` override is kept for drive-scoped
+     fills on DrivesPage where per-drive identity is the signal.
+     ────────────────────────────────────────────────────────── */
   .cap-bar {
     position: relative;
     width: 100%;
     height: 6px;
-    background: var(--surface-inset);
-    border-radius: 3px;
+    background: var(--surface-container);
+    border-radius: var(--radius-full);
     overflow: hidden;
   }
   .cap-bar.lg {
     height: 8px;
-    border-radius: 4px;
   }
   .cap-bar.xl {
     height: 10px;
-    border-radius: 5px;
   }
   .cap-used {
     position: absolute;
     inset: 0 auto 0 0;
-    background: var(--drive-color, var(--accent));
+    background: var(--drive-color, var(--ink));
     border-radius: inherit;
+  }
+  .cap-used[data-level="warn"] {
+    background: var(--warn);
+  }
+  .cap-used[data-level="danger"] {
+    background: var(--danger);
   }
   .cap-reserved {
     position: absolute;
@@ -697,48 +816,132 @@ a {
     bottom: 0;
     background: repeating-linear-gradient(
       45deg,
-      rgba(var(--accent-rgb), 0.4),
-      rgba(var(--accent-rgb), 0.4) 3px,
+      var(--ink-4),
+      var(--ink-4) 3px,
       transparent 3px,
       transparent 6px
     );
+    opacity: 0.4;
   }
 
   /* ── Drive dot ── */
   .drive-dot {
     width: 10px;
     height: 10px;
-    border-radius: 5px;
+    border-radius: var(--radius-full);
     background: var(--drive-color, var(--ink-3));
     flex-shrink: 0;
     display: inline-block;
+  }
+
+  /* ── ActivityTimelineRow — DESIGN.md §6 ──
+     Single row cadence used by the Inbox for last activity + recent
+     projects. 28px icon tile, 17/400 primary, 14/400 ink-3 secondary,
+     utility-micro timestamp on the right. Hover fills to
+     --surface-container-low; no shadow, no border, no translate. ── */
+  .activity-row {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto 12px;
+    align-items: center;
+    column-gap: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    color: var(--ink);
+    text-decoration: none;
+    transition: background 140ms var(--ease);
+  }
+  .activity-row:hover {
+    background: var(--surface-container-low);
+  }
+  .activity-row:focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+    background: var(--surface-container-low);
+  }
+  .activity-row--static,
+  .activity-row--static:hover,
+  .activity-row--static:focus-visible {
+    background: transparent;
+    cursor: default;
+    outline: none;
+  }
+  .activity-row__tile {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--surface-container-low);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .activity-row__body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+  }
+  .activity-row__primary {
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .activity-row__secondary {
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--ink-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+  }
+  .activity-row__meta {
+    font-size: 12px;
+    color: var(--ink-3);
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .activity-row__chevron {
+    opacity: 0;
+    transition: opacity 140ms var(--ease);
+  }
+  .activity-row:hover .activity-row__chevron,
+  .activity-row:focus-visible .activity-row__chevron {
+    opacity: 1;
   }
 
   /* ── Keyboard shortcut hint ── */
   .kbd {
     margin-left: auto;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
-    color: var(--ink-4);
-    background: rgba(0, 0, 0, 0.04);
-    padding: 2px 5px;
-    border-radius: 4px;
-    letter-spacing: 0.02em;
+    color: var(--ink-3);
+    background: var(--surface-container-low);
+    border: 1px solid var(--hairline);
+    padding: 2px 6px;
+    border-radius: var(--radius);
+    letter-spacing: 0;
   }
 
-  /* ── Link card — interactive card with consistent focus ring ── */
+  /* ── Link card focus ring ── */
   .link-card:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+    box-shadow: none;
   }
 
   /* ── Search suggestion item hover ── */
   .search-suggestion-item:hover {
-    background: var(--surface-inset);
+    background: var(--surface-container-low);
   }
 
-  /* ── Keyboard shortcut key appearance ── */
   kbd {
     font-family: inherit;
   }
@@ -746,16 +949,17 @@ a {
   /* ── Skeleton loader ── */
   .skeleton {
     background: var(--color-skeleton);
-    border-radius: 4px;
+    border-radius: var(--radius);
     animation: skeleton-pulse 1.5s ease-in-out infinite;
   }
 
-  /* ── Button press micro-interaction ── */
+  /* ── Button press micro-interaction. DESIGN.md §7 allows
+     small affordances but not scale-on-hover. Keep at 0.98. ── */
   .button-secondary:active,
   .button-primary:active,
   .button-danger:active,
   .button-success:active {
-    transform: scale(0.97);
+    transform: scale(0.98);
     transition:
       background var(--duration-instant) ease,
       transform var(--duration-instant) ease;
@@ -768,34 +972,39 @@ a {
 
   /* ── Project row hover (flat list style) ── */
   .proj-row {
-    transition: background 100ms;
+    transition:
+      background 100ms,
+      border-color 100ms;
   }
   .proj-row:hover {
-    background: var(--surface-inset);
+    background: var(--surface-container-low);
+  }
+  .proj-row[aria-selected="true"] {
+    background: var(--surface-container);
   }
 
   /* ── Inbox attention tile hover ── */
   .attention-tile:hover {
-    border-color: var(--hairline-strong);
+    border-color: var(--border-soft);
   }
   .attention-tile:focus-visible {
-    outline: none;
-    border-color: var(--ink);
-    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+    box-shadow: none;
   }
 }
 
 /* ── Scrollbars ── */
 .scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
+  scrollbar-color: var(--border-soft) transparent;
 }
 .scroll::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 .scroll::-webkit-scrollbar-thumb {
-  background: var(--hairline-strong);
+  background: var(--border-soft);
   border-radius: 5px;
   border: 3px solid transparent;
   background-clip: padding-box;
@@ -823,7 +1032,7 @@ a {
 @keyframes scaleIn {
   from {
     opacity: 0;
-    transform: scale(0.96) translateY(6px);
+    transform: scale(0.98) translateY(4px);
   }
   to {
     opacity: 1;
@@ -831,7 +1040,7 @@ a {
   }
 }
 .fade-in {
-  animation: fadeIn 200ms var(--ease);
+  animation: fadeIn 180ms var(--ease);
 }
 @keyframes fadeIn {
   from {
@@ -843,19 +1052,19 @@ a {
 }
 
 .pulse-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 5px;
-  background: var(--accent);
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--action);
   animation: pulseDot 1.8s ease-in-out infinite;
 }
 @keyframes pulseDot {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.4);
+    box-shadow: 0 0 0 0 rgba(var(--action-rgb), 0.4);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(var(--accent-rgb), 0);
+    box-shadow: 0 0 0 6px rgba(var(--action-rgb), 0);
   }
 }
 

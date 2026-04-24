@@ -5,8 +5,7 @@ export interface NavItem {
   label: string;
   /**
    * When set, the item renders as a <NavLink to={to}> for active-state styling.
-   * Leave undefined and provide `onClick` for action-style items (e.g. "Scan"
-   * that opens a workflow modal instead of navigating).
+   * Leave undefined and provide `onClick` for action-style items.
    */
   to?: string;
   icon: IconName;
@@ -14,52 +13,60 @@ export interface NavItem {
   count?: number;
   /** Invoked on click when `to` is undefined — for non-route items. */
   onClick?(): void;
-  /** When true, renders an animated pulse dot to signal background activity. */
+  /** When true, renders an animated pulse dot in place of the icon. */
   scanActive?: boolean;
+  /** Optional key shortcut shown on hover (e.g. "⌘1"). */
+  shortcut?: string;
 }
 
 interface SidebarNavProps {
-  /** Primary nav items — the 3 core surfaces: Projects, Drives, Scan. */
+  /** Primary nav items — the core surfaces (Inbox, Projects, Drives). */
   items: NavItem[];
-  /** Secondary items tucked at the bottom — typically just Settings. */
+  /** Secondary items pinned to the bottom — typically Settings. */
   footerItems?: NavItem[];
+  /** Brand label shown as the wordmark. */
+  brandLabel?: string;
 }
 
 /**
- * Things-3 style minimal sidebar. The layout is intentionally spare: a brand
- * mark at the top, a short stack of primary items with a thin accent bar on
- * the active row, flex-spacer, then the footer stack (Settings) pinned to the
- * bottom. No counts badges unless the caller supplies them.
+ * Minimal sidebar. DESIGN.md §4: 256px, surface background, hairline
+ * right edge, wordmark only (no monogram, no sub-label, no boxed brand
+ * tile). Active row is ink → action via `.side-item.active`. Search
+ * lives in the top bar so the sidebar stays quiet and focused on
+ * navigation.
  */
-export function SidebarNav({ items, footerItems = [] }: SidebarNavProps) {
+export function SidebarNav({
+  items,
+  footerItems = [],
+  brandLabel = "Project Catalog"
+}: SidebarNavProps) {
   return (
     <aside
       data-tauri-drag-region
-      className="sticky top-0 hidden h-screen w-[200px] shrink-0 flex-col overflow-y-auto border-r px-[10px] pb-3 pt-[14px] lg:flex"
+      className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r px-3 pb-4 pt-3 lg:flex"
       style={{
         background: "var(--sidebar)",
         borderColor: "var(--hairline)"
       }}
     >
-      {/* Brand — 20×20 black square with an 8×8 white inner square + wordmark */}
-      <div className="flex items-center gap-[9px] pb-[22px] pl-[10px] pr-[10px] pt-[4px]">
+      {/* Drag handle spacer aligned to the top-nav height so the window
+          can be dragged from the whole top edge. */}
+      <div data-tauri-drag-region className="h-5" aria-hidden="true" />
+
+      <div
+        data-tauri-drag-region
+        className="px-3 pb-5 pt-2"
+      >
         <span
-          className="inline-flex h-5 w-5 items-center justify-center rounded-[5px]"
-          style={{ background: "var(--ink)" }}
-          aria-hidden="true"
-        >
-          <span className="h-2 w-2 rounded-[2px]" style={{ background: "#fff" }} />
-        </span>
-        <span
-          className="text-[14px] font-semibold"
+          data-tauri-drag-region
+          className="block truncate text-[15px] font-semibold"
           style={{ color: "var(--ink)", letterSpacing: "-0.01em" }}
         >
-          Index
+          {brandLabel}
         </span>
       </div>
 
-      {/* Primary nav */}
-      <nav className="flex flex-col gap-[2px] pt-1">
+      <nav className="flex flex-col gap-[2px]" aria-label="Primary">
         {items.map((item) => (
           <SideItem key={item.label} item={item} />
         ))}
@@ -67,43 +74,54 @@ export function SidebarNav({ items, footerItems = [] }: SidebarNavProps) {
 
       <div className="flex-1" />
 
-      {/* Footer nav — Settings */}
       {footerItems.length > 0 ? (
-        <div className="flex flex-col gap-[2px]">
+        <nav
+          className="flex flex-col gap-[2px] border-t pt-3"
+          style={{ borderColor: "var(--hairline)" }}
+          aria-label="Secondary"
+        >
           {footerItems.map((item) => (
             <SideItem key={item.label} item={item} />
           ))}
-        </div>
+        </nav>
       ) : null}
     </aside>
   );
 }
 
 function SideItem({ item }: { item: NavItem }) {
-  const content = (active: boolean) => (
-    <>
-      {item.scanActive ? (
-        <span className="relative flex h-[17px] w-[17px] shrink-0 items-center justify-center">
-          <span
-            className="absolute inline-flex h-2 w-2 animate-ping rounded-full opacity-60"
-            style={{ background: "var(--accent)" }}
-          />
-          <span
-            className="relative inline-flex h-2 w-2 rounded-full"
-            style={{ background: "var(--accent)" }}
-          />
-        </span>
-      ) : (
-        <Icon
-          name={item.icon}
-          size={17}
-          color={active ? "var(--ink)" : "var(--ink-3)"}
-          className="side-icon"
+  const iconNode = (active: boolean) =>
+    item.scanActive ? (
+      <span className="relative flex h-[17px] w-[17px] shrink-0 items-center justify-center">
+        <span
+          className="absolute inline-flex h-2 w-2 animate-ping rounded-full opacity-60"
+          style={{ background: "var(--action)" }}
         />
-      )}
-      <span>{item.label}</span>
-      {item.count != null ? (
+        <span
+          className="relative inline-flex h-2 w-2 rounded-full"
+          style={{ background: "var(--action)" }}
+        />
+      </span>
+    ) : (
+      <Icon
+        name={item.icon}
+        size={17}
+        color={active ? "var(--action)" : "var(--ink-3)"}
+        className="side-icon"
+      />
+    );
+
+  const inner = (active: boolean) => (
+    <>
+      {iconNode(active)}
+      <span className="truncate">{item.label}</span>
+      {item.count != null && item.count > 0 ? (
         <span className="side-count tnum">{item.count}</span>
+      ) : null}
+      {item.shortcut ? (
+        <span className="side-shortcut tnum" aria-hidden="true">
+          {item.shortcut}
+        </span>
       ) : null}
     </>
   );
@@ -115,14 +133,14 @@ function SideItem({ item }: { item: NavItem }) {
         end={item.to === "/"}
         className={({ isActive }) => "side-item" + (isActive ? " active" : "")}
       >
-        {({ isActive }) => content(isActive)}
+        {({ isActive }) => inner(isActive)}
       </NavLink>
     );
   }
 
   return (
     <button type="button" className="side-item" onClick={item.onClick}>
-      {content(false)}
+      {inner(false)}
     </button>
   );
 }

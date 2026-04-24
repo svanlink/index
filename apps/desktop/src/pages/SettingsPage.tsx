@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { FeedbackNotice, SectionCard } from "./pagePrimitives";
+import { FeedbackNotice } from "./pagePrimitives";
 import { useCatalogStore } from "../app/providers";
 import {
   formatSyncTimestamp,
@@ -13,109 +13,221 @@ import {
 } from "../app/syncHelpers";
 
 // ---------------------------------------------------------------------------
-// SettingsPage
-// ---------------------------------------------------------------------------
+// SettingsPage — DESIGN.md §7
 //
-// Scope trimmed to a single responsibility: show sync state and let the user
-// trigger a manual sync. Previous sections ("Legacy folder type recovery",
-// "Release diagnostics", "Persistence foundation") were developer/migration
-// surfaces that didn't belong in a shipped single-user product:
-//   - Legacy folder recovery: one-shot migration → belongs in a dev script.
-//   - Release diagnostics: env + config inspection → belongs in dev tools.
-//   - Persistence foundation: pure marketing copy, no action.
-// Removing them keeps Settings focused on what the user can actually do.
+// Settings is a focused operations surface, not a dashboard. Three things the
+// user actually needs:
+//   1. Current sync status (one line, state dot + label + mode).
+//   2. The four meta values (pending, failed, last push, last pull).
+//   3. One primary action (Sync now / Retry).
+//
+// Anything else stacks as a single prioritised FeedbackNotice so the page
+// does not fan out into three overlapping messages.
 // ---------------------------------------------------------------------------
+
+type NoticeTone = "success" | "warning" | "error" | "info";
 
 export function SettingsPage() {
   const { syncState, syncNow, isSyncing, startupSyncResult } = useCatalogStore();
   const [feedback, setFeedback] = useState<{
-    tone: "success" | "warning" | "error" | "info";
+    tone: NoticeTone;
     title: string;
     messages: string[];
   } | null>(null);
 
   const enabled = isSyncEnabled(syncState);
   const summaryMessages = useMemo(() => getSyncSummaryMessages(syncState), [syncState]);
-  const startupMessage = useMemo(() => getStartupSyncMessage(startupSyncResult), [startupSyncResult]);
+  const startupMessage = useMemo(
+    () => getStartupSyncMessage(startupSyncResult),
+    [startupSyncResult]
+  );
   const startupTone = useMemo(() => getStartupSyncTone(startupSyncResult), [startupSyncResult]);
+  const summaryTone = getSyncStatusTone(syncState);
+  const syncStatusLabel = enabled ? getSyncStatusLabel(syncState) : "Sync disabled";
+
+  const activeNotice = resolveActiveNotice({
+    feedback,
+    startupMessage,
+    startupTone,
+    enabled,
+    summaryMessages,
+    summaryTone
+  });
 
   async function handleSync() {
     setFeedback(null);
-
     try {
       const result = await syncNow();
       const hasError = Boolean(result.state.lastSyncError);
       setFeedback({
         tone: hasError ? "warning" : "success",
-        title: hasError ? "Manual sync completed with issues" : "Manual sync completed",
+        title: hasError ? "Sync completed with issues" : "Sync completed",
         messages: hasError
           ? [result.state.lastSyncError ?? "Some queue items still need retry."]
           : [
-              `${result.pushed} queued change${result.pushed === 1 ? "" : "s"} pushed successfully.`,
-              `${result.pulled} remote record${result.pulled === 1 ? "" : "s"} merged into the local catalog.`
+              `${result.pushed} queued change${result.pushed === 1 ? "" : "s"} pushed.`,
+              `${result.pulled} remote record${result.pulled === 1 ? "" : "s"} merged.`
             ]
       });
     } catch (error) {
       setFeedback({
         tone: "error",
-        title: "Manual sync failed",
-        messages: [error instanceof Error ? error.message : "The sync cycle did not complete."]
+        title: "Sync failed",
+        messages: [
+          error instanceof Error ? error.message : "The sync cycle did not complete."
+        ]
       });
     }
   }
 
+  const stateDotColor = !enabled
+    ? "var(--ink-4)"
+    : syncState.failedCount > 0
+      ? "var(--danger)"
+      : syncState.pendingCount > 0
+        ? "var(--warn)"
+        : "var(--ok)";
+
+  const primaryActionClass =
+    !enabled
+      ? "btn"
+      : syncState.failedCount > 0
+        ? "btn btn-danger"
+        : "btn btn-primary";
+
   return (
-    <div className="space-y-6">
-      <SectionCard
-        title="Sync status"
-        description="This surface reflects the current Supabase transport state from the local repository and queue."
-        action={
-          <button
-            type="button"
-            className={syncState.failedCount > 0 ? "button-danger" : "button-success"}
-            disabled={!enabled || isSyncing}
-            onClick={() => void handleSync()}
-          >
-            {isSyncing ? "Syncing..." : syncState.failedCount > 0 ? "Retry sync" : "Sync now"}
-          </button>
-        }
-      >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <Metric label="Sync enabled" value={enabled ? "Yes" : "No"} />
-          <Metric label="Current state" value={getSyncStatusLabel(syncState)} />
-          <Metric label="Queue pending" value={String(syncState.pendingCount)} />
-          <Metric label="Queue failed" value={String(syncState.failedCount)} />
-          <Metric label="Last push" value={formatSyncTimestamp(syncState.lastPushAt)} />
-          <Metric label="Last pull" value={formatSyncTimestamp(syncState.lastPullAt)} />
+    <div className="space-y-8 pt-1">
+      {/* Sync status line — the single clearest answer to "is sync OK?".
+          State dot + label + mode, no tile, no pill, no uppercase chip. */}
+      <section className="flex items-center gap-3 pb-6" style={{ borderBottom: "1px solid var(--hairline)" }}>
+        <span
+          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ background: stateDotColor }}
+          aria-hidden="true"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-[17px] font-medium" style={{ color: "var(--ink)" }}>
+            {syncStatusLabel}
+          </div>
+          <div className="mt-0.5 text-[14px]" style={{ color: "var(--ink-3)" }}>
+            {enabled ? "Remote sync enabled" : "Local-only mode"}
+          </div>
         </div>
+        <button
+          type="button"
+          className={primaryActionClass}
+          disabled={!enabled || isSyncing}
+          onClick={() => void handleSync()}
+        >
+          {isSyncing ? "Syncing…" : syncState.failedCount > 0 ? "Retry sync" : "Sync now"}
+        </button>
+      </section>
 
-        <div className="mt-6 space-y-4">
-          <FeedbackNotice
-            tone={getSyncStatusTone(syncState)}
-            title={enabled ? "Transport summary" : "Transport disabled"}
-            messages={summaryMessages}
+      {/* Detail — four meta values as label/value rows. No grid of tiles. */}
+      <section>
+        <h2 className="h-section" style={{ marginBottom: 12 }}>
+          Detail
+        </h2>
+        <dl className="grid gap-y-2" style={{ gridTemplateColumns: "minmax(160px, max-content) 1fr" }}>
+          <MetaField label="Queue pending" value={String(syncState.pendingCount)} />
+          <MetaField
+            label="Queue failed"
+            value={String(syncState.failedCount)}
+            tone={syncState.failedCount > 0 ? "danger" : undefined}
           />
+          <MetaField label="Last push" value={formatSyncTimestamp(syncState.lastPushAt)} />
+          <MetaField label="Last pull" value={formatSyncTimestamp(syncState.lastPullAt)} />
+        </dl>
+      </section>
 
-          {startupMessage ? (
-            <FeedbackNotice
-              tone={startupTone}
-              title="Startup sync"
-              messages={[startupMessage]}
-            />
-          ) : null}
-
-          {feedback ? <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} /> : null}
-        </div>
-      </SectionCard>
+      {activeNotice ? (
+        <section>
+          <FeedbackNotice
+            tone={activeNotice.tone}
+            title={activeNotice.title}
+            messages={activeNotice.messages}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+// ---------------------------------------------------------------------------
+// MetaField — label on the left, value on the right. 14/500 label in ink-3,
+// 14/400 value in ink (or danger when flagged). No uppercase tracking.
+// ---------------------------------------------------------------------------
+
+function MetaField({
+  label,
+  value,
+  tone
+}: {
+  label: string;
+  value: string;
+  tone?: "danger";
+}) {
   return (
-    <div>
-      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-0.5 text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>{value}</p>
-    </div>
+    <>
+      <dt className="text-[14px]" style={{ color: "var(--ink-3)" }}>
+        {label}
+      </dt>
+      <dd
+        className="tnum text-[14px]"
+        style={{
+          color: tone === "danger" ? "var(--danger)" : "var(--ink)",
+          margin: 0
+        }}
+      >
+        {value}
+      </dd>
+    </>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Notice resolution — one notice at most, prioritised.
+// ---------------------------------------------------------------------------
+
+interface NoticeSource {
+  feedback: { tone: NoticeTone; title: string; messages: string[] } | null;
+  startupMessage: string | null;
+  startupTone: NoticeTone;
+  enabled: boolean;
+  summaryMessages: string[];
+  summaryTone: NoticeTone;
+}
+
+function resolveActiveNotice(
+  source: NoticeSource
+): { tone: NoticeTone; title: string; messages: string[] } | null {
+  if (source.feedback) return source.feedback;
+
+  if (source.startupMessage && source.startupTone !== "success") {
+    return {
+      tone: source.startupTone,
+      title: "Startup sync",
+      messages: [source.startupMessage]
+    };
+  }
+
+  // Only surface a summary when disabled or when there is something non-trivial
+  // to report — the "everything is fine" summary would just be noise.
+  if (!source.enabled) {
+    return {
+      tone: source.summaryTone,
+      title: "Transport disabled",
+      messages: source.summaryMessages
+    };
+  }
+
+  if (source.summaryMessages.length > 0 && source.summaryTone !== "success") {
+    return {
+      tone: source.summaryTone,
+      title: "Transport summary",
+      messages: source.summaryMessages
+    };
+  }
+
+  return null;
 }

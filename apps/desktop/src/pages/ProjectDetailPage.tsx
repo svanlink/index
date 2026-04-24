@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { categoryValues, type Category, type FolderType, type ProjectScanEvent } from "@drive-project-catalog/domain";
-
+import { Icon } from "@drive-project-catalog/ui";
 
 import { validateSingleProjectMove } from "../app/catalogValidation";
 import { useCatalogStore } from "../app/providers";
@@ -270,8 +270,24 @@ export function ProjectDetailPage() {
 
   const moveImpactLabel =
     currentProject.sizeBytes === null
-      ? "Unknown size impact"
+      ? "Unknown"
       : formatBytes(currentProject.sizeBytes);
+  const currentDriveName = getDriveName(drives, currentProject.currentDriveId);
+  const targetDriveName = getDriveName(drives, currentProject.targetDriveId);
+  const isMovePending = currentProject.moveStatus === "pending";
+  const relatedProjects = projects
+    .filter((candidate) => {
+      if (candidate.id === currentProject.id) return false;
+      const candidateClient = candidate.correctedClient ?? candidate.parsedClient;
+      const currentClient = currentProject.correctedClient ?? currentProject.parsedClient;
+      return Boolean(currentClient) && candidateClient === currentClient;
+    })
+    .slice(0, 3);
+  const hasClassificationDrift =
+    !isEventsLoading &&
+    events.length > 0 &&
+    events[0]?.observedFolderType != null &&
+    events[0].observedFolderType !== currentProject.folderType;
 
   async function handleDeleteProject() {
     try {
@@ -282,6 +298,10 @@ export function ProjectDetailPage() {
       setFeedback({ tone: "error", title: "Delete failed", messages: [error instanceof Error ? error.message : "The project could not be deleted."] });
     }
   }
+
+  const statusBadges = getProjectStatusBadges(currentProject);
+  const displayClient = currentProject.correctedClient ?? currentProject.parsedClient ?? "No client";
+  const displayDate = formatParsedDate(currentProject.correctedDate ?? currentProject.parsedDate);
 
   return (
     <div className="space-y-6">
@@ -296,244 +316,460 @@ export function ProjectDetailPage() {
         />
       ) : null}
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</h2>
-        <Link to="/projects" className="button-secondary">Back</Link>
+      <div className="card overflow-hidden">
+        <div
+          className="flex flex-wrap items-center gap-2 border-b px-5 py-4"
+          style={{ borderColor: "var(--hairline)" }}
+        >
+          <Link to="/projects" className="btn btn-ghost btn-sm">
+            <Icon name="chevron" size={11} className="rotate-180" />
+            Projects
+          </Link>
+          <div className="flex-1" />
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() =>
+              document
+                .getElementById("project-metadata-card")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          >
+            <Icon name="edit" size={11} />
+            Edit metadata
+          </button>
+          <button type="button" className="btn btn-sm btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+            <Icon name="trash" size={11} />
+            Delete
+          </button>
+        </div>
+
+        <div className="px-6 py-6">
+          <div className="flex flex-wrap items-start gap-5">
+            <div className="min-w-0 flex-1">
+              <div className="eyebrow mono">
+                {displayDate} · {displayClient}
+              </div>
+              <h1 className="h-title" style={{ margin: "6px 0 0" }}>
+                {getProjectName(currentProject)}
+              </h1>
+              <p className="mono mt-2 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                {currentProject.folderPath ?? currentProject.folderName}
+              </p>
+              {statusBadges.length > 0 ? (
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {statusBadges.map((badge) => (
+                    <StatusBadge key={badge} label={badge} />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[14px]"
+              style={{ background: "var(--surface-inset)" }}
+            >
+              <Icon name="folder" size={24} color="var(--ink-2)" />
+            </div>
+          </div>
+
+          <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
+            <MetaField label="Current drive" value={currentDriveName} />
+            <MetaField
+              label={isMovePending ? "Target drive" : "Size"}
+              value={isMovePending ? targetDriveName : formatBytes(currentProject.sizeBytes)}
+              tone={isMovePending ? "accent" : undefined}
+            />
+            <MetaField label="Type" value={getFolderTypeLabel(currentProject.folderType)} />
+            <MetaField label="Category" value={currentProject.category ?? "Uncategorized"} />
+          </dl>
+        </div>
       </div>
 
       {feedback ? (
         <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        {getProjectStatusBadges(project).map((badge) => (
-          <StatusBadge key={badge} label={badge} />
-        ))}
-      </div>
-
-      <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <SectionCard title="Project fields" description="Parsed, corrected, and operational fields shown from the current local record.">
-          <div className="grid gap-4 md:grid-cols-2">
-            <DetailField label="Folder name" value={project.folderName} />
-            <DetailField label="Type" value={getFolderTypeLabel(project.folderType)} />
-            <DetailField label="Parsed date" value={formatParsedDate(project.parsedDate)} />
-            <DetailField label="Category" value={project.category ?? "Uncategorized"} />
-            <DetailField label="Parsed client" value={project.parsedClient ?? "—"} />
-            <DetailField label="Parsed project" value={project.parsedProject ?? "—"} />
-            <DetailField label="Corrected date" value={project.correctedDate ? formatParsedDate(project.correctedDate) : "Not set"} />
-            <DetailField label="Corrected client" value={project.correctedClient ?? "Not set"} />
-            <DetailField label="Corrected project" value={project.correctedProject ?? "Not set"} />
-            <DetailField label="Size" value={formatBytes(project.sizeBytes)} />
-            <DetailField label="Current drive" value={getDriveName(drives, project.currentDriveId)} />
-            <DetailField label="Target drive" value={getDriveName(drives, project.targetDriveId)} />
-            <DetailField label="Last seen" value={formatDate(project.lastSeenAt)} />
-            <DetailField label="Last scanned" value={formatDate(project.lastScannedAt)} />
-            <DetailField label="Source" value={project.isManual ? "Manual project" : "Scanned project"} />
+      {isMovePending ? (
+        <div
+          className="rounded-[16px] border px-5 py-4"
+          style={{
+            borderColor: "var(--accent)",
+            background: "var(--accent-soft)"
+          }}
+        >
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="eyebrow" style={{ color: "var(--accent-ink)" }}>
+                Move in progress
+              </div>
+              <div className="mt-1 text-[14px] font-semibold tracking-[-0.01em]" style={{ color: "var(--ink)" }}>
+                {currentDriveName} → {targetDriveName}
+              </div>
+              <p className="mt-2 text-[12.5px] leading-[1.5]" style={{ color: "var(--ink-2)" }}>
+                {targetDriveName} has reserved {moveImpactLabel} for this move. Drag the folder outside the app, then confirm to update the catalog.
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={isMutating || cancelMoveAction.isPending}
+                onClick={cancelMoveAction.run}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                disabled={isMutating || confirmMoveAction.isPending}
+                onClick={confirmMoveAction.run}
+              >
+                <Icon name="check" size={11} color="currentColor" />
+                Confirm moved
+              </button>
+            </div>
           </div>
-        </SectionCard>
+        </div>
+      ) : null}
 
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <SectionCard
-            title="Edit metadata"
-            description={project.folderType === "personal_folder"
-              ? "Assign structure and correct display values. Folder on disk is never renamed."
-              : "Correct display values. Parsed source fields and folder name on disk are never changed."}
+            title="Parsed fields"
+            description="Values inferred from the folder name on disk. These are immutable — corrections live in the next section."
           >
-            <form className="grid gap-4" onSubmit={handleMetadataSave}>
-              <FormField label="Date override (YYMMDD)">
-                <input
-                  value={metadataForm.correctedDate}
-                  onChange={(event) => setMetadataForm((current) => ({ ...current, correctedDate: event.target.value }))}
-                  className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                  placeholder={project.parsedDate ?? "e.g. 240401"}
-                  maxLength={6}
-                />
-              </FormField>
-              <FormField label="Client override">
-                <input
-                  value={metadataForm.correctedClient}
-                  onChange={(event) => setMetadataForm((current) => ({ ...current, correctedClient: event.target.value }))}
-                  className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                  placeholder={project.parsedClient ?? (project.folderType === "personal_folder" ? "e.g. Sony" : "Leave blank to leave empty")}
-                />
-              </FormField>
-              <FormField label="Project override">
-                <input
-                  value={metadataForm.correctedProject}
-                  onChange={(event) => setMetadataForm((current) => ({ ...current, correctedProject: event.target.value }))}
-                  className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                  placeholder={project.parsedProject ?? (project.folderType === "personal_folder" ? "Leave blank to use folder name" : "Leave blank to leave empty")}
-                />
-              </FormField>
-              <FormField label="Category">
-                <select
-                  value={metadataForm.category}
-                  onChange={(event) => setMetadataForm((current) => ({ ...current, category: event.target.value as Category | "" }))}
-                  className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                >
-                  <option value="">Uncategorized</option>
-                  {categoryValues.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-              {project.folderType === "personal_folder" ? (
-                <FormField label="Folder type">
-                  <select
-                    value={metadataForm.folderType}
-                    onChange={(event) => setMetadataForm((current) => ({ ...current, folderType: event.target.value as FolderType | "" }))}
-                    className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                  >
-                    <option value="personal_folder">Personal folder (keep as-is)</option>
-                    <option value="personal_project">Personal project</option>
-                    <option value="client">Client project</option>
-                  </select>
-                  <p className="mt-1 text-xs" style={{ color: "var(--color-text-muted)" }}>
-                    {metadataForm.folderType === "personal_folder" || metadataForm.folderType === ""
-                      ? "The folder on disk is never renamed. Changing this is permanent and cannot be reversed through this form."
-                      : metadataForm.folderType === "client"
-                        ? "Reclassifying to client project — set a client name and project name above so the entry displays correctly. The folder on disk is not renamed."
-                        : "Reclassifying to personal project — set a project name above so the entry displays correctly. The folder on disk is not renamed."}
-                  </p>
-                </FormField>
-              ) : null}
-              <div className="flex justify-end">
-                <button type="submit" className="button-secondary" disabled={metadataMutation.isPending || isMutating}>
-                  {metadataMutation.isConfirmed ? "Saved ✓" : metadataMutation.isPending ? "Saving…" : "Save corrections"}
-                </button>
-              </div>
-            </form>
+            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              <MetaField label="Date" value={formatParsedDate(currentProject.parsedDate)} />
+              <MetaField label="Client" value={currentProject.parsedClient ?? "—"} />
+              <MetaField label="Project" value={currentProject.parsedProject ?? "—"} />
+              <MetaField label="Folder name" value={currentProject.folderName} mono />
+            </dl>
           </SectionCard>
 
-          <SectionCard title="Move overview" description="Plan moves virtually, reserve incoming space, then confirm after the physical folder move happens outside the app.">
-            <div className="grid gap-4 md:grid-cols-3">
-              <DetailField label="Current" value={getDriveName(drives, project.currentDriveId)} />
-              <DetailField label="Target" value={getDriveName(drives, project.targetDriveId)} />
-              <DetailField label="Impact" value={moveImpactLabel} />
-            </div>
-
-            <form className="mt-5 grid gap-4" onSubmit={handlePlanMove}>
-              <FormField label="Target drive">
-                <select
-                  value={targetDriveId}
-                  onChange={(event) => setTargetDriveId(event.target.value)}
-                  className="field-shell w-full bg-transparent px-4 py-3 outline-none"
-                >
-                  <option value="">Select a drive</option>
-                  {drives
-                    .filter((drive) => drive.id !== project.currentDriveId)
-                    .map((drive) => (
-                      <option key={drive.id} value={drive.id}>
-                        {drive.displayName}
-                      </option>
-                    ))}
-                </select>
-              </FormField>
-              {moveValidation.errors.length > 0 ? (
-                <FeedbackNotice tone="error" title="Move validation" messages={moveValidation.errors} />
-              ) : null}
-              {moveValidation.warnings.length > 0 ? (
-                <FeedbackNotice tone="warning" title="Move cautions" messages={moveValidation.warnings} />
-              ) : null}
-              {project.sizeBytes === null ? (
-                <p className="text-sm" style={{ color: "var(--color-text-muted)" }}>
-                  This project has an unknown size. The target drive will still reserve an unknown incoming impact state.
-                </p>
-              ) : null}
-              <div className="grid gap-3 sm:grid-cols-3">
-                <button type="submit" className="button-secondary" disabled={!targetDriveId || isMutating}>
-                  Set target drive
-                </button>
-                <button
-                  type="button"
-                  className="button-success"
-                  disabled={project.moveStatus !== "pending" || isMutating || confirmMoveAction.isPending}
-                  onClick={confirmMoveAction.run}
-                >
-                  Confirm moved
-                </button>
-                <button
-                  type="button"
-                  className="button-danger"
-                  disabled={project.moveStatus !== "pending" || isMutating || cancelMoveAction.isPending}
-                  onClick={cancelMoveAction.run}
-                >
-                  Cancel move
-                </button>
+          <SectionCard
+            title="Scan activity"
+            description="Observed classifications and timestamps stored from scans of this project."
+          >
+            {hasClassificationDrift ? (
+              <div className="mb-4">
+                <FeedbackNotice
+                  tone="info"
+                  title="Classification drift detected"
+                  messages={[
+                    `Most recent scan classified this folder as "${getFolderTypeLabel(events[0].observedFolderType!)}", but the stored type is "${getFolderTypeLabel(currentProject.folderType)}".`,
+                    "The stored type is preserved. Use the Edit metadata form to reclassify if needed."
+                  ]}
+                />
               </div>
-            </form>
-          </SectionCard>
-
-          <SectionCard title="Scan observations" description="Observed folder classifications and timestamps stored in the local catalog.">
-            {!isEventsLoading && events.length > 0 && events[0]?.observedFolderType != null && events[0].observedFolderType !== project.folderType ? (
-              <FeedbackNotice
-                tone="info"
-                title="Classification drift detected"
-                messages={[
-                  `Most recent scan classified this folder as "${getFolderTypeLabel(events[0].observedFolderType)}", but the stored type is "${getFolderTypeLabel(project.folderType)}".`,
-                  "The stored type is preserved. Use the Edit metadata form to reclassify if needed."
-                ]}
-              />
             ) : null}
+            <dl className="mb-4 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+              <MetaField label="Last seen" value={formatDate(currentProject.lastSeenAt)} />
+              <MetaField label="Last scanned" value={formatDate(currentProject.lastScannedAt)} />
+              <MetaField label="Source" value={currentProject.isManual ? "Manual entry" : "Scanned"} />
+            </dl>
             {isEventsLoading ? (
               <LoadingState label="Loading observations" />
             ) : events.length === 0 ? (
-              <EmptyState title="No observations yet" description="This project has no recorded scan events in the local catalog." />
+              <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
+                No scan observations yet.
+              </p>
             ) : (
-              <div className="space-y-3">
-                {events.map((event) => (
-                  <div key={event.id} className="border-b py-2.5 last:border-b-0" style={{ borderColor: "var(--color-border)" }}>
-                    <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{event.observedFolderName}</p>
-                    <div className="flex gap-3 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                      <span>{event.observedDriveName}</span>
-                      {event.observedFolderType != null ? <span>{getFolderTypeLabel(event.observedFolderType)}</span> : null}
-                      <span>{formatDate(event.observedAt)}</span>
+              <ActivityTimeline events={events} />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Related"
+            description="Other projects from the same client in the current catalog."
+          >
+            {relatedProjects.length === 0 ? (
+              <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
+                Nothing from this client yet.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-px">
+                {relatedProjects.map((relatedProject) => (
+                  <Link
+                    key={relatedProject.id}
+                    to={`/projects/${relatedProject.id}`}
+                    className="link-card group flex items-center justify-between rounded-[10px] px-3 py-2.5 transition-colors hover:bg-[color:var(--surface-inset)]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium" style={{ color: "var(--ink)" }}>
+                        {getProjectName(relatedProject)}
+                      </p>
+                      <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+                        {formatParsedDate(relatedProject.correctedDate ?? relatedProject.parsedDate)} · {formatBytes(relatedProject.sizeBytes)}
+                      </p>
                     </div>
-                  </div>
+                    <Icon name="chevron" size={12} color="var(--ink-4)" />
+                  </Link>
                 ))}
               </div>
             )}
           </SectionCard>
         </div>
-      </section>
 
-      {/* Danger zone — separated from primary actions */}
-      <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--color-border)" }}>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-soft)" }}>Danger zone</p>
-        <div className="mt-3 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>Delete project</p>
-            <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              Permanently removes this project from the catalog. This cannot be undone.
-            </p>
+        <div className="space-y-6">
+          <div id="project-metadata-card">
+            <SectionCard
+              title="Corrections"
+              description={
+                currentProject.folderType === "personal_folder"
+                  ? "Assign structure and correct display values. The folder on disk is never renamed."
+                  : "Override parsed fields. The folder on disk is never renamed."
+              }
+            >
+              <form className="grid gap-4" onSubmit={handleMetadataSave}>
+                <FormField label="Date">
+                  <input
+                    value={metadataForm.correctedDate}
+                    onChange={(event) => setMetadataForm((current) => ({ ...current, correctedDate: event.target.value }))}
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    placeholder={currentProject.parsedDate ?? "YYMMDD, e.g. 240401"}
+                    maxLength={6}
+                  />
+                </FormField>
+                <FormField label="Client">
+                  <input
+                    value={metadataForm.correctedClient}
+                    onChange={(event) => setMetadataForm((current) => ({ ...current, correctedClient: event.target.value }))}
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    placeholder={currentProject.parsedClient ?? (currentProject.folderType === "personal_folder" ? "e.g. Sony" : "Leave blank to keep empty")}
+                  />
+                </FormField>
+                <FormField label="Project">
+                  <input
+                    value={metadataForm.correctedProject}
+                    onChange={(event) => setMetadataForm((current) => ({ ...current, correctedProject: event.target.value }))}
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    placeholder={currentProject.parsedProject ?? (currentProject.folderType === "personal_folder" ? "Leave blank to use folder name" : "Leave blank to keep empty")}
+                  />
+                </FormField>
+                <FormField label="Category">
+                  <select
+                    value={metadataForm.category}
+                    onChange={(event) => setMetadataForm((current) => ({ ...current, category: event.target.value as Category | "" }))}
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                  >
+                    <option value="">Uncategorized</option>
+                    {categoryValues.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+                {currentProject.folderType === "personal_folder" ? (
+                  <FormField label="Folder type">
+                    <select
+                      value={metadataForm.folderType}
+                      onChange={(event) => setMetadataForm((current) => ({ ...current, folderType: event.target.value as FolderType | "" }))}
+                      className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    >
+                      <option value="personal_folder">Personal folder (keep as-is)</option>
+                      <option value="personal_project">Personal project</option>
+                      <option value="client">Client project</option>
+                    </select>
+                    <p className="mt-1.5 text-[11.5px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                      {metadataForm.folderType === "personal_folder" || metadataForm.folderType === ""
+                        ? "The folder on disk is never renamed. Changing this is permanent and cannot be reversed through this form."
+                        : metadataForm.folderType === "client"
+                          ? "Reclassifying to client project — set a client name and project name above so the entry displays correctly."
+                          : "Reclassifying to personal project — set a project name above so the entry displays correctly."}
+                    </p>
+                  </FormField>
+                ) : null}
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  {metadataMutation.isConfirmed ? (
+                    <span className="text-[11.5px] tnum" style={{ color: "var(--ink-3)" }}>
+                      Saved ✓
+                    </span>
+                  ) : null}
+                  <button
+                    type="submit"
+                    className="btn btn-sm btn-primary"
+                    disabled={metadataMutation.isPending || isMutating}
+                  >
+                    {metadataMutation.isPending ? "Saving…" : "Save corrections"}
+                  </button>
+                </div>
+              </form>
+            </SectionCard>
           </div>
-          <button type="button" className="button-danger shrink-0" onClick={() => setShowDeleteConfirm(true)}>
-            Delete
-          </button>
+
+          <SectionCard
+            title="Move"
+            description="Plan moves virtually. Target drives reserve incoming space until you confirm the physical move."
+          >
+            <dl className="mb-5 grid gap-x-6 gap-y-3 grid-cols-3">
+              <MetaField label="Current" value={currentDriveName} />
+              <MetaField
+                label="Target"
+                value={isMovePending ? targetDriveName : "—"}
+                tone={isMovePending ? "accent" : undefined}
+              />
+              <MetaField label="Impact" value={moveImpactLabel} />
+            </dl>
+
+            {isMovePending ? (
+              <p className="text-[12.5px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                To replan this move, cancel it first from the rail above.
+              </p>
+            ) : (
+              <form className="grid gap-4" onSubmit={handlePlanMove}>
+                <FormField label="Target drive">
+                  <select
+                    value={targetDriveId}
+                    onChange={(event) => setTargetDriveId(event.target.value)}
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                  >
+                    <option value="">Select a drive</option>
+                    {drives
+                      .filter((drive) => drive.id !== currentProject.currentDriveId)
+                      .map((drive) => (
+                        <option key={drive.id} value={drive.id}>
+                          {drive.displayName}
+                        </option>
+                      ))}
+                  </select>
+                </FormField>
+                {moveValidation.errors.length > 0 ? (
+                  <FeedbackNotice tone="error" title="Move validation" messages={moveValidation.errors} />
+                ) : null}
+                {moveValidation.warnings.length > 0 ? (
+                  <FeedbackNotice tone="warning" title="Move cautions" messages={moveValidation.warnings} />
+                ) : null}
+                {currentProject.sizeBytes === null && targetDriveId ? (
+                  <p className="text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                    This project has an unknown size. The target drive will reserve an unknown incoming impact.
+                  </p>
+                ) : null}
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    className="btn btn-sm btn-primary"
+                    disabled={!targetDriveId || isMutating}
+                  >
+                    Set target drive
+                  </button>
+                </div>
+              </form>
+            )}
+          </SectionCard>
+
+          <div className="card px-5 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold tracking-[-0.01em]" style={{ color: "var(--ink)" }}>
+                  Delete project
+                </p>
+                <p className="mt-1 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                  Permanently removes this project from the catalog. This cannot be undone.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-danger shrink-0"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
 
-function DetailField({ label, value }: { label: string; value: string }) {
+/**
+ * Inline label/value pair used in the identity card, corrections panel, and move panel.
+ * Matches the MetaField pattern in DriveDetailPage and DrivesPage so every detail
+ * surface reads with the same visual rhythm.
+ */
+function MetaField({
+  label,
+  value,
+  tone,
+  mono
+}: {
+  label: string;
+  value: string;
+  tone?: "accent" | "warn";
+  mono?: boolean;
+}) {
+  const valueColor =
+    tone === "accent" ? "var(--accent-ink)" : tone === "warn" ? "var(--warn)" : "var(--ink)";
+
   return (
-    <div>
-      <p className="text-[11px] font-medium" style={{ color: "var(--color-text-soft)" }}>{label}</p>
-      <p className="mt-0.5 text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{value}</p>
+    <div className="min-w-0">
+      <dt
+        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
+        style={{ color: "var(--ink-4)" }}
+      >
+        {label}
+      </dt>
+      <dd
+        className={`tnum truncate text-[13.5px] font-medium ${mono ? "mono" : ""}`}
+        style={{ color: valueColor, marginTop: 2 }}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="space-y-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
+    <label className="block space-y-1.5">
+      <span className="text-[12px] font-medium" style={{ color: "var(--ink-2)" }}>
         {label}
       </span>
       {children}
     </label>
+  );
+}
+
+function ActivityTimeline({ events }: { events: ProjectScanEvent[] }) {
+  return (
+    <div className="relative pl-4">
+      <div
+        className="absolute bottom-1 left-[3px] top-[6px] w-px"
+        style={{ background: "var(--hairline)" }}
+      />
+      <div className="space-y-4">
+        {events.map((event) => (
+          <div key={event.id} className="relative">
+            <span
+              className="absolute -left-4 top-[5px] h-[7px] w-[7px] rounded-full"
+              style={{
+                background:
+                  event.observedFolderType != null ? "var(--accent)" : "var(--ink-3)",
+                boxShadow: "0 0 0 3px var(--surface)"
+              }}
+            />
+            <div className="flex items-center gap-3">
+              <p className="text-[13px] font-medium" style={{ color: "var(--ink)" }}>
+                {event.observedFolderName}
+              </p>
+              <span className="text-[11px] tnum" style={{ color: "var(--ink-4)" }}>
+                {formatDate(event.observedAt)}
+              </span>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-2 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+              <span>{event.observedDriveName}</span>
+              {event.observedFolderType != null ? (
+                <>
+                  <span style={{ color: "var(--ink-4)" }}>·</span>
+                  <span>{getFolderTypeLabel(event.observedFolderType)}</span>
+                </>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

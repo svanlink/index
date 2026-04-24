@@ -4,7 +4,6 @@ import { Icon } from "@drive-project-catalog/ui";
 import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import {
   buildStoragePlanningRows,
-  buildStoragePlanningSummary,
   getDriveHealthLabel,
   type DriveHealthState
 } from "@drive-project-catalog/data";
@@ -19,7 +18,7 @@ import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { ImportFoldersDialog } from "./ImportFoldersDialog";
-import { DriveCardSkeleton, EmptyState, FeedbackNotice, StatusBadge } from "./pagePrimitives";
+import { DriveCardSkeleton, FeedbackNotice, StatusBadge } from "./pagePrimitives";
 import { getDriveColor } from "./driveColor";
 
 // ---------------------------------------------------------------------------
@@ -98,11 +97,9 @@ export function DrivesPage() {
   const [isImporting, setIsImporting] = useState(false);
 
   // Planning rows give us health-ranked ordering (overcommitted → near-capacity
-  // → healthy) and portfolio-level totals. Previously these lived on a separate
-  // /storage route; folding them here means the drives list doubles as the
-  // storage-planning surface.
+  // → healthy). Previously these lived on a separate /storage route; folding
+  // them here means the drives list doubles as the storage-planning surface.
   const planningRows = useMemo(() => buildStoragePlanningRows(drives, projects), [drives, projects]);
-  const planningSummary = useMemo(() => buildStoragePlanningSummary(planningRows, projects), [planningRows, projects]);
 
   // Cmd+N — toggle create form
   useShortcut({ key: "n", meta: true, onTrigger: () => setIsCreateOpen((c) => !c), enabled: !isMutating });
@@ -277,9 +274,8 @@ export function DrivesPage() {
     : importSourcePath
       ? deriveVolumeName(importSourcePath, null)
       : "";
-
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 pt-2">
       {importSourcePath && importFolders ? (
         <ImportFoldersDialog
           sourcePath={importSourcePath}
@@ -299,40 +295,35 @@ export function DrivesPage() {
         />
       ) : null}
 
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <div className="eyebrow">Storage</div>
-          <h1 className="h-title mt-1">Drives</h1>
-          {drives.length > 0 ? (
-            <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-              {planningSummary.totalDrives} {planningSummary.totalDrives === 1 ? "drive" : "drives"}
-              {planningSummary.totalReservedIncomingBytes > 0
-                ? ` · ${formatBytes(planningSummary.totalReservedIncomingBytes)} reserved`
-                : ""}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
+      {/* DESIGN.md §7: no 56px hero on list pages, no 4-tile KPI grid.
+          Breadcrumb in the top nav already names the section. Page opens
+          directly into the actions + inventory. */}
+      {!isLoading && drives.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             className="btn btn-sm"
             onClick={() => setIsCreateOpen((c) => !c)}
           >
-            <Icon name="plus" size={12} />
-            {isCreateOpen ? "Discard" : "Add drive"}
+            <Icon name="plus" size={12} color="currentColor" />
+            {isCreateOpen ? "Discard" : "Add manually"}
           </button>
           <button
             type="button"
             className="btn btn-sm btn-primary"
             onClick={() => void runImportFromVolume()}
             disabled={!canUseImport || isPickingImport || isImporting || isMutating}
-            title={canUseImport ? undefined : "The native volume picker is only available in the desktop app."}
+            title={
+              canUseImport
+                ? undefined
+                : "The native volume picker is only available in the desktop app."
+            }
           >
-            <Icon name="scan" size={12} color="#fff" />
+            <Icon name="scan" size={12} color="currentColor" />
             {isPickingImport ? "Opening…" : "Scan connected drive"}
           </button>
         </div>
-      </div>
+      ) : null}
 
       {feedback ? (
         <FeedbackNotice
@@ -340,15 +331,6 @@ export function DrivesPage() {
           title={feedback.title}
           messages={feedback.messages}
         />
-      ) : null}
-
-      {!isLoading && drives.length > 0 ? (
-        <div className="flex items-center gap-8">
-          <SummaryCard label="Drives" value={String(planningSummary.totalDrives)} />
-          <SummaryCard label="Overcommitted" value={String(planningSummary.overcommittedCount)} />
-          <SummaryCard label="Unknown impact" value={String(planningSummary.unknownImpactCount)} />
-          <SummaryCard label="Reserved" value={formatBytes(planningSummary.totalReservedIncomingBytes)} />
-        </div>
       ) : null}
 
       {isCreateOpen ? (
@@ -365,53 +347,67 @@ export function DrivesPage() {
         <div className="grid gap-5 lg:grid-cols-2" aria-busy="true" aria-label="Loading drives">
           {[0, 1, 2, 3].map((i) => <DriveCardSkeleton key={i} />)}
         </div>
-      ) : planningRows.length === 0 ? (
-        <EmptyState
-          title="No drives in catalog"
-          description="Point the app at a mounted volume to create a drive and pull in its top-level folders in one step — or add a drive manually."
-          action={
-            <div className="flex flex-wrap items-center justify-center gap-2">
+      ) : planningRows.length === 0 && !isCreateOpen ? (
+        <div className="flex items-start pt-6">
+          <div style={{ maxWidth: 520 }}>
+            <span
+              className="mb-5 inline-flex h-9 w-9 items-center justify-center rounded-[10px]"
+              style={{ background: "var(--surface-container-low)" }}
+              aria-hidden="true"
+            >
+              <Icon name="hardDrive" size={18} color="var(--ink-2)" />
+            </span>
+            <h2
+              className="text-[28px] font-semibold leading-tight"
+              style={{ color: "var(--ink)", letterSpacing: "-0.01em", margin: 0 }}
+            >
+              Add your first drive.
+            </h2>
+            <p
+              className="mt-3 text-[17px] leading-[1.47]"
+              style={{ color: "var(--ink-2)", margin: 0 }}
+            >
+              Scanning a connected drive creates the drive record and imports its top-level
+              folders in one step. Add manually if the volume isn&rsquo;t mounted.
+            </p>
+            <div className="mt-6 flex items-center gap-2">
               <button
                 type="button"
-                className="btn btn-sm btn-primary"
+                className="btn btn-primary"
                 onClick={() => void runImportFromVolume()}
                 disabled={!canUseImport || isPickingImport || isImporting || isMutating}
               >
-                <Icon name="scan" size={12} color="#fff" />
+                <Icon name="scan" size={13} color="currentColor" />
                 {isPickingImport ? "Opening…" : "Scan connected drive"}
               </button>
               <button
                 type="button"
-                className="btn btn-sm"
+                className="btn"
                 onClick={() => setIsCreateOpen(true)}
               >
-                Add drive manually
+                Add manually
               </button>
             </div>
-          }
-        />
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {planningRows.map((row) => (
-            <DriveCard
-              key={row.drive.id}
-              drive={row.drive}
-              projectCount={projectCounts[row.drive.id] ?? 0}
-              scanSession={getDriveScanSession(row.drive, scanSessions)}
-              health={row.health}
-            />
-          ))}
+          </div>
         </div>
+      ) : (
+        <section className="space-y-3">
+          <h2 className="h-section" style={{ margin: 0 }}>
+            Drive inventory
+          </h2>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {planningRows.map((row) => (
+              <DriveCard
+                key={row.drive.id}
+                drive={row.drive}
+                projectCount={projectCounts[row.drive.id] ?? 0}
+                scanSession={getDriveScanSession(row.drive, scanSessions)}
+                health={row.health}
+              />
+            ))}
+          </div>
+        </section>
       )}
-    </div>
-  );
-}
-
-function SummaryCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="eyebrow">{label}</p>
-      <p className="mt-0.5 text-[18px] font-semibold tabular-nums" style={{ color: "var(--ink)" }}>{value}</p>
     </div>
   );
 }
@@ -476,7 +472,7 @@ function DriveCard({
 
   return (
     <article
-      className="card cursor-pointer p-[18px] transition-transform duration-150 hover:-translate-y-0.5 hover:shadow-[var(--sh-2)]"
+      className="card cursor-pointer p-5 transition-colors duration-150 hover:bg-[color:var(--surface-muted)] hover:shadow-[var(--sh-2)]"
       style={cardStyle}
       onClick={() => navigate(`/drives/${drive.id}`)}
       onKeyDown={(e) => {
@@ -513,10 +509,10 @@ function DriveCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3
-              className="truncate text-[17px] font-semibold"
-              style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.01em", color: "var(--ink)" }}
-            >
-              {drive.displayName}
+            className="truncate text-[18px] font-semibold"
+            style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.01em", color: "var(--ink)" }}
+          >
+            {drive.displayName}
             </h3>
             {health && health !== "healthy" ? (
               <StatusBadge label={getDriveHealthLabel(health)} />
@@ -569,42 +565,31 @@ function DriveCard({
         <span>{capacityFooter}</span>
       </div>
 
-      {/* Stats row */}
+      {/* Meta row — inline, hairline-separated, no beige tiles. */}
       <div
-        className="mt-4 flex gap-4 border-t pt-3 text-[11.5px]"
-        style={{ borderColor: "var(--hairline)" }}
+        className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-[12px] tnum"
+        style={{ borderColor: "var(--hairline)", color: "var(--ink-3)" }}
       >
-        <DriveStat label="Projects" value={String(projectCount)} />
-        <DriveStat
-          label="Free"
-          value={effectiveFreeBytes !== null ? formatBytes(effectiveFreeBytes) : "—"}
-        />
-        <DriveStat
-          label="Reserved"
-          value={drive.reservedIncomingBytes > 0 ? formatBytes(drive.reservedIncomingBytes) : "—"}
-        />
-        <DriveStat label="Last scan" value={lastScanLabel} />
+        <span>
+          <span className="font-medium" style={{ color: "var(--ink-2)" }}>{projectCount}</span>{" "}
+          {projectCount === 1 ? "project" : "projects"}
+        </span>
+        <span style={{ color: "var(--ink-4)" }}>·</span>
+        <span>
+          {effectiveFreeBytes !== null ? `${formatBytes(effectiveFreeBytes)} free` : "Unknown free"}
+        </span>
+        {drive.reservedIncomingBytes > 0 ? (
+          <>
+            <span style={{ color: "var(--ink-4)" }}>·</span>
+            <span>{formatBytes(drive.reservedIncomingBytes)} reserved</span>
+          </>
+        ) : null}
+        <span style={{ color: "var(--ink-4)" }}>·</span>
+        <span>Last scan {lastScanLabel}</span>
       </div>
     </article>
   );
 }
-
-function DriveStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 flex-1">
-      <div className="eyebrow" style={{ fontSize: 9.5 }}>
-        {label}
-      </div>
-      <div
-        className="tnum mt-0.5 truncate text-[12.5px] font-medium"
-        style={{ color: "var(--ink)" }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
 
 // ---------------------------------------------------------------------------
 // Create drive form

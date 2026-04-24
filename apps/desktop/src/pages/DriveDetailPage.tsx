@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Project } from "@drive-project-catalog/domain";
 import { getScanStatusLabel, getScanStatusMessage } from "@drive-project-catalog/data";
+import { Icon } from "@drive-project-catalog/ui";
 
 import { isDesktopScanAvailable, useVolumeInfo } from "../app/scanCommands";
 import {
@@ -14,17 +15,22 @@ import { useScanWorkflow } from "../app/scanWorkflow";
 import { formatBytes, formatDate, formatParsedDate, getProjectName, getProjectStatusBadges } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { ImportFoldersDialog } from "./ImportFoldersDialog";
-import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, FeedbackNotice, LoadingState, MetricCard, SectionCard, StatusBadge } from "./pagePrimitives";
+import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, FeedbackNotice, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
 
 // ---------------------------------------------------------------------------
-// DriveDetailPage
-// ---------------------------------------------------------------------------
+// DriveDetailPage — 2026 refresh
 //
-// Scans are inherently per-drive, so the scan workflow lives inline here
-// rather than as a global toolbar modal. The previous DesktopScanPanel /
-// ShellToolbarActions layer was removed — all its state is sourced directly
-// from the ScanWorkflowProvider context and rendered as a first-class section
-// on this page.
+// The previous layout stacked: (1) a big identity card with CapacityBar + 5
+// beige MetricCards, (2) a near-identical "Storage detail" section with the
+// same CapacityBar + 8+ more beige MetricCards, (3) a scan section whose
+// summary rendered as a 6-8 tile metric grid, (4) an import section, (5)
+// three project collection grids, (6) a separate danger-zone card. It was
+// dashboard-by-numbers — massive beige tile grids with no hierarchy.
+//
+// This rewrite keeps all the data but presents it as a focused operations
+// page: one identity card, one storage-state row, one scan section with an
+// inline status line, one import section, three project collections, and a
+// terminal danger zone.
 // ---------------------------------------------------------------------------
 
 export function DriveDetailPage() {
@@ -56,19 +62,16 @@ export function DriveDetailPage() {
 
   // Import-from-volume flow state. The three fields form a small state machine:
   //   - idle:        importSourcePath === null
-  //   - enumerating: isPickingImport === true  (native picker open, or Rust
-  //                  call in flight — same UX because both block the same
-  //                  section of the UI)
+  //   - enumerating: isPickingImport === true
   //   - preview:     importSourcePath !== null && importFolders !== null
-  //   - importing:   isImporting === true       (repository call in flight)
+  //   - importing:   isImporting === true
   const [importSourcePath, setImportSourcePath] = useState<string | null>(null);
   const [importFolders, setImportFolders] = useState<VolumeFolderEntry[] | null>(null);
   const [isPickingImport, setIsPickingImport] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
 
-  // Most recent session for this drive drives two things: the volume info
-  // lookup (which needs a valid rootPath) and the default target path we seed
-  // into the scan form below.
+  // Most recent session for this drive — drives the volume info lookup and the
+  // default target path we seed into the scan form below.
   const latestSessionForDrive = useMemo(
     () =>
       scanSessions
@@ -83,9 +86,7 @@ export function DriveDetailPage() {
   const driveRootPath = latestSessionForDrive?.rootPath ?? null;
   const volumeInfo = useVolumeInfo(driveRootPath);
 
-  // Only treat the workflow's active session as "ours" if it targets this
-  // drive — otherwise we'd show a running scan from another drive under this
-  // drive's header.
+  // Only treat the workflow's active session as "ours" if it targets this drive.
   const activeSession =
     workflowActiveSession?.requestedDriveId === driveId ? workflowActiveSession : null;
   const scanSummary = activeSession ?? latestSessionForDrive;
@@ -97,9 +98,6 @@ export function DriveDetailPage() {
     };
   }, [driveId, selectDrive]);
 
-  // Bind the scan workflow to this drive while the page is mounted. Seeding
-  // `draftRootPath` from the last known scan spares the user from retyping the
-  // /Volumes/... path every time they revisit an existing drive.
   useEffect(() => {
     setSelectedDriveId(driveId);
     if (!draftRootPath && driveRootPath) {
@@ -107,20 +105,10 @@ export function DriveDetailPage() {
     }
   }, [driveId, driveRootPath, draftRootPath, setSelectedDriveId, setDraftRootPath]);
 
-  // Auto-dismiss feedback after 2.8s (shared hook; matches DrivesPage).
   useFeedbackDismiss(feedback, setFeedback);
 
-  // Compute detail *before* the early returns so all hooks below run on every
-  // render. Moving this out of the "post-return" zone is what lets us keep
-  // `existingProjectPathsOnDrive` as a `useMemo` without tripping Rules of
-  // Hooks on the initial `isLoading` render.
   const detail = getDriveDetailView(driveId);
 
-  // Stable set of folderPaths already associated with this drive. Pass this
-  // into the preview modal so it can mark duplicates — the repository's dedup
-  // keys on exactly this same (driveId, folderPath) pair, so the UI's
-  // "already in catalog" labels can never drift from what actually gets
-  // persisted.
   const existingProjectPathsOnDrive = useMemo(() => {
     const paths = new Set<string>();
     if (!detail) return paths;
@@ -135,15 +123,16 @@ export function DriveDetailPage() {
   }
 
   if (!detail) {
-    return <EmptyState title="Drive not found" description="The requested drive is not available in the current local catalog." />;
+    return (
+      <EmptyState
+        title="Drive not found"
+        description="The requested drive is not available in the current local catalog."
+      />
+    );
   }
 
   const { drive, projects, incomingProjects, missingProjects } = detail;
 
-  // S6/H11 — deleteDrive errors must surface to the user. Previously the
-  // catch silently closed the modal, which read as "deleted successfully"
-  // even when the delete failed. Now we close the modal and raise a visible
-  // error notice so the user knows to retry or investigate.
   async function handleDeleteDrive() {
     try {
       await deleteDrive(driveId);
@@ -158,27 +147,14 @@ export function DriveDetailPage() {
     }
   }
 
-  // Default the native picker to the drive's known root path (last scanned
-  // path, falling back to the conventional `/Volumes/<volumeName>`). Users
-  // almost always want to pick the same volume this page represents, so
-  // starting there saves clicks — they can still navigate elsewhere.
   const importPickerDefaultPath =
     driveRootPath ?? (drive.volumeName ? `/Volumes/${drive.volumeName}` : null);
 
-  // Plain async function — no memoization needed since its only consumers
-  // are inline event handlers that re-create every render anyway. Declaring
-  // this via `useCallback` after the early-return block above would violate
-  // Rules of Hooks on the initial `isLoading` render.
   async function runImportPicker() {
     setIsPickingImport(true);
     try {
       const selection = await pickVolumeRoot(importPickerDefaultPath);
-      if (!selection) {
-        // User cancelled the native dialog — leave any prior preview state
-        // intact so "Pick different folder" → cancel → back to original
-        // preview works without re-enumerating.
-        return;
-      }
+      if (!selection) return;
       const folders = await enumerateVolumeFolders(selection);
       setImportSourcePath(selection);
       setImportFolders(folders);
@@ -245,10 +221,14 @@ export function DriveDetailPage() {
   }
 
   const canStartScan = isScanAvailable && !activeSession && Boolean(draftRootPath.trim());
+  const canImportFromVolume = isDesktopScanAvailable();
   const scanPlaceholder = drive.volumeName ? `/Volumes/${drive.volumeName}` : "/Volumes/…";
 
+  const remainingAfterReserve =
+    drive.freeBytes === null ? null : Math.max(drive.freeBytes - drive.reservedIncomingBytes, 0);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pt-2">
       {showDeleteConfirm ? (
         <ConfirmModal
           title="Delete drive?"
@@ -272,65 +252,121 @@ export function DriveDetailPage() {
         />
       ) : null}
 
-      <div className="flex items-center justify-between">
-        <div />
-        <Link to="/drives" className="button-secondary">Back</Link>
-      </div>
+      {/* ── Identity card — volume label, capacity bar, primary actions ── */}
+      <section className="card overflow-hidden">
+        {/* Toolbar: back link on the left, action group on the right. */}
+        <div
+          className="flex flex-wrap items-center gap-2 px-5 py-3"
+          style={{ borderBottom: "1px solid var(--hairline)" }}
+        >
+          <Link to="/drives" className="btn btn-ghost btn-sm">
+            <Icon name="chevron" size={11} color="currentColor" className="rotate-180" />
+            Drives
+          </Link>
+          <div className="flex-1" />
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => void runImportPicker()}
+            disabled={!canImportFromVolume || isPickingImport || isImporting}
+          >
+            <Icon name="folder" size={11} color="currentColor" />
+            {isPickingImport ? "Opening…" : "Import folders"}
+          </button>
+          {activeSession ? (
+            <button type="button" className="btn btn-sm btn-danger" onClick={() => void cancelScan()}>
+              Cancel scan
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            onClick={() => void startScan()}
+            disabled={!canStartScan}
+          >
+            <Icon name="scan" size={11} color="currentColor" />
+            {activeSession ? "Scan running" : "Start scan"}
+          </button>
+        </div>
 
-      {feedback ? (
-        <FeedbackNotice
-          tone={feedback.tone}
-          title={feedback.title}
-          messages={feedback.messages}
-        />
-      ) : null}
+        {/* Identity block. No MetricCard grid below — capacity details live
+            as an inline meta row beside the progress bar. */}
+        <div className="px-6 pt-6 pb-5">
+          <div className="flex flex-wrap items-start gap-4">
+            <div
+              className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[12px]"
+              style={{ background: "var(--surface-inset)" }}
+            >
+              <Icon name="hardDrive" size={24} color="var(--ink-2)" />
+              <span
+                className="absolute bottom-2 right-2 h-2 w-2 rounded-full"
+                style={{ background: "var(--accent)", border: "2px solid var(--surface)" }}
+              />
+            </div>
 
-      <SectionCard title="Drive summary" description="Capacity and reservation data stays local-first and updates as move plans change.">
-        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <div>
+            <div className="min-w-0 flex-1">
+              <div className="eyebrow">
+                {drive.createdManually ? "Manual drive" : "Connected volume"}
+                {volumeInfo?.filesystemType ? ` · ${volumeInfo.filesystemType}` : ""}
+              </div>
+              <h1 className="h-title mt-1" style={{ margin: "4px 0 0" }}>{drive.displayName}</h1>
+              {drive.volumeName ? (
+                <p
+                  className="mono mt-1 text-[12px] break-all"
+                  style={{ color: "var(--ink-3)", margin: "4px 0 0" }}
+                >
+                  /Volumes/{drive.volumeName}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-5">
             <CapacityBar
               usedBytes={drive.usedBytes}
               totalBytes={drive.totalCapacityBytes}
               reservedBytes={drive.reservedIncomingBytes}
             />
             <CapacityLegend usedLabel="Used" reservedLabel="Reserved" freeLabel="Free" />
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <MetricCard label="Used" value={formatBytes(drive.usedBytes)} />
-              <MetricCard label="Reserved incoming" value={formatBytes(drive.reservedIncomingBytes)} />
-              <MetricCard label="Remaining after reserve" value={formatBytes(drive.freeBytes === null ? null : Math.max(drive.freeBytes - drive.reservedIncomingBytes, 0))} />
-            </div>
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <MetricCard label="Capacity" value={formatBytes(drive.totalCapacityBytes)} />
-            <MetricCard label="Free" value={formatBytes(drive.freeBytes)} />
-            <MetricCard label="Projects" value={String(projects.length)} />
-            <MetricCard label="Incoming plans" value={String(incomingProjects.length)} />
-            <MetricCard label="Missing records" value={String(missingProjects.length)} />
-            <MetricCard label="Last scan" value={formatDate(drive.lastScannedAt)} />
-            {volumeInfo ? (
-              <>
-                <MetricCard label="Filesystem" value={volumeInfo.filesystemType} />
-                <MetricCard label="Volume total" value={formatBytes(volumeInfo.totalBytes)} />
-                <MetricCard label="Volume free" value={formatBytes(volumeInfo.freeBytes)} />
-              </>
-            ) : null}
-          </div>
-        </div>
-      </SectionCard>
 
+          {/* Inline capacity meta — small and dense. Replaces the previous
+              5-tile beige MetricCard grid. */}
+          <dl
+            className="mt-4 grid grid-cols-2 gap-x-8 gap-y-3 md:grid-cols-5"
+            style={{ color: "var(--ink-3)" }}
+          >
+            <MetaField label="Capacity" value={formatBytes(drive.totalCapacityBytes)} />
+            <MetaField label="Used" value={formatBytes(drive.usedBytes)} />
+            <MetaField
+              label="Reserved"
+              value={formatBytes(drive.reservedIncomingBytes)}
+              tone={drive.reservedIncomingBytes > 0 ? "warn" : undefined}
+            />
+            <MetaField label="Free" value={formatBytes(drive.freeBytes)} />
+            <MetaField label="Projects" value={String(projects.length)} />
+          </dl>
+        </div>
+      </section>
+
+      {feedback ? (
+        <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
+      ) : null}
+
+      {/* ── Scan drive — inline form, single action, compact status panel ── */}
       <SectionCard
         title="Scan drive"
         description="Index this drive's folder structure into the catalog. Runs locally — nothing leaves your machine."
         action={
           <div className="flex gap-2">
             {activeSession ? (
-              <button type="button" className="button-danger" onClick={() => void cancelScan()}>
+              <button type="button" className="btn btn-sm btn-danger" onClick={() => void cancelScan()}>
                 Cancel
               </button>
             ) : null}
             <button
               type="button"
-              className="button-success"
+              className="btn btn-sm btn-primary"
               onClick={() => void startScan()}
               disabled={!canStartScan}
             >
@@ -340,28 +376,24 @@ export function DriveDetailPage() {
         }
       >
         <div className="space-y-4">
-          <label className="block space-y-2">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
-              Scan target path
-            </span>
-            <div className="flex gap-2">
-              <input
-                value={draftRootPath}
-                onChange={(event) => setDraftRootPath(event.target.value)}
-                className="field-shell min-w-0 flex-1 bg-transparent px-4 py-3 outline-none"
-                placeholder={scanPlaceholder}
-                disabled={Boolean(activeSession)}
-              />
-              <button
-                type="button"
-                className="button-secondary shrink-0"
-                onClick={() => void chooseDirectory()}
-                disabled={!isScanAvailable || isPickingDirectory || Boolean(activeSession)}
-              >
-                {isPickingDirectory ? "Opening..." : "Browse"}
-              </button>
-            </div>
-          </label>
+          <div className="flex gap-2">
+            <input
+              value={draftRootPath}
+              onChange={(event) => setDraftRootPath(event.target.value)}
+              className="field-shell min-w-0 flex-1 bg-transparent px-3 py-2.5 outline-none"
+              placeholder={scanPlaceholder}
+              disabled={Boolean(activeSession)}
+              aria-label="Scan target path"
+            />
+            <button
+              type="button"
+              className="btn btn-sm shrink-0"
+              onClick={() => void chooseDirectory()}
+              disabled={!isScanAvailable || isPickingDirectory || Boolean(activeSession)}
+            >
+              {isPickingDirectory ? "Opening…" : "Browse"}
+            </button>
+          </div>
 
           {!isScanAvailable ? (
             <FeedbackNotice
@@ -374,80 +406,59 @@ export function DriveDetailPage() {
             <FeedbackNotice tone="error" title="Scan error" messages={[scanError]} />
           ) : null}
 
-          {scanSummary ? (
-            <div className="rounded-md border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-surface)" }}>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-soft)" }}>
-                  {activeSession ? "Running" : "Last scan"}
-                </p>
-                <p className="mt-1 text-[14px] font-semibold" style={{ color: "var(--color-text)" }}>
-                  {getScanStatusLabel(scanSummary)}
-                </p>
-                <p className="mt-0.5 text-[12px] break-all" style={{ color: "var(--color-text-muted)" }}>
-                  {scanSummary.rootPath}
-                </p>
-              </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Folders" value={String(scanSummary.foldersScanned)} />
-                <MetricCard label="Matches" value={String(scanSummary.matchesFound)} />
-                {scanSummary.summary ? (
-                  <>
-                    <MetricCard label="New" value={String(scanSummary.summary.newProjectsCount)} />
-                    <MetricCard label="Updated" value={String(scanSummary.summary.updatedProjectsCount)} />
-                    <MetricCard label="Missing" value={String(scanSummary.summary.missingProjectsCount)} />
-                    <MetricCard label="Duplicates" value={String(scanSummary.summary.duplicatesFlaggedCount)} />
-                  </>
-                ) : null}
-                <MetricCard label="Started" value={formatDate(scanSummary.startedAt)} />
-                <MetricCard label="Ended" value={formatDate(scanSummary.finishedAt)} />
-              </div>
-              {(scanSummary.status === "failed" ||
-                scanSummary.status === "interrupted" ||
-                scanSummary.status === "cancelled") ? (
-                <p
-                  className="mt-3 text-[12px]"
-                  style={{
-                    color: scanSummary.status === "cancelled" ? "var(--color-warning)" : "var(--color-danger)"
-                  }}
-                >
-                  {getScanStatusMessage(scanSummary)}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+          {scanSummary ? <ScanStatusPanel scanSummary={scanSummary} isRunning={Boolean(activeSession)} /> : null}
         </div>
       </SectionCard>
 
+      {/* ── Storage detail — quiet definition list, no MetricCard grid ── */}
+      <SectionCard
+        title="Storage detail"
+        description="Reservation and volume data stays local-first and updates as move plans change."
+      >
+        <dl
+          className="grid gap-x-8 gap-y-3 md:grid-cols-3"
+          style={{ color: "var(--ink-3)" }}
+        >
+          <MetaField label="Reserved incoming" value={formatBytes(drive.reservedIncomingBytes)} />
+          <MetaField label="Remaining after reserve" value={formatBytes(remainingAfterReserve)} />
+          <MetaField label="Last scan" value={formatDate(drive.lastScannedAt)} />
+          <MetaField label="Incoming plans" value={String(incomingProjects.length)} />
+          <MetaField label="Missing records" value={String(missingProjects.length)} />
+          {volumeInfo ? (
+            <>
+              <MetaField label="Filesystem" value={volumeInfo.filesystemType} />
+              <MetaField label="Volume total" value={formatBytes(volumeInfo.totalBytes)} />
+              <MetaField label="Volume free" value={formatBytes(volumeInfo.freeBytes)} />
+            </>
+          ) : null}
+        </dl>
+      </SectionCard>
+
+      {/* ── Import folders — single action, short rationale ── */}
       <SectionCard
         title="Import folders from volume"
-        description="Browse a connected volume and add its top-level folders as projects on this drive without running a full scan. Names are classified automatically; nothing on disk is changed."
+        description="Browse a connected volume and add its top-level folders as projects without running a full scan. Hidden and system folders are filtered automatically; folders already on this drive are skipped."
         action={
           <button
             type="button"
-            className="button-secondary"
+            className="btn btn-sm"
             onClick={() => void runImportPicker()}
-            disabled={!isDesktopScanAvailable() || isPickingImport || isImporting}
+            disabled={!canImportFromVolume || isPickingImport || isImporting}
           >
             {isPickingImport ? "Opening…" : "Choose folder…"}
           </button>
         }
       >
-        {!isDesktopScanAvailable() ? (
+        {!canImportFromVolume ? (
           <FeedbackNotice
             tone="warning"
             title="Desktop only"
             messages={["Importing folders requires the native desktop app. The native picker and filesystem read are not available in the browser."]}
           />
-        ) : (
-          <p className="text-[13px]" style={{ color: "var(--color-text-muted)" }}>
-            Pick a volume or subfolder — you'll get a preview of its top-level
-            folder names before anything is added to the catalog. Hidden files
-            and system folders are filtered automatically, and folders that
-            already exist on this drive are skipped.
-          </p>
-        )}
+        ) : null}
       </SectionCard>
 
+      {/* ── Project collections — three lists, hairline-bordered rows ── */}
       <section className="grid gap-6 xl:grid-cols-3">
         <ProjectCollection
           title="Projects on this drive"
@@ -468,21 +479,156 @@ export function DriveDetailPage() {
         />
       </section>
 
-      {/* Danger zone — separated from primary actions */}
-      <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--color-border)" }}>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-soft)" }}>Danger zone</p>
-        <div className="mt-3 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>Delete drive</p>
-            <p className="mt-0.5 text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              Permanently removes this drive from the catalog. Projects assigned to it will become unassigned.
-            </p>
-          </div>
-          <button type="button" className="button-danger shrink-0" onClick={() => setShowDeleteConfirm(true)}>
-            Delete
-          </button>
+      {/* ── Danger zone — inline row, not a standalone card ── */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+        style={{ borderTop: "1px solid var(--hairline)" }}
+      >
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium" style={{ color: "var(--ink)", margin: 0 }}>
+            Delete drive
+          </p>
+          <p className="text-[12.5px]" style={{ color: "var(--ink-3)", margin: "2px 0 0" }}>
+            Permanently removes this drive. Projects assigned to it will become unassigned.
+          </p>
         </div>
+        <button
+          type="button"
+          className="btn btn-sm btn-danger shrink-0"
+          onClick={() => setShowDeleteConfirm(true)}
+        >
+          Delete
+        </button>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers — local to this page
+// ---------------------------------------------------------------------------
+
+/**
+ * Inline label/value pair used in the identity card and storage detail
+ * section. Matches the MetaField in DrivesPage's DriveCard so the two pages
+ * read with the same rhythm.
+ */
+function MetaField({
+  label,
+  value,
+  tone
+}: {
+  label: string;
+  value: string;
+  tone?: "warn";
+}): ReactNode {
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <dt
+        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
+        style={{ color: "var(--ink-4)" }}
+      >
+        {label}
+      </dt>
+      <dd
+        className="tnum truncate text-[13.5px] font-medium"
+        style={{
+          color: tone === "warn" ? "var(--warn)" : "var(--ink)",
+          margin: 0
+        }}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * Scan status panel — replaces the old 6-8 tile MetricCard grid with a
+ * compact status line + inline meta row. Reads as a single paragraph of
+ * state rather than a dashboard.
+ */
+function ScanStatusPanel({
+  scanSummary,
+  isRunning
+}: {
+  scanSummary: NonNullable<ReturnType<typeof useScanWorkflow>["activeSession"]>;
+  isRunning: boolean;
+}) {
+  const statusTone =
+    scanSummary.status === "failed" || scanSummary.status === "interrupted"
+      ? "danger"
+      : scanSummary.status === "cancelled"
+        ? "warn"
+        : isRunning
+          ? "accent"
+          : "neutral";
+
+  return (
+    <div
+      className="rounded-[12px] px-4 py-3.5"
+      style={{ background: "var(--surface-inset)" }}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className="inline-block h-2 w-2 rounded-full"
+          style={{
+            background:
+              statusTone === "danger"
+                ? "var(--danger)"
+                : statusTone === "warn"
+                  ? "var(--warn)"
+                  : statusTone === "accent"
+                    ? "var(--accent)"
+                    : "var(--ok)"
+          }}
+          aria-hidden="true"
+        />
+        <span className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
+          {isRunning ? "Running" : "Last scan"}
+        </span>
+        <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+          {getScanStatusLabel(scanSummary)}
+        </span>
+      </div>
+      <p
+        className="mono mt-1.5 text-[11.5px] break-all"
+        style={{ color: "var(--ink-3)", margin: "6px 0 0" }}
+      >
+        {scanSummary.rootPath}
+      </p>
+
+      <dl
+        className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-4"
+        style={{ color: "var(--ink-3)" }}
+      >
+        <MetaField label="Folders" value={String(scanSummary.foldersScanned)} />
+        <MetaField label="Matches" value={String(scanSummary.matchesFound)} />
+        {scanSummary.summary ? (
+          <>
+            <MetaField label="New" value={String(scanSummary.summary.newProjectsCount)} />
+            <MetaField label="Updated" value={String(scanSummary.summary.updatedProjectsCount)} />
+            <MetaField label="Missing" value={String(scanSummary.summary.missingProjectsCount)} />
+            <MetaField label="Duplicates" value={String(scanSummary.summary.duplicatesFlaggedCount)} />
+          </>
+        ) : null}
+        <MetaField label="Started" value={formatDate(scanSummary.startedAt)} />
+        <MetaField label="Ended" value={formatDate(scanSummary.finishedAt)} />
+      </dl>
+
+      {(scanSummary.status === "failed" ||
+        scanSummary.status === "interrupted" ||
+        scanSummary.status === "cancelled") ? (
+        <p
+          className="mt-3 text-[12.5px]"
+          style={{
+            color: scanSummary.status === "cancelled" ? "var(--warn)" : "var(--danger)",
+            margin: "12px 0 0"
+          }}
+        >
+          {getScanStatusMessage(scanSummary)}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -501,23 +647,32 @@ function ProjectCollection({
   return (
     <SectionCard title={title} description={description}>
       {projects.length === 0 ? (
-        <EmptyState title="No projects" description="Nothing in this section yet." />
+        <p className="text-[12.5px]" style={{ color: "var(--ink-3)", margin: 0 }}>
+          Nothing here yet.
+        </p>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-px">
           {projects.map((project) => (
             <Link
               key={project.id}
               to={`/projects/${project.id}`}
-              className="link-card flex items-center justify-between border-b py-2.5 last:border-b-0"
-              style={{ borderColor: "var(--color-border)" }}
+              className="link-card flex items-center justify-between gap-3 rounded-[8px] px-2.5 py-2 transition-colors hover:bg-[color:var(--surface-inset)]"
             >
-              <div>
-                <p className="text-[13px] font-medium" style={{ color: "var(--color-text)" }}>{getProjectName(project)}</p>
-                <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+              <div className="min-w-0 flex-1">
+                <p
+                  className="truncate text-[13px] font-medium"
+                  style={{ color: "var(--ink)", margin: 0 }}
+                >
+                  {getProjectName(project)}
+                </p>
+                <p
+                  className="mt-0.5 text-[11.5px]"
+                  style={{ color: "var(--ink-3)", margin: "2px 0 0" }}
+                >
                   {formatParsedDate(project.parsedDate)} · {formatBytes(project.sizeBytes)}
                 </p>
               </div>
-              <div className="flex gap-1">
+              <div className="flex shrink-0 gap-1">
                 {accentLabel ? <StatusBadge label={accentLabel} /> : null}
                 {getProjectStatusBadges(project).map((badge) => (
                   <StatusBadge key={badge} label={badge} />

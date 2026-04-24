@@ -12,7 +12,7 @@ vi.mock("../app/catalogRepository", async () => {
 });
 
 describe("ProjectsPage", () => {
-  it("filters projects immediately as the search input changes", async () => {
+  it("filters projects after submitting the global omnibox", async () => {
     const router = createTestRouter(["/projects"]);
 
     render(
@@ -23,14 +23,16 @@ describe("ProjectsPage", () => {
       </AppProviders>
     );
 
-    const searchInput = await screen.findByPlaceholderText("Search by name, client, date, drive…");
+    const searchInput = await screen.findByPlaceholderText("Search projects, drives, or folders");
     expect(await screen.findByText("Adidas Social")).toBeInTheDocument();
 
     fireEvent.change(searchInput, { target: { value: "apple" } });
+    fireEvent.submit(searchInput.closest("form")!);
 
     await waitFor(() => {
       expect(screen.getAllByText("Apple Product Shoot").length).toBeGreaterThan(0);
       expect(screen.queryAllByText("Adidas Social")).toHaveLength(0);
+      expect(router.state.location.search).toBe("?q=apple");
     });
   });
 });

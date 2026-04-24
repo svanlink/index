@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type For
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@drive-project-catalog/ui";
 import { useShortcut } from "../app/useShortcut";
-import { buildProjectSearchSuggestions, filterProjectCatalog, UNASSIGNED_DRIVE_FILTER_VALUE } from "@drive-project-catalog/data";
+import { filterProjectCatalog, UNASSIGNED_DRIVE_FILTER_VALUE } from "@drive-project-catalog/data";
 import {
   categoryValues,
   folderTypeValues,
@@ -21,19 +21,12 @@ import {
   getDriveName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { EmptyState, FeedbackNotice, ProjectRowSkeleton, SearchField, SectionCard, StatusBadge } from "./pagePrimitives";
+import { FeedbackNotice, ProjectRowSkeleton, SectionCard, StatusBadge } from "./pagePrimitives";
 import { getDriveColor } from "./driveColor";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const STATUS_FILTERS = [
-  { label: "Unassigned", key: "showUnassigned", param: "unassigned" },
-  { label: "Missing", key: "showMissing", param: "missing" },
-  { label: "Duplicates", key: "showDuplicate", param: "duplicate" },
-  { label: "Move pending", key: "showMovePending", param: "movePending" }
-] as const;
 
 const FOLDER_TYPE_LABELS: Record<FolderType, string> = {
   client: "Client",
@@ -100,6 +93,36 @@ export function ProjectsPage() {
   const showMovePending = searchParams.get("movePending") === "1";
   const hasActiveFilters = !!(categoryFilter || folderTypeFilter || driveFilter || targetDriveFilter || showUnassigned || showMissing || showDuplicate || showMovePending);
 
+  const statusCounts = useMemo(
+    () => ({
+      all: projects.length,
+      unassigned: projects.filter((project) => project.currentDriveId == null).length,
+      missing: projects.filter((project) => project.missingStatus === "missing").length,
+      duplicate: projects.filter((project) => project.duplicateStatus === "duplicate").length,
+      movePending: projects.filter((project) => project.moveStatus === "pending").length
+    }),
+    [projects]
+  );
+
+  const activeStatusTab =
+    showUnassigned && !showMissing && !showDuplicate && !showMovePending
+      ? "unassigned"
+      : showMissing && !showUnassigned && !showDuplicate && !showMovePending
+        ? "missing"
+        : showDuplicate && !showUnassigned && !showMissing && !showMovePending
+          ? "duplicate"
+          : showMovePending && !showUnassigned && !showMissing && !showDuplicate
+            ? "movePending"
+            : "all";
+
+  const statusTabs = [
+    { id: "all", label: "All", count: statusCounts.all },
+    { id: "unassigned", label: "Unassigned", count: statusCounts.unassigned },
+    { id: "missing", label: "Missing", count: statusCounts.missing },
+    { id: "duplicate", label: "Duplicates", count: statusCounts.duplicate },
+    { id: "movePending", label: "Moves", count: statusCounts.movePending }
+  ].filter((tab) => tab.id === "all" || tab.count > 0);
+
   const filteredProjects = useMemo(
     () => filterProjectCatalog(projects, drives, {
       search, category: categoryFilter || "", folderType: folderTypeFilter || "",
@@ -117,15 +140,6 @@ export function ProjectsPage() {
   const manualProjectValidation = useMemo(
     () => validateManualProjectForm(projectForm),
     [projectForm]
-  );
-
-  const searchSuggestions = useMemo(
-    () => buildProjectSearchSuggestions(projects, drives, search, {
-      category: categoryFilter || "", currentDriveId: driveFilter || undefined,
-      targetDriveId: targetDriveFilter || undefined,
-      showUnassigned, showMissing, showDuplicate, showMovePending
-    }),
-    [categoryFilter, driveFilter, drives, projects, search, showDuplicate, showMissing, showMovePending, showUnassigned, targetDriveFilter]
   );
 
   const allVisibleSelected =
@@ -217,24 +231,10 @@ export function ProjectsPage() {
     }
   }, [assignProjectsToDrive, batchPreview, batchState.assignDriveId, batchState.category, batchState.targetDriveId, deleteProjects, planProjectsMove, selectedIds, setProjectsCategory]);
 
-  function toggleStatusFilter(param: string) {
-    const next = new URLSearchParams(searchParams);
-    if (next.get(param) === "1") next.delete(param);
-    else next.set(param, "1");
-    setSearchParams(next);
-  }
-
   function updateQueryParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value); else next.delete(key);
     setSearchParams(next);
-  }
-
-  function updateSearchValue(value: string) {
-    setSearch(value);
-    const next = new URLSearchParams(searchParams);
-    if (value.trim()) next.set("q", value); else next.delete("q");
-    setSearchParams(next, { replace: true });
   }
 
   function toggleSelection(id: string) {
@@ -261,32 +261,88 @@ export function ProjectsPage() {
     setSearchParams(next);
   }
 
+  function selectStatusTab(tabId: string) {
+    const next = new URLSearchParams(searchParams);
+    next.delete("unassigned");
+    next.delete("missing");
+    next.delete("duplicate");
+    next.delete("movePending");
+
+    if (tabId === "unassigned") next.set("unassigned", "1");
+    if (tabId === "missing") next.set("missing", "1");
+    if (tabId === "duplicate") next.set("duplicate", "1");
+    if (tabId === "movePending") next.set("movePending", "1");
+
+    setSearchParams(next);
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
-  return (
-    <div className="space-y-5">
-      {/* ── Page header ── */}
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <div className="eyebrow">Catalog</div>
-          <h1 className="h-title mt-1">Projects</h1>
-          {!isLoading ? (
-            <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-              {projects.length} {projects.length === 1 ? "project" : "projects"} across {drives.length} {drives.length === 1 ? "drive" : "drives"}
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className="btn btn-sm"
-          onClick={() => setIsCreateOpen((c) => !c)}
+  const showChrome = projects.length > 0 && !isLoading;
+
+  // Cold-start welcome — flat layout, no decorative panel. Per DESIGN.md §7
+  // ("hairlines not shadows") and matching InboxWelcome / DrivesPage cold-
+  // start. One icon tile, headline, description, two actions. Create-form
+  // still reachable via Cmd+N or the secondary button.
+  if (!isLoading && projects.length === 0 && !isCreateOpen) {
+    return (
+      <div className="pt-8">
+        <div
+          className="mb-5 flex h-11 w-11 items-center justify-center rounded-[10px]"
+          style={{ background: "var(--surface-container-low)" }}
         >
-          <Icon name="plus" size={12} />
-          {isCreateOpen ? "Discard" : "New project"}
-        </button>
+          <Icon name="folder" size={20} color="var(--ink)" />
+        </div>
+        <h1
+          className="text-[28px] font-semibold"
+          style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.015em", lineHeight: 1.15 }}
+        >
+          No projects yet.
+        </h1>
+        <p
+          className="mt-2 max-w-[48ch] text-[17px] leading-[1.47]"
+          style={{ color: "var(--ink-2)", margin: "8px 0 0" }}
+        >
+          Scan a connected drive to index its folders, or create a manual project
+          to start building the catalog.
+        </p>
+        <div className="mt-6 flex items-center gap-2">
+          <Link to="/drives" className="btn btn-primary">
+            <Icon name="scan" size={13} color="currentColor" />
+            Scan a drive
+          </Link>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setIsCreateOpen(true)}
+          >
+            New project
+          </button>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 pt-2">
+      {/* Action strip — AppShell chrome owns the "Projects" title. This page
+          only offers the action that can't live in chrome: creating a manual
+          project. The counts users actually need land in the status-tab
+          counts below, not in a stat grid. */}
+      {(projects.length > 0 || isCreateOpen) && !isLoading ? (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            onClick={() => setIsCreateOpen((c) => !c)}
+          >
+            <Icon name="plus" size={12} color="currentColor" />
+            {isCreateOpen ? "Discard" : "New project"}
+          </button>
+        </div>
+      ) : null}
 
       {feedback ? (
         <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
@@ -304,94 +360,91 @@ export function ProjectsPage() {
         />
       ) : null}
 
-      {/* ── Toolbar: search, dropdowns, status pills — single visual unit ── */}
-      <div className="border-b pb-3" style={{ borderColor: "var(--hairline)" }}>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Search — takes available space */}
-          <div className="min-w-[200px] flex-1">
-            <SearchField
-              value={search}
-              onChange={updateSearchValue}
-              placeholder="Search by name, client, date, drive…"
-              suggestions={searchSuggestions}
-              onSelectSuggestion={updateSearchValue}
-              resultCount={search.trim() ? filteredProjects.length : undefined}
-            />
-          </div>
-
-          {/* Divider */}
-          <div className="hidden h-7 w-px xl:block" style={{ background: "var(--hairline)" }} />
-
-          {/* Dropdowns — compact inline */}
-          <CompactSelect
-            value={folderTypeFilter}
-            onChange={(v) => updateQueryParam("folderType", v)}
-            placeholder="All types"
-          >
-            <option value="">All types</option>
-            {folderTypeValues.map((t) => (
-              <option key={t} value={t}>{FOLDER_TYPE_LABELS[t]}</option>
-            ))}
-          </CompactSelect>
-
-          <CompactSelect
-            value={categoryFilter}
-            onChange={(v) => updateQueryParam("category", v)}
-            placeholder="All categories"
-          >
-            <option value="">All categories</option>
-            {categoryValues.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </CompactSelect>
-
-          <CompactSelect
-            value={driveFilter}
-            onChange={(v) => updateQueryParam("drive", v)}
-            placeholder="All drives"
-          >
-            <option value="">All drives</option>
-            <option value={UNASSIGNED_DRIVE_FILTER_VALUE}>Unassigned</option>
-            {drives.map((d) => (
-              <option key={d.id} value={d.id}>{d.displayName}</option>
-            ))}
-          </CompactSelect>
-
-          {/* Divider */}
-          <div className="hidden h-7 w-px xl:block" style={{ background: "var(--hairline)" }} />
-
-          {/* Status pills — inline with everything else */}
-          {STATUS_FILTERS.map((f) => {
-            const active =
-              f.param === "unassigned" ? showUnassigned
-              : f.param === "missing" ? showMissing
-              : f.param === "duplicate" ? showDuplicate
-              : showMovePending;
-            return (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => toggleStatusFilter(f.param)}
-                className={active ? "chip chip-accent" : "chip chip-ghost"}
-                style={{ cursor: "pointer" }}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-
-          {hasActiveFilters ? (
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="ml-auto text-[12px] font-medium transition-colors"
-              style={{ color: "var(--ink-3)" }}
+      {showChrome ? (
+        <div>
+          {statusTabs.length > 1 ? (
+            <div
+              className="flex flex-wrap items-center gap-0"
+              style={{ borderBottom: "1px solid var(--hairline)" }}
             >
-              Clear filters
-            </button>
+              {statusTabs.map((tab) => {
+                const isActive = activeStatusTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => selectStatusTab(tab.id)}
+                    className="flex items-center gap-1.5 pb-3 pt-[10px] pr-5 text-[14px] transition-colors"
+                    style={{
+                      borderBottom: isActive ? "2px solid var(--ink)" : "2px solid transparent",
+                      color: isActive ? "var(--ink)" : "var(--ink-3)",
+                      fontWeight: isActive ? 500 : 400,
+                      marginBottom: -1
+                    }}
+                  >
+                    <span>{tab.label}</span>
+                    {tab.count > 0 ? (
+                      <span
+                        className="tnum text-[12px]"
+                        style={{ color: isActive ? "var(--ink-3)" : "var(--ink-4)" }}
+                      >
+                        {tab.count}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
           ) : null}
+
+          <div className="flex flex-wrap items-center gap-2 pt-3">
+            <CompactSelect
+              value={folderTypeFilter}
+              onChange={(v) => updateQueryParam("folderType", v)}
+              placeholder="All types"
+            >
+              <option value="">All types</option>
+              {folderTypeValues.map((t) => (
+                <option key={t} value={t}>{FOLDER_TYPE_LABELS[t]}</option>
+              ))}
+            </CompactSelect>
+
+            <CompactSelect
+              value={categoryFilter}
+              onChange={(v) => updateQueryParam("category", v)}
+              placeholder="All categories"
+            >
+              <option value="">All categories</option>
+              {categoryValues.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </CompactSelect>
+
+            <CompactSelect
+              value={driveFilter}
+              onChange={(v) => updateQueryParam("drive", v)}
+              placeholder="All drives"
+            >
+              <option value="">All drives</option>
+              <option value={UNASSIGNED_DRIVE_FILTER_VALUE}>Unassigned</option>
+              {drives.map((d) => (
+                <option key={d.id} value={d.id}>{d.displayName}</option>
+              ))}
+            </CompactSelect>
+
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="text-[13px] transition-colors"
+                style={{ color: "var(--ink-3)" }}
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* ── Batch action bar ── */}
       {selectedIds.length > 0 ? (
@@ -410,27 +463,39 @@ export function ProjectsPage() {
       ) : null}
 
       {/* ── Project list ── */}
-      <div className="overflow-hidden">
+      <div className="card overflow-hidden">
         {isLoading ? (
           <div aria-busy="true" aria-label="Loading projects">
             {[0, 1, 2, 3, 4, 5].map((i) => <ProjectRowSkeleton key={i} />)}
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div className="py-4">
-            <EmptyState
-              title={projects.length === 0 ? "No projects yet" : "No results"}
-              description={
-                projects.length === 0
-                  ? "Run a scan to index a drive, or create a manual project to start building the catalog."
-                  : "Try a broader search or remove an active filter."
-              }
-            />
+          <div
+            className="flex flex-col items-center gap-1 px-4 py-16 text-center"
+          >
+            <p
+              className="text-[13.5px] font-semibold"
+              style={{ color: "var(--ink)" }}
+            >
+              No results
+            </p>
+            <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+              Try a broader search or{" "}
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="font-medium underline-offset-2 hover:underline"
+                style={{ color: "var(--ink-2)" }}
+              >
+                clear filters
+              </button>
+              .
+            </p>
           </div>
         ) : (
           <>
             {/* Table controls strip */}
             <div
-              className="flex items-center justify-between gap-4 border-b px-2 py-2"
+              className="flex items-center justify-between gap-4 border-b px-4 py-3"
               style={{ borderColor: "var(--hairline)" }}
             >
               <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium" style={{ color: "var(--ink-3)" }}>
@@ -548,9 +613,9 @@ function ProjectRow({
   return (
     <div
       role="listitem"
-      className={`proj-row group grid items-center gap-4 border-b px-2 py-2.5 ${isSelected ? "bg-[color:var(--accent-soft)]" : ""}`}
+      className={`proj-row group grid items-center gap-3 border-b px-4 py-3 ${isSelected ? "bg-[color:var(--accent-soft)]" : ""}`}
       style={{
-        gridTemplateColumns: "28px 1fr 220px 70px 140px 16px",
+        gridTemplateColumns: "28px minmax(0,1fr) minmax(170px,220px) 88px minmax(140px,180px) 16px",
         borderColor: "var(--hairline)",
         boxShadow: statusAccent
       }}
@@ -574,7 +639,7 @@ function ProjectRow({
         aria-label={`Open ${project.folderName}`}
       >
         <div
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11.5px] font-semibold"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[11.5px] font-semibold"
           style={{ background: avatar.bg, color: avatar.color }}
         >
           {avatarLetter}
@@ -692,7 +757,10 @@ function BatchActionBar({
   return (
     <div
       className="card overflow-hidden px-4 py-3"
-      style={{ borderColor: "var(--ink)" }}
+      style={{
+        borderColor: "rgba(var(--accent-rgb), 0.22)",
+        background: "color-mix(in srgb, var(--accent-soft) 38%, var(--surface))"
+      }}
     >
       {preview ? (
         <div className="space-y-3">
@@ -942,4 +1010,3 @@ function CompactSelect({
     </select>
   );
 }
-
