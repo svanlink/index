@@ -1,4 +1,4 @@
-# Drive Project Catalog
+# Catalog
 
 Drive Project Catalog is a macOS desktop cataloging app for external hard drives. The current build includes a Tauri desktop shell, a React + TypeScript + Tailwind frontend, shared domain/data/UI packages, local SQLite persistence, manual scan workflow support, scan history, storage planning, and optional Supabase transport on top of a local-first sync boundary.
 
