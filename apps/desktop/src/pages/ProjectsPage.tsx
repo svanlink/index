@@ -327,6 +327,10 @@ export function ProjectsPage() {
 
   return (
     <div className="space-y-6 pt-2">
+      {/* sr-only h1 for WCAG 2.4.6 and test identification. The top-nav
+          breadcrumb names this section for sighted users; the h1 exists for
+          screen readers and automated tests only. */}
+      <h1 className="sr-only">Projects</h1>
       {/* Action strip — AppShell chrome owns the "Projects" title. This page
           only offers the action that can't live in chrome: creating a manual
           project. The counts users actually need land in the status-tab
@@ -938,8 +942,8 @@ function CreateProjectForm({
         </div>
       ) : null}
       <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={onSubmit}>
-        <FormField label="Date (YYMMDD)">
-          <input required maxLength={6} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="240401" />
+        <FormField label="Date (YYYY-MM-DD)">
+          <input required maxLength={10} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="2024-03-12" />
         </FormField>
         <FormField label="Client">
           <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="Apple" />

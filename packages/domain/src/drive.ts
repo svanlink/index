@@ -10,5 +10,11 @@ export interface Drive {
   createdManually: boolean;
   createdAt: string;
   updatedAt: string;
+  /** macOS volume UUID — stable across remounts. Added in schema migration 8. */
+  volumeUuid?: string | null;
+  /** Last observed mount path (e.g. `/Volumes/MyDrive`). Added in schema migration 8. */
+  mountPath?: string | null;
+  /** Filesystem type reported by diskutil (e.g. `"APFS"`, `"ExFAT"`). Added in schema migration 8. */
+  filesystem?: string | null;
 }
 

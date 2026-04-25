@@ -233,7 +233,7 @@ describe("Migration chain recovery (S1)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     } finally {
       verify.close();
     }
@@ -287,7 +287,7 @@ describe("Migration chain recovery (S1)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     } finally {
       verify.close();
     }
@@ -354,7 +354,7 @@ describe("Migration chain recovery (S1)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     } finally {
       verify.close();
     }
@@ -533,11 +533,11 @@ describe("Sequential migration chain (M11)", () => {
     }
   }
 
-  it("boots a pristine v1 DB through migrations 2..7 sequentially and reaches the final schema", async () => {
+  it("boots a pristine v1 DB through migrations 2..10 sequentially and reaches the final schema", async () => {
     const databasePath = createTempDatabasePath();
     seedCleanV1Fixture(databasePath);
 
-    // Boot the adapter — this triggers #ensureReady → #runMigrations and walks 2..7 in order.
+    // Boot the adapter — this triggers #ensureReady → #runMigrations and walks 2..10 in order.
     const persistence = createPersistence(databasePath);
     await persistence.listDrives();
 
@@ -547,7 +547,7 @@ describe("Sequential migration chain (M11)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
       // 2. Migration 2 — scans / project_scan_events / scan_sessions gained created_at+updated_at.
       const scansCols = verify.prepare("PRAGMA table_info(scans)").all() as Array<{ name: string }>;
@@ -639,7 +639,16 @@ describe("Sequential migration chain (M11)", () => {
       const folderTypeColumnCount = sspCols.filter((c) => c.name === "folder_type").length;
       expect(folderTypeColumnCount).toBe(1);
 
-      // 8. Pre-existing, non-migrated rows survive end-to-end.
+      // 9. Migration 9 — projects gained normalized_name, naming_confidence, metadata_status, partial_hash.
+      expect(projectsColNames).toEqual(
+        expect.arrayContaining(["normalized_name", "naming_confidence", "metadata_status", "partial_hash"])
+      );
+
+      // 10. Migration 10 — projects gained naming_status (nullable, NULL on pre-migration rows).
+      expect(projectsColNames).toContain("naming_status");
+      expect(projectsCols.find((c) => c.name === "naming_status")?.notnull).toBe(0);
+
+      // 11. Pre-existing, non-migrated rows survive end-to-end.
       const driveCount = verify.prepare("SELECT COUNT(*) as count FROM drives").get() as { count: number };
       expect(Number(driveCount.count)).toBe(2);
       const scanCount = verify.prepare("SELECT COUNT(*) as count FROM scans").get() as { count: number };
@@ -672,7 +681,7 @@ describe("Sequential migration chain (M11)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
       // Data the first boot migrated must still be present after the second boot's no-op pass.
       const projectCount = verify.prepare("SELECT COUNT(*) as count FROM projects").get() as {

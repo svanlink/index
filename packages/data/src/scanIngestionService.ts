@@ -208,6 +208,12 @@ function reconcileObservedProject(
   const project: Project = matchedProject
     ? {
         ...matchedProject,
+        // Refresh filesystem-derived fields on every rescan so that renames or
+        // path changes are reflected in the catalog immediately. folderName and
+        // folderPath are the on-disk truth; they must not be left stale from
+        // the first time the project was discovered.
+        folderName: record.folderName,
+        folderPath: record.folderPath,
         parsedDate: record.parsedDate,
         parsedClient: record.parsedClient,
         parsedProject: record.parsedProject,

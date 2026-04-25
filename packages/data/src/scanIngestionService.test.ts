@@ -493,6 +493,89 @@ describe("S3/H7 — terminal status priority (running, failed)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Rescan — folderName / folderPath refresh
+// ---------------------------------------------------------------------------
+
+describe("rescan — folderName and folderPath are refreshed on match", () => {
+  it("updates folderName when a matched client project has been renamed on disk", () => {
+    // First scan: project is discovered under the legacy name.
+    const firstSession = makeSession([
+      makeRecord({
+        folderType: "client",
+        folderName: "240401_Apple_ProductShoot",
+        folderPath: "/Volumes/TestDrive/240401_Apple_ProductShoot",
+        parsedDate: "240401",
+        parsedClient: "Apple",
+        parsedProject: "ProductShoot"
+      })
+    ]);
+    const firstResult = ingestScanSessionSnapshot(makeEmptySnapshot(), firstSession);
+    expect(firstResult.snapshot.projects).toHaveLength(1);
+    expect(firstResult.snapshot.projects[0]!.folderName).toBe("240401_Apple_ProductShoot");
+
+    // Second scan: the folder was renamed to the new-standard form on disk.
+    // The parsed fields are identical so the ingestion service matches the
+    // existing project — and must refresh folderName and folderPath.
+    const secondSession = makeSession(
+      [
+        makeRecord({
+          folderType: "client",
+          folderName: "240401_[C]_Apple_ProductShoot",
+          folderPath: "/Volumes/TestDrive/240401_[C]_Apple_ProductShoot",
+          parsedDate: "240401",
+          parsedClient: "Apple",
+          parsedProject: "ProductShoot"
+        })
+      ],
+      { scanId: "scan-test-2" }
+    );
+    const secondResult = ingestScanSessionSnapshot(firstResult.snapshot, secondSession);
+
+    // Still only one project — no phantom duplicate was created.
+    expect(secondResult.snapshot.projects).toHaveLength(1);
+
+    const project = secondResult.snapshot.projects[0]!;
+    // folderName and folderPath must reflect the on-disk truth from the latest scan.
+    expect(project.folderName).toBe("240401_[C]_Apple_ProductShoot");
+    expect(project.folderPath).toBe("/Volumes/TestDrive/240401_[C]_Apple_ProductShoot");
+  });
+
+  it("updates folderPath when a project moves to a different subdirectory on the same drive", () => {
+    const firstSession = makeSession([
+      makeRecord({
+        folderType: "client",
+        folderName: "240401_Apple_ProductShoot",
+        folderPath: "/Volumes/TestDrive/Clients/240401_Apple_ProductShoot",
+        parsedDate: "240401",
+        parsedClient: "Apple",
+        parsedProject: "ProductShoot"
+      })
+    ]);
+    const firstResult = ingestScanSessionSnapshot(makeEmptySnapshot(), firstSession);
+
+    const secondSession = makeSession(
+      [
+        makeRecord({
+          folderType: "client",
+          folderName: "240401_Apple_ProductShoot",
+          folderPath: "/Volumes/TestDrive/Archive/240401_Apple_ProductShoot",
+          parsedDate: "240401",
+          parsedClient: "Apple",
+          parsedProject: "ProductShoot"
+        })
+      ],
+      { scanId: "scan-test-2" }
+    );
+    const secondResult = ingestScanSessionSnapshot(firstResult.snapshot, secondSession);
+
+    expect(secondResult.snapshot.projects).toHaveLength(1);
+    expect(secondResult.snapshot.projects[0]!.folderPath).toBe(
+      "/Volumes/TestDrive/Archive/240401_Apple_ProductShoot"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Original regression tests
 // ---------------------------------------------------------------------------
 

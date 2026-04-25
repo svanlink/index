@@ -64,14 +64,18 @@ const IGNORED_SYSTEM_FOLDERS: &[&str] = &[
 /// Every folder is classified — none are silently discarded.
 #[derive(Debug, Clone)]
 enum FolderClassification {
-    /// YYMMDD_ClientName_ProjectName (client is not "Internal")
+    /// New standard: `YYYY-MM-DD_ClientName_ProjectName`
+    /// Legacy:       `YYMMDD_ClientName_ProjectName` (client ≠ "Internal")
     Client {
         date: String,
         client: String,
         project: String,
     },
-    /// YYMMDD_Internal_ProjectName
-    PersonalProject { date: String, project: String },
+    /// Legacy: `YYMMDD_Internal_ProjectName`
+    PersonalProject {
+        date: String,
+        project: String,
+    },
     /// Anything that does not match the structured patterns
     PersonalFolder,
 }
@@ -87,25 +91,25 @@ impl FolderClassification {
 
     fn parsed_date(&self) -> Option<&str> {
         match self {
-            FolderClassification::Client { date, .. } | FolderClassification::PersonalProject { date, .. } => {
-                Some(date.as_str())
-            }
+            FolderClassification::Client { date, .. }
+            | FolderClassification::PersonalProject { date, .. } => Some(date.as_str()),
             FolderClassification::PersonalFolder => None,
         }
     }
 
+    /// Returns the client name for `Client` folders.
+    /// Always `None` for `PersonalProject` and `PersonalFolder`.
     fn parsed_client(&self) -> Option<&str> {
         match self {
             FolderClassification::Client { client, .. } => Some(client.as_str()),
-            _ => None,
+            FolderClassification::PersonalProject { .. } | FolderClassification::PersonalFolder => None,
         }
     }
 
     fn parsed_project(&self) -> Option<&str> {
         match self {
-            FolderClassification::Client { project, .. } | FolderClassification::PersonalProject { project, .. } => {
-                Some(project.as_str())
-            }
+            FolderClassification::Client { project, .. }
+            | FolderClassification::PersonalProject { project, .. } => Some(project.as_str()),
             FolderClassification::PersonalFolder => None,
         }
     }
@@ -142,6 +146,9 @@ pub struct ScanSnapshot {
     pub matches_found: u64,
     pub error: Option<String>,
     pub size_jobs_pending: usize,
+    /// `"index_only"` — no size workers spawned; project `size_status` is `"unknown"`.
+    /// `"index_with_size"` — a background size walk runs per top-level folder.
+    pub scan_mode: String,
     pub projects: Vec<ScanProjectRecord>,
 }
 
@@ -149,6 +156,10 @@ pub struct ScanSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct ScanStartRequest {
     pub root_path: String,
+    /// Controls whether recursive size workers are spawned for each top-level
+    /// folder. `"index_only"` (default when omitted) records folders only —
+    /// fast, no sizes. `"index_with_size"` spawns a background size-walk per folder.
+    pub scan_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -189,6 +200,8 @@ pub struct AppScanState {
 struct ScanSession {
     cancel_requested: AtomicBool,
     finalized: AtomicBool,
+    /// Immutable after construction — read without a lock.
+    scan_mode: String,
     snapshot: Mutex<ScanSnapshot>,
     size_workers: Mutex<Vec<JoinHandle<()>>>,
 }
@@ -218,10 +231,11 @@ impl AppScanState {
 }
 
 impl ScanSession {
-    fn new(scan_id: String, root_path: String, drive_name: String) -> Self {
+    fn new(scan_id: String, root_path: String, drive_name: String, scan_mode: String) -> Self {
         Self {
             cancel_requested: AtomicBool::new(false),
             finalized: AtomicBool::new(false),
+            scan_mode: scan_mode.clone(),
             snapshot: Mutex::new(ScanSnapshot {
                 scan_id,
                 root_path,
@@ -233,6 +247,7 @@ impl ScanSession {
                 matches_found: 0,
                 error: None,
                 size_jobs_pending: 0,
+                scan_mode,
                 projects: Vec::new(),
             }),
             size_workers: Mutex::new(Vec::new()),
@@ -298,9 +313,14 @@ impl ScanSession {
         classification: &FolderClassification,
         source_drive_name: String,
     ) -> String {
+        let index_only = self.scan_mode == "index_only";
         let mut snapshot = self.snapshot.lock().expect("scan snapshot poisoned");
         snapshot.matches_found += 1;
-        snapshot.size_jobs_pending += 1;
+        // In "index" mode we never spawn a size worker, so size_jobs_pending
+        // stays at zero and size_status is "unknown" rather than "pending".
+        if !index_only {
+            snapshot.size_jobs_pending += 1;
+        }
         let project_id = format!("{}-project-{}", snapshot.scan_id, snapshot.matches_found);
 
         snapshot.projects.push(ScanProjectRecord {
@@ -314,7 +334,7 @@ impl ScanSession {
             parsed_project: classification.parsed_project().map(str::to_string),
             source_drive_name,
             scan_timestamp: timestamp_now(),
-            size_status: "pending".to_string(),
+            size_status: if index_only { "unknown".to_string() } else { "pending".to_string() },
             size_bytes: None,
             size_error: None,
         });
@@ -441,10 +461,12 @@ pub fn start_scan(
 
     let scan_id = state.next_scan_id();
     let drive_name = derive_drive_name(&root_path);
+    let scan_mode = request.scan_mode.unwrap_or_else(|| "index_only".to_string());
     let session = Arc::new(ScanSession::new(
         scan_id.clone(),
         root_path.to_string_lossy().to_string(),
         drive_name.clone(),
+        scan_mode,
     ));
     state.insert_session(scan_id.clone(), Arc::clone(&session));
 
@@ -550,7 +572,12 @@ fn scan_directory(
             &classification,
             drive_name.to_string(),
         );
-        spawn_size_calculation(Arc::clone(session), project_id, child_path.clone());
+        // Spawn a recursive size worker only in "index_with_sizes" mode.
+        // In "index" mode the project record carries size_status = "unknown"
+        // and size_jobs_pending stays at zero, keeping the scan fast.
+        if session.scan_mode != "index_only" {
+            spawn_size_calculation(Arc::clone(session), project_id, child_path.clone());
+        }
 
         // Intentionally no recursion: the scanner is a single-level sweep of the drive
         // root. Every top-level entry becomes a project record; nothing below is walked.
@@ -623,47 +650,84 @@ fn should_ignore_directory(name: &str) -> bool {
     name.starts_with('.') || IGNORED_SYSTEM_FOLDERS.contains(&name)
 }
 
+/// Returns true iff `value` is exactly 6 ASCII decimal digits (legacy `YYMMDD` date).
+fn is_six_ascii_digits(value: &str) -> bool {
+    value.len() == 6 && value.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Returns true iff `value` is exactly 10 bytes matching `YYYY-MM-DD`:
+/// four ASCII digits, a hyphen, two ASCII digits, a hyphen, two ASCII digits.
+fn is_ten_char_iso_date(value: &str) -> bool {
+    let b = value.as_bytes();
+    b.len() == 10
+        && b[0].is_ascii_digit()
+        && b[1].is_ascii_digit()
+        && b[2].is_ascii_digit()
+        && b[3].is_ascii_digit()
+        && b[4] == b'-'
+        && b[5].is_ascii_digit()
+        && b[6].is_ascii_digit()
+        && b[7] == b'-'
+        && b[8].is_ascii_digit()
+        && b[9].is_ascii_digit()
+}
+
 /// Classify a folder name into one of three types.
 /// Never returns an error — every name produces a classification.
 ///
 /// Rules (evaluated in order):
-///   1. YYMMDD_ClientName_ProjectName (exactly 3 parts, date is 6 digits, client ≠ "Internal") → Client
-///   2. YYMMDD_Internal_ProjectName (client is literally "Internal") → PersonalProject
-///   3. Anything else → PersonalFolder
+///
+/// **New standard (preferred)**
+///   1. `YYYY-MM-DD_ClientName_ProjectName` → `Client`
+///
+/// **Legacy (backward-compatible)**
+///   2. `YYMMDD_ClientName_ProjectName` (client ≠ "Internal") → `Client`
+///   3. `YYMMDD_Internal_ProjectName`                         → `PersonalProject`
+///
+/// **Fallback**
+///   4. Anything else → `PersonalFolder`
 fn classify_folder_name(name: &str) -> FolderClassification {
     let parts: Vec<&str> = name.split('_').collect();
 
-    // Must have exactly 3 underscore-delimited parts
-    if parts.len() != 3 {
-        return FolderClassification::PersonalFolder;
-    }
+    // All structured conventions produce exactly 3 tokens when split by '_'.
+    // YYYY-MM-DD dates contain hyphens (not underscores), so they remain a
+    // single token after the split.
+    if parts.len() == 3 {
+        let date    = parts[0];
+        let client  = parts[1];
+        let project = parts[2];
 
-    let date = parts[0];
-    let client = parts[1];
-    let project = parts[2];
-
-    // Date segment must be exactly 6 ASCII digits
-    if date.len() != 6 || !date.bytes().all(|b| b.is_ascii_digit()) {
-        return FolderClassification::PersonalFolder;
-    }
-
-    // Client and project segments must be non-empty
-    if client.is_empty() || project.is_empty() {
-        return FolderClassification::PersonalFolder;
-    }
-
-    if client == "Internal" {
-        FolderClassification::PersonalProject {
-            date: date.to_string(),
-            project: project.to_string(),
+        if client.is_empty() || project.is_empty() {
+            return FolderClassification::PersonalFolder;
         }
-    } else {
-        FolderClassification::Client {
-            date: date.to_string(),
-            client: client.to_string(),
-            project: project.to_string(),
+
+        // ── New standard: YYYY-MM-DD_Client_Project ─────────────────────────
+        if is_ten_char_iso_date(date) {
+            return FolderClassification::Client {
+                date:    date.to_string(),
+                client:  client.to_string(),
+                project: project.to_string(),
+            };
+        }
+
+        // ── Legacy: YYMMDD_Client_Project or YYMMDD_Internal_Project ────────
+        if is_six_ascii_digits(date) {
+            return if client == "Internal" {
+                FolderClassification::PersonalProject {
+                    date:    date.to_string(),
+                    project: project.to_string(),
+                }
+            } else {
+                FolderClassification::Client {
+                    date:    date.to_string(),
+                    client:  client.to_string(),
+                    project: project.to_string(),
+                }
+            };
         }
     }
+
+    FolderClassification::PersonalFolder
 }
 
 fn derive_drive_name(path: &Path) -> String {
@@ -683,8 +747,30 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    // ── New standard: YYYY-MM-DD_Client_Project ─────────────────────────────
+
     #[test]
-    fn classifies_client_folders() {
+    fn classifies_new_standard_yyyy_mm_dd_folders() {
+        let c = classify_folder_name("2024-03-12_Richemont_EventRecap");
+        assert!(matches!(c, FolderClassification::Client { .. }));
+        assert_eq!(c.folder_type_str(), "client");
+        assert_eq!(c.parsed_date(), Some("2024-03-12"));
+        assert_eq!(c.parsed_client(), Some("Richemont"));
+        assert_eq!(c.parsed_project(), Some("EventRecap"));
+
+        let c = classify_folder_name("2024-06-05_Decathlon_RunningCampaign");
+        assert_eq!(c.parsed_date(), Some("2024-06-05"));
+        assert_eq!(c.parsed_client(), Some("Decathlon"));
+
+        let c = classify_folder_name("2023-09-11_Fuerteventura_SurfDoc");
+        assert_eq!(c.parsed_date(), Some("2023-09-11"));
+        assert_eq!(c.parsed_client(), Some("Fuerteventura"));
+    }
+
+    // ── Legacy YYMMDD format (backward-compat) ───────────────────────────────
+
+    #[test]
+    fn classifies_legacy_client_folders() {
         let c = classify_folder_name("240401_Apple_ProductShoot");
         assert!(matches!(c, FolderClassification::Client { .. }));
         assert_eq!(c.folder_type_str(), "client");
@@ -694,7 +780,7 @@ mod tests {
     }
 
     #[test]
-    fn classifies_personal_project_when_client_is_internal() {
+    fn classifies_legacy_personal_project_when_client_is_internal() {
         let c = classify_folder_name("240401_Internal_Archive");
         assert!(matches!(c, FolderClassification::PersonalProject { .. }));
         assert_eq!(c.folder_type_str(), "personal_project");
@@ -703,17 +789,19 @@ mod tests {
         assert_eq!(c.parsed_project(), Some("Archive"));
     }
 
+    // ── personal_folder fallback ─────────────────────────────────────────────
+
     #[test]
     fn classifies_personal_folder_for_non_standard_names() {
         // Too few parts
         let c = classify_folder_name("240401_Apple");
         assert!(matches!(c, FolderClassification::PersonalFolder));
 
-        // Too many parts
+        // Too many parts (underscores in project name)
         let c = classify_folder_name("240401_Apple_Product_Shoot");
         assert!(matches!(c, FolderClassification::PersonalFolder));
 
-        // Non-digit date
+        // Non-digit date (legacy path)
         let c = classify_folder_name("24A401_Apple_ProductShoot");
         assert!(matches!(c, FolderClassification::PersonalFolder));
 
@@ -725,9 +813,40 @@ mod tests {
         let c = classify_folder_name("Archive");
         assert!(matches!(c, FolderClassification::PersonalFolder));
 
-        // Internal-like but not exact case
+        // Internal-like but not exact case (legacy path treats it as client)
         let c = classify_folder_name("240401_internal_Archive");
         assert!(matches!(c, FolderClassification::Client { .. }), "lowercase 'internal' is a client name, not personal_project");
+    }
+
+    // ── index_only mode ──────────────────────────────────────────────────────
+
+    #[test]
+    fn index_only_mode_sets_unknown_size_status_and_no_pending_jobs() {
+        let temp = tempdir().expect("tempdir");
+        let root = temp.path();
+        fs::create_dir(root.join("240401_Apple_ProductShoot")).expect("project");
+        fs::write(root.join("240401_Apple_ProductShoot").join("file.mov"), vec![0_u8; 256]).expect("file");
+
+        let session = Arc::new(ScanSession::new(
+            "scan-index-only".to_string(),
+            root.to_string_lossy().to_string(),
+            "Drive A".to_string(),
+            "index_only".to_string(),
+        ));
+
+        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
+            .expect("scan should succeed");
+
+        let snapshot = session.snapshot();
+        assert_eq!(snapshot.scan_mode, "index_only");
+        assert_eq!(snapshot.size_jobs_pending, 0, "index_only must not spawn size workers");
+        assert!(
+            snapshot.projects.iter().all(|p| p.size_status == "unknown"),
+            "all projects must have size_status=unknown in index_only mode"
+        );
+        // No size workers should have been registered
+        let workers = session.size_workers.lock().expect("workers");
+        assert!(workers.is_empty(), "no size worker handles registered in index_only mode");
     }
 
     #[test]
@@ -773,6 +892,7 @@ mod tests {
             "scan-test".to_string(),
             root.to_string_lossy().to_string(),
             "Drive A".to_string(),
+            "index_with_size".to_string(),
         ));
 
         execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session)).expect("scan should succeed");
@@ -823,6 +943,7 @@ mod tests {
             "scan-cancel".to_string(),
             root.to_string_lossy().to_string(),
             "Drive A".to_string(),
+            "index_with_size".to_string(),
         ));
         session.cancel_requested.store(true, Ordering::Relaxed);
 
@@ -847,6 +968,7 @@ mod tests {
             "scan-race".to_string(),
             root.to_string_lossy().to_string(),
             "Drive A".to_string(),
+            "index_with_size".to_string(),
         ));
 
         execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
@@ -881,6 +1003,7 @@ mod tests {
             "scan-complete".to_string(),
             root.to_string_lossy().to_string(),
             "Drive A".to_string(),
+            "index_with_size".to_string(),
         ));
 
         execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
@@ -907,6 +1030,7 @@ mod tests {
             "scan-double-terminal".to_string(),
             "/tmp".to_string(),
             "Drive A".to_string(),
+            "index_with_size".to_string(),
         ));
 
         session.mark_cancelled();
@@ -929,6 +1053,7 @@ mod tests {
             "scan-idempotent".to_string(),
             "/tmp".to_string(),
             "Drive A".to_string(),
+            "index_with_size".to_string(),
         ));
 
         session.mark_completed();
@@ -959,6 +1084,7 @@ mod tests {
             "scan-sizes".to_string(),
             root.to_string_lossy().to_string(),
             "Drive A".to_string(),
+            "index_with_size".to_string(),
         ));
 
         execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
@@ -999,6 +1125,7 @@ mod tests {
             "scan-drop".to_string(),
             root.to_string_lossy().to_string(),
             "Drive A".to_string(),
+            "index_with_size".to_string(),
         ));
 
         execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))

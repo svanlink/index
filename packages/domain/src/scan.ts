@@ -52,6 +52,20 @@ export interface ScanSessionSnapshot {
   matchesFound: number;
   error: string | null;
   sizeJobsPending: number;
+  /**
+   * Controls how deeply the scan engine processed each top-level folder.
+   *
+   * - `"index_only"` (default) — top-level folder list only; `sizeStatus` is
+   *   `"unknown"` on every project. Fast and safe for the default pass.
+   * - `"index_with_size"` — a recursive size walk runs per top-level folder.
+   * - `"index_with_hash"` — size walk + partial content hash for duplicate
+   *   candidate detection (future).
+   * - `"deep_analysis"` — full analysis pass including metadata extraction
+   *   (future).
+   *
+   * Absent on sessions persisted before this field was introduced.
+   */
+  scanMode?: "index_only" | "index_with_size" | "index_with_hash" | "deep_analysis";
   projects: ScanProjectRecord[];
   requestedDriveId?: string | null;
   requestedDriveName?: string | null;
@@ -62,6 +76,8 @@ export interface ScanSessionSnapshot {
 
 export interface ScanStartRequest {
   rootPath: string;
+  /** Defaults to `"index_only"` when omitted. */
+  scanMode?: "index_only" | "index_with_size" | "index_with_hash" | "deep_analysis";
 }
 
 export interface ScanStartResponse {

@@ -538,6 +538,121 @@ const migrations: Migration[] = [
         );
       }
     }
+  },
+  {
+    version: 8,
+    // Add volume identity columns to drives: stable UUID, last observed mount path, filesystem type.
+    // All nullable with no DEFAULT so existing rows stay valid (SQLite fills them with NULL).
+    // ALTER TABLE ADD COLUMN is not idempotent in SQLite — guard each add via pragma.
+    run: async (database: SqlDatabase) => {
+      const addColumnIfMissing = async (tableName: string, columnName: string, definition: string) => {
+        const columns = await database.select<{ name: string }>(`PRAGMA table_info(${tableName})`);
+        if (!columns.some((col) => col.name === columnName)) {
+          await database.execute(`ALTER TABLE ${tableName} ADD COLUMN ${definition}`);
+        }
+      };
+      await addColumnIfMissing("drives", "volume_uuid", "volume_uuid TEXT");
+      await addColumnIfMissing("drives", "mount_path", "mount_path TEXT");
+      await addColumnIfMissing("drives", "filesystem", "filesystem TEXT");
+    }
+  },
+  {
+    version: 9,
+    // Add classifier-output columns to projects, scan_mode to scan_sessions, and create
+    // four new tables for the rename, duplicate, metadata, and reporting pipelines.
+    // ALTER TABLE ADD COLUMN guards are used throughout (not idempotent in SQLite).
+    run: async (database: SqlDatabase) => {
+      const addColumnIfMissing = async (tableName: string, columnName: string, definition: string) => {
+        const columns = await database.select<{ name: string }>(`PRAGMA table_info(${tableName})`);
+        if (!columns.some((col) => col.name === columnName)) {
+          await database.execute(`ALTER TABLE ${tableName} ADD COLUMN ${definition}`);
+        }
+      };
+
+      // projects — classifier output fields (guard: table may not exist in partial-migration DBs)
+      if (await tableExists(database, "projects")) {
+        await addColumnIfMissing("projects", "normalized_name", "normalized_name TEXT");
+        await addColumnIfMissing("projects", "naming_confidence", "naming_confidence TEXT");
+        await addColumnIfMissing("projects", "metadata_status", "metadata_status TEXT");
+        await addColumnIfMissing("projects", "partial_hash", "partial_hash TEXT");
+      }
+
+      // scan_sessions — scan depth mode (guard: table may not exist in partial-migration DBs)
+      if (await tableExists(database, "scan_sessions")) {
+        await addColumnIfMissing("scan_sessions", "scan_mode", "scan_mode TEXT");
+      }
+
+      // rename_suggestions — proposed canonical renames for legacy/non-standard folders
+      await database.execute(`CREATE TABLE IF NOT EXISTS rename_suggestions (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        current_name TEXT NOT NULL,
+        suggested_name TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`);
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rename_suggestions_project_id ON rename_suggestions (project_id)"
+      );
+
+      // duplicate_candidates — pairs of projects flagged as potential duplicates
+      await database.execute(`CREATE TABLE IF NOT EXISTS duplicate_candidates (
+        id TEXT PRIMARY KEY,
+        project_id_a TEXT NOT NULL,
+        project_id_b TEXT NOT NULL,
+        match_basis TEXT NOT NULL,
+        confidence TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`);
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_duplicate_candidates_project_id_a ON duplicate_candidates (project_id_a)"
+      );
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_duplicate_candidates_project_id_b ON duplicate_candidates (project_id_b)"
+      );
+
+      // metadata_records — sidecar metadata (EXIF, XMP, etc.) extracted per project
+      await database.execute(`CREATE TABLE IF NOT EXISTS metadata_records (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        value TEXT,
+        source TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`);
+      await database.execute(
+        "CREATE INDEX IF NOT EXISTS idx_metadata_records_project_id ON metadata_records (project_id)"
+      );
+
+      // csv_reports — generated export reports
+      await database.execute(`CREATE TABLE IF NOT EXISTS csv_reports (
+        id TEXT PRIMARY KEY,
+        report_type TEXT NOT NULL,
+        generated_at TEXT NOT NULL,
+        row_count INTEGER NOT NULL,
+        file_path TEXT,
+        created_at TEXT NOT NULL
+      )`);
+    }
+  },
+  {
+    version: 10,
+    // Add naming_status to projects: "valid" | "legacy" | "invalid".
+    // Existing rows get NULL (read back as "unknown" by mapProjectRow) until
+    // a reclassify pass is run. ALTER TABLE ADD COLUMN is not idempotent in
+    // SQLite — guard via tableExists + pragma check.
+    run: async (database: SqlDatabase) => {
+      if (!(await tableExists(database, "projects"))) return;
+      const columns = await database.select<{ name: string }>("PRAGMA table_info(projects)");
+      if (!columns.some((col) => col.name === "naming_status")) {
+        await database.execute("ALTER TABLE projects ADD COLUMN naming_status TEXT");
+      }
+    }
   }
 ];
 
@@ -928,6 +1043,10 @@ type DriveRow = {
   created_manually: number;
   created_at: string;
   updated_at: string;
+  // Migration 8 columns — NULL on rows that predate the migration
+  volume_uuid: string | null;
+  mount_path: string | null;
+  filesystem: string | null;
 };
 
 type ProjectRow = {
@@ -956,6 +1075,13 @@ type ProjectRow = {
   last_scanned_at: string | null;
   created_at: string;
   updated_at: string;
+  // Migration 9 columns — NULL on rows that predate the migration
+  normalized_name: string | null;
+  naming_confidence: string | null;
+  metadata_status: string | null;
+  partial_hash: string | null;
+  // Migration 10 columns — NULL on rows that predate the migration
+  naming_status: string | null;
 };
 
 type ScanRow = {
@@ -1003,6 +1129,8 @@ type ScanSessionRow = {
   summary_duration_ms: number | null;
   created_at: string;
   updated_at: string;
+  // Migration 9 column — NULL on rows that predate the migration
+  scan_mode: string | null;
 };
 
 type ScanSessionProjectRow = {
@@ -1022,7 +1150,7 @@ type ScanSessionProjectRow = {
   size_error: string | null;
 };
 
-function mapDriveRow(row: DriveRow) {
+function mapDriveRow(row: DriveRow): Drive {
   return {
     id: row.id,
     volumeName: row.volume_name,
@@ -1034,7 +1162,10 @@ function mapDriveRow(row: DriveRow) {
     lastScannedAt: row.last_scanned_at,
     createdManually: fromSqlBoolean(row.created_manually),
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    volumeUuid: row.volume_uuid ?? null,
+    mountPath: row.mount_path ?? null,
+    filesystem: row.filesystem ?? null
   };
 }
 
@@ -1064,7 +1195,14 @@ function mapProjectRow(row: ProjectRow): Project {
     lastSeenAt: row.last_seen_at,
     lastScannedAt: row.last_scanned_at,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    normalizedName: row.normalized_name ?? null,
+    namingConfidence: (row.naming_confidence ?? null) as "high" | "medium" | "low" | null,
+    metadataStatus: (row.metadata_status ?? null) as "pending" | "complete" | "error" | null,
+    partialHash: row.partial_hash ?? null,
+    namingStatus: row.naming_status === null || row.naming_status === undefined
+      ? "unknown"
+      : (row.naming_status as "valid" | "legacy" | "invalid" | "unknown")
   };
 }
 
@@ -1097,7 +1235,7 @@ function mapProjectScanEventRow(row: ProjectScanEventRow) {
   };
 }
 
-function mapScanSessionRow(row: ScanSessionRow, projects: ScanProjectRecord[]) {
+function mapScanSessionRow(row: ScanSessionRow, projects: ScanProjectRecord[]): ScanSessionSnapshot {
   return {
     scanId: row.scan_id,
     rootPath: row.root_path,
@@ -1114,6 +1252,7 @@ function mapScanSessionRow(row: ScanSessionRow, projects: ScanProjectRecord[]) {
     requestedDriveName: row.requested_drive_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    scanMode: (row.scan_mode ?? undefined) as ScanSessionSnapshot["scanMode"],
     summary: row.summary_new_projects_count === null
       ? null
       : {
@@ -1164,8 +1303,9 @@ async function upsertDriveRow(database: SqlDatabase, drive: Drive) {
   await database.execute(
     `INSERT INTO drives (
       id, volume_name, display_name, total_capacity_bytes, used_bytes, free_bytes,
-      reserved_incoming_bytes, last_scanned_at, created_manually, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      reserved_incoming_bytes, last_scanned_at, created_manually, created_at, updated_at,
+      volume_uuid, mount_path, filesystem
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       volume_name = excluded.volume_name,
       display_name = excluded.display_name,
@@ -1176,7 +1316,10 @@ async function upsertDriveRow(database: SqlDatabase, drive: Drive) {
       last_scanned_at = excluded.last_scanned_at,
       created_manually = excluded.created_manually,
       created_at = excluded.created_at,
-      updated_at = excluded.updated_at`,
+      updated_at = excluded.updated_at,
+      volume_uuid = excluded.volume_uuid,
+      mount_path = excluded.mount_path,
+      filesystem = excluded.filesystem`,
     [
       drive.id,
       drive.volumeName,
@@ -1188,7 +1331,10 @@ async function upsertDriveRow(database: SqlDatabase, drive: Drive) {
       drive.lastScannedAt,
       toSqlBoolean(drive.createdManually),
       drive.createdAt,
-      drive.updatedAt
+      drive.updatedAt,
+      drive.volumeUuid ?? null,
+      drive.mountPath ?? null,
+      drive.filesystem ?? null
     ]
   );
 }
@@ -1206,8 +1352,9 @@ async function upsertProjectRow(database: SqlDatabase, project: Project) {
       parsed_date, parsed_client, parsed_project, corrected_date, corrected_client, corrected_project,
       category, size_bytes, size_status, current_drive_id, target_drive_id, move_status,
       missing_status, duplicate_status, is_unassigned, is_manual, last_seen_at, last_scanned_at,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      created_at, updated_at,
+      normalized_name, naming_confidence, metadata_status, partial_hash, naming_status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       folder_type = excluded.folder_type,
       is_standardized = excluded.is_standardized,
@@ -1232,7 +1379,12 @@ async function upsertProjectRow(database: SqlDatabase, project: Project) {
       last_seen_at = excluded.last_seen_at,
       last_scanned_at = excluded.last_scanned_at,
       created_at = excluded.created_at,
-      updated_at = excluded.updated_at`,
+      updated_at = excluded.updated_at,
+      normalized_name = excluded.normalized_name,
+      naming_confidence = excluded.naming_confidence,
+      metadata_status = excluded.metadata_status,
+      partial_hash = excluded.partial_hash,
+      naming_status = excluded.naming_status`,
     [
       project.id,
       project.folderType ?? 'client',
@@ -1258,7 +1410,12 @@ async function upsertProjectRow(database: SqlDatabase, project: Project) {
       project.lastSeenAt,
       project.lastScannedAt,
       createdAt,
-      updatedAt
+      updatedAt,
+      project.normalizedName ?? null,
+      project.namingConfidence ?? null,
+      project.metadataStatus ?? null,
+      project.partialHash ?? null,
+      project.namingStatus === "unknown" ? null : (project.namingStatus ?? null)
     ]
   );
 }
@@ -1329,19 +1486,19 @@ async function writeScanSessionRecord(database: SqlDatabase, session: ScanSessio
         requested_drive_id, requested_drive_name,
         summary_new_projects_count, summary_updated_projects_count,
         summary_missing_projects_count, summary_duplicates_flagged_count, summary_duration_ms,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at, updated_at, scan_mode
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(scan_id) DO UPDATE SET
         root_path = excluded.root_path,
         drive_name = excluded.drive_name,
-      status = excluded.status,
-      started_at = excluded.started_at,
-      finished_at = excluded.finished_at,
-      folders_scanned = excluded.folders_scanned,
-      matches_found = excluded.matches_found,
-      error = excluded.error,
-      size_jobs_pending = excluded.size_jobs_pending,
-      requested_drive_id = excluded.requested_drive_id,
+        status = excluded.status,
+        started_at = excluded.started_at,
+        finished_at = excluded.finished_at,
+        folders_scanned = excluded.folders_scanned,
+        matches_found = excluded.matches_found,
+        error = excluded.error,
+        size_jobs_pending = excluded.size_jobs_pending,
+        requested_drive_id = excluded.requested_drive_id,
         requested_drive_name = excluded.requested_drive_name,
         summary_new_projects_count = excluded.summary_new_projects_count,
         summary_updated_projects_count = excluded.summary_updated_projects_count,
@@ -1349,27 +1506,29 @@ async function writeScanSessionRecord(database: SqlDatabase, session: ScanSessio
         summary_duplicates_flagged_count = excluded.summary_duplicates_flagged_count,
         summary_duration_ms = excluded.summary_duration_ms,
         created_at = excluded.created_at,
-        updated_at = excluded.updated_at`,
+        updated_at = excluded.updated_at,
+        scan_mode = excluded.scan_mode`,
       [
         session.scanId,
         session.rootPath,
-      session.driveName,
-      session.status,
-      session.startedAt,
-      session.finishedAt,
-      session.foldersScanned,
-      session.matchesFound,
-      session.error,
-      session.sizeJobsPending,
-      session.requestedDriveId ?? null,
-      session.requestedDriveName ?? null,
-      session.summary?.newProjectsCount ?? null,
+        session.driveName,
+        session.status,
+        session.startedAt,
+        session.finishedAt,
+        session.foldersScanned,
+        session.matchesFound,
+        session.error,
+        session.sizeJobsPending,
+        session.requestedDriveId ?? null,
+        session.requestedDriveName ?? null,
+        session.summary?.newProjectsCount ?? null,
         session.summary?.updatedProjectsCount ?? null,
         session.summary?.missingProjectsCount ?? null,
         session.summary?.duplicatesFlaggedCount ?? null,
         session.summary?.durationMs ?? null,
         session.createdAt,
-        session.updatedAt
+        session.updatedAt,
+        session.scanMode ?? null
       ]
     );
 

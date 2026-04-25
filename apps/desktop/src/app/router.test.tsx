@@ -13,7 +13,7 @@ vi.mock("./catalogRepository", async () => {
 
 describe("desktop routes", () => {
   it.each([
-    { path: "/", value: "Overview" },
+    { path: "/", value: "Inbox" },
     { path: "/projects", value: "Projects" },
     { path: "/drives", value: "Drives" },
     { path: "/projects/project-240401-apple-shoot", value: "Apple Product Shoot" },

@@ -276,6 +276,10 @@ export function DrivesPage() {
       : "";
   return (
     <div className="space-y-6 pt-2">
+      {/* sr-only h1 for WCAG 2.4.6 and test identification. The top-nav
+          breadcrumb names this section for sighted users; the h1 exists for
+          screen readers and automated tests only. */}
+      <h1 className="sr-only">Drives</h1>
       {importSourcePath && importFolders ? (
         <ImportFoldersDialog
           sourcePath={importSourcePath}

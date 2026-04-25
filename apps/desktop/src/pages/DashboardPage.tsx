@@ -65,6 +65,11 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-10 pt-1">
+      {/* sr-only h1 so screen readers and tests can identify this page. The
+          visible section heading ("Last activity") is a secondary landmark;
+          the top-nav breadcrumb names the section for sighted users but is not
+          an h1 in the DOM, so we provide one here for WCAG 2.4.6 compliance. */}
+      <h1 className="sr-only">Inbox</h1>
       <Section title="Last activity">
         {activeScan ? (
           <ActiveScanRow
@@ -325,7 +330,7 @@ function InboxWelcome() {
           className="mt-3 text-[17px] leading-[1.47]"
           style={{ color: "var(--ink-2)", margin: 0 }}
         >
-          Project Catalog indexes what's already on your drives so you can find any project by
+          Catalog indexes what's already on your drives so you can find any project by
           name, no matter where it lives.
         </p>
         <div className="mt-6 flex items-center gap-2">

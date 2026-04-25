@@ -5,6 +5,11 @@ use std::process::Command;
 pub struct VolumeInfo {
     pub filesystem_type: String,
     pub volume_name: String,
+    /// Volume UUID as reported by `diskutil info`. `None` when the volume does
+    /// not expose a UUID (e.g. FAT32 without a partition UUID) or when parsing
+    /// fails. Used by the drive-import flow to establish a stable identity for
+    /// volumes whose display names may change across remounts.
+    pub volume_uuid: Option<String>,
     pub total_bytes: u64,
     pub free_bytes: u64,
 }
@@ -15,15 +20,27 @@ pub fn get_volume_info(path: String) -> Option<VolumeInfo> {
     let (total_bytes, free_bytes) = parse_df_bytes(&path)?;
 
     Some(VolumeInfo {
-        filesystem_type: diskutil.0,
-        volume_name: diskutil.1,
+        filesystem_type: diskutil.filesystem_type,
+        volume_name: diskutil.volume_name,
+        volume_uuid: diskutil.volume_uuid,
         total_bytes,
         free_bytes,
     })
 }
 
-/// Returns `(filesystem_type, volume_name)` from `diskutil info <path>`.
-fn parse_diskutil_info(path: &str) -> Option<(String, String)> {
+struct DiskutilInfo {
+    filesystem_type: String,
+    volume_name: String,
+    /// `None` when the volume has no UUID or diskutil does not report one.
+    volume_uuid: Option<String>,
+}
+
+/// Parses `diskutil info <path>` output into a `DiskutilInfo`.
+///
+/// Returns `None` only when `diskutil` fails or `File System Personality` is
+/// absent (the minimum viable field). `volume_name` and `volume_uuid` may be
+/// empty / `None` independently without causing a `None` return.
+fn parse_diskutil_info(path: &str) -> Option<DiskutilInfo> {
     let output = Command::new("diskutil")
         .args(["info", path])
         .output()
@@ -36,6 +53,7 @@ fn parse_diskutil_info(path: &str) -> Option<(String, String)> {
     let text = String::from_utf8_lossy(&output.stdout);
     let mut filesystem_type = String::new();
     let mut volume_name = String::new();
+    let mut volume_uuid: Option<String> = None;
 
     for line in text.lines() {
         if filesystem_type.is_empty() {
@@ -48,7 +66,15 @@ fn parse_diskutil_info(path: &str) -> Option<(String, String)> {
                 volume_name = rest.1.trim().to_string();
             }
         }
-        if !filesystem_type.is_empty() && !volume_name.is_empty() {
+        if volume_uuid.is_none() {
+            if let Some(rest) = line.split_once("Volume UUID:") {
+                let uuid = rest.1.trim().to_string();
+                if !uuid.is_empty() {
+                    volume_uuid = Some(uuid);
+                }
+            }
+        }
+        if !filesystem_type.is_empty() && !volume_name.is_empty() && volume_uuid.is_some() {
             break;
         }
     }
@@ -57,7 +83,7 @@ fn parse_diskutil_info(path: &str) -> Option<(String, String)> {
         return None;
     }
 
-    Some((filesystem_type, volume_name))
+    Some(DiskutilInfo { filesystem_type, volume_name, volume_uuid })
 }
 
 /// Returns `(total_bytes, free_bytes)` from `df -Pk <path>`.

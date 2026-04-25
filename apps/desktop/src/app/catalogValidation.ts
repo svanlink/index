@@ -31,8 +31,8 @@ export function validateManualProjectForm(input: ManualProjectFormValidationInpu
   const parsedClient = input.parsedClient.trim();
   const parsedProject = input.parsedProject.trim();
 
-  if (!/^\d{6}$/.test(parsedDate)) {
-    errors.push("Date must use the YYMMDD format.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(parsedDate)) {
+    errors.push("Date must use the YYYY-MM-DD format (e.g. 2024-03-12).");
   } else if (!isValidParsedDate(parsedDate)) {
     errors.push("Date must be a real calendar date.");
   }
@@ -247,9 +247,10 @@ export function validateSingleProjectMove(params: {
 }
 
 function isValidParsedDate(value: string) {
-  const year = Number(`20${value.slice(0, 2)}`);
-  const month = Number(value.slice(2, 4));
-  const day = Number(value.slice(4, 6));
+  const [yearStr, monthStr, dayStr] = value.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
   const date = new Date(year, month - 1, day);
 
   return (

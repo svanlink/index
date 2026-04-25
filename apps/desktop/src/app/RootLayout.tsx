@@ -78,7 +78,7 @@ export function RootLayout() {
     }
 
     return {
-      section: sectionLabels[path] ?? "Project Catalog",
+      section: sectionLabels[path] ?? "Catalog",
       sectionDetail: undefined as string | undefined
     };
   }, [location.pathname, params.projectId, params.driveId, projects, drives]);
@@ -126,7 +126,7 @@ export function RootLayout() {
       footerNavItems={footerNavItems}
       section={section}
       sectionDetail={sectionDetail}
-      brandLabel="Project Catalog"
+      brandLabel="Catalog"
       searchValue={globalSearch}
       searchPlaceholder="Search projects, drives, or folders"
       onSearchChange={setGlobalSearch}

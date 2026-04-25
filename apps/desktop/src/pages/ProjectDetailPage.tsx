@@ -527,8 +527,8 @@ export function ProjectDetailPage() {
                     value={metadataForm.correctedDate}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedDate: event.target.value }))}
                     className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
-                    placeholder={currentProject.parsedDate ?? "YYMMDD, e.g. 240401"}
-                    maxLength={6}
+                    placeholder={currentProject.parsedDate ? formatParsedDate(currentProject.parsedDate) : "YYYY-MM-DD, e.g. 2024-03-12"}
+                    maxLength={10}
                   />
                 </FormField>
                 <FormField label="Client">

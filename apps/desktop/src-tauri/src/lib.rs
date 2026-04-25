@@ -20,7 +20,7 @@ struct AppInfo {
 #[tauri::command]
 fn app_info() -> AppInfo {
     AppInfo {
-        name: "Drive Project Catalog",
+        name: "Catalog",
         surface: "desktop",
         phase: "release-readiness",
     }
