@@ -1,18 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Alert,
-  AlertTitle,
-  Avatar,
-  Box,
-  Button,
-  Chip,
-  Paper,
-  Skeleton,
-  Stack,
-  TextField,
-  Typography
-} from "@mui/material";
 import { Icon } from "@drive-project-catalog/ui";
 import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import {
@@ -26,17 +13,12 @@ import {
   pickVolumeRoot,
   type VolumeFolderEntry
 } from "../app/volumeImportCommands";
-import {
-  copyTextToClipboard,
-  openPathInFinder,
-  showNativeContextMenu,
-  showPathInFinder
-} from "../app/nativeContextMenu";
 import { useShortcut } from "../app/useShortcut";
 import { useCatalogStore } from "../app/providers";
 import { formatBytes, formatDate } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { ImportFoldersDialog } from "./ImportFoldersDialog";
+import { DriveCardSkeleton, FeedbackNotice, StatusBadge } from "./pagePrimitives";
 import { getDriveColor } from "./driveColor";
 
 // ---------------------------------------------------------------------------
@@ -264,21 +246,12 @@ export function DrivesPage() {
             ? `${result.importedCount} folder${result.importedCount === 1 ? "" : "s"} added to "${driveToUse.displayName}".`
             : `Created "${driveToUse.displayName}" and imported ${result.importedCount} folder${result.importedCount === 1 ? "" : "s"}.`
         ];
-        if (result.cleanupReviewCount > 0) {
-          parts.push(`${result.cleanupReviewCount} need cleanup and were sent to Rename Review.`);
-        }
-        const issueParts = buildImportCleanupIssueParts(result);
-        if (issueParts.length > 0) {
-          parts.push(`Detected: ${issueParts.join(", ")}.`);
-        }
         if (result.skippedCount > 0) {
           parts.push(`${result.skippedCount} already in catalog were skipped.`);
         }
         setFeedback({
-          tone: result.cleanupReviewCount > 0 ? "warning" : "success",
-          title: result.cleanupReviewCount > 0
-            ? matched ? "Folders imported with cleanup needed" : "Drive imported with cleanup needed"
-            : matched ? "Folders imported" : "Drive imported",
+          tone: "success",
+          title: matched ? "Folders imported" : "Drive imported",
           messages: parts
         });
       }
@@ -302,7 +275,7 @@ export function DrivesPage() {
       ? deriveVolumeName(importSourcePath, null)
       : "";
   return (
-    <Stack spacing={2}>
+    <div className="space-y-6 pt-2">
       {/* sr-only h1 for WCAG 2.4.6 and test identification. The top-nav
           breadcrumb names this section for sighted users; the h1 exists for
           screen readers and automated tests only. */}
@@ -330,11 +303,18 @@ export function DrivesPage() {
           Breadcrumb in the top nav already names the section. Page opens
           directly into the actions + inventory. */}
       {!isLoading && drives.length > 0 ? (
-        <Stack direction="row" sx={{ justifyContent: "flex-end", gap: 1, flexWrap: "wrap" }}>
-          <Button variant="outlined" onClick={() => setIsCreateOpen((c) => !c)} startIcon={<Icon name="plus" size={16} color="currentColor" />}>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => setIsCreateOpen((c) => !c)}
+          >
+            <Icon name="plus" size={12} color="currentColor" />
             {isCreateOpen ? "Discard" : "Add manually"}
-          </Button>
-          <Button
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
             onClick={() => void runImportFromVolume()}
             disabled={!canUseImport || isPickingImport || isImporting || isMutating}
             title={
@@ -342,15 +322,19 @@ export function DrivesPage() {
                 ? undefined
                 : "The native volume picker is only available in the desktop app."
             }
-            startIcon={<Icon name="scan" size={16} color="currentColor" />}
           >
+            <Icon name="scan" size={12} color="currentColor" />
             {isPickingImport ? "Opening…" : "Scan connected drive"}
-          </Button>
-        </Stack>
+          </button>
+        </div>
       ) : null}
 
       {feedback ? (
-        <FeedbackAlert tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
+        <FeedbackNotice
+          tone={feedback.tone}
+          title={feedback.title}
+          messages={feedback.messages}
+        />
       ) : null}
 
       {isCreateOpen ? (
@@ -364,54 +348,58 @@ export function DrivesPage() {
       ) : null}
 
       {isLoading ? (
-        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "repeat(2, 1fr)" } }} aria-busy="true" aria-label="Loading drives">
-          {[0, 1, 2, 3].map((i) => (
-            <Paper key={i} variant="outlined" sx={{ p: 2 }}>
-              <Skeleton width="55%" />
-              <Skeleton width="34%" />
-              <Skeleton sx={{ mt: 2 }} height={8} />
-              <Stack direction="row" sx={{ gap: 2, mt: 1 }}>
-                <Skeleton width={80} />
-                <Skeleton width={80} />
-              </Stack>
-            </Paper>
-          ))}
-        </Box>
+        <div className="grid gap-5 lg:grid-cols-2" aria-busy="true" aria-label="Loading drives">
+          {[0, 1, 2, 3].map((i) => <DriveCardSkeleton key={i} />)}
+        </div>
       ) : planningRows.length === 0 && !isCreateOpen ? (
-        <Paper variant="outlined" sx={{ p: 4, maxWidth: 620 }}>
-          <Stack spacing={2.5}>
-            <Avatar sx={{ bgcolor: "primary.main", width: 44, height: 44 }}>
-              <Icon name="hardDrive" size={22} color="currentColor" />
-            </Avatar>
-            <Box>
-              <Typography variant="h4" component="h2" gutterBottom>
+        <div className="flex items-start pt-6">
+          <div style={{ maxWidth: 520 }}>
+            <span
+              className="mb-5 inline-flex h-9 w-9 items-center justify-center rounded-[10px]"
+              style={{ background: "var(--surface-container-low)" }}
+              aria-hidden="true"
+            >
+              <Icon name="hardDrive" size={18} color="var(--ink-2)" />
+            </span>
+            <h2
+              className="text-[22px] font-semibold leading-tight"
+              style={{ color: "var(--ink)", letterSpacing: "-0.01em", margin: 0 }}
+            >
               Add your first drive.
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
+            </h2>
+            <p
+              className="mt-3 text-[14px] leading-relaxed"
+              style={{ color: "var(--ink-2)", margin: 0 }}
+            >
               Scanning a connected drive creates the drive record and imports its top-level
               folders in one step. Add manually if the volume isn&rsquo;t mounted.
-              </Typography>
-            </Box>
-            <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
-              <Button
+            </p>
+            <div className="mt-6 flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-primary"
                 onClick={() => void runImportFromVolume()}
                 disabled={!canUseImport || isPickingImport || isImporting || isMutating}
-                startIcon={<Icon name="scan" size={16} color="currentColor" />}
               >
+                <Icon name="scan" size={13} color="currentColor" />
                 {isPickingImport ? "Opening…" : "Scan connected drive"}
-              </Button>
-              <Button variant="outlined" onClick={() => setIsCreateOpen(true)}>
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setIsCreateOpen(true)}
+              >
                 Add manually
-              </Button>
-            </Stack>
-          </Stack>
-        </Paper>
+              </button>
+            </div>
+          </div>
+        </div>
       ) : (
-        <Box component="section">
-          <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
+        <section className="space-y-3">
+          <h2 className="h-section" style={{ margin: 0 }}>
             Drive inventory
-          </Typography>
-          <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "repeat(2, 1fr)" } }}>
+          </h2>
+          <div className="grid gap-4 lg:grid-cols-2">
             {planningRows.map((row) => (
               <DriveCard
                 key={row.drive.id}
@@ -421,29 +409,11 @@ export function DrivesPage() {
                 health={row.health}
               />
             ))}
-          </Box>
-        </Box>
+          </div>
+        </section>
       )}
-    </Stack>
+    </div>
   );
-}
-
-function buildImportCleanupIssueParts(result: {
-  duplicateCount: number;
-  legacyNameCount: number;
-  invalidNameCount: number;
-  missingDateCount: number;
-  missingClientCount: number;
-  missingProjectCount: number;
-}) {
-  const parts: string[] = [];
-  if (result.legacyNameCount > 0) parts.push(`${result.legacyNameCount} legacy name${result.legacyNameCount === 1 ? "" : "s"}`);
-  if (result.invalidNameCount > 0) parts.push(`${result.invalidNameCount} invalid name${result.invalidNameCount === 1 ? "" : "s"}`);
-  if (result.duplicateCount > 0) parts.push(`${result.duplicateCount} duplicate${result.duplicateCount === 1 ? "" : "s"}`);
-  if (result.missingDateCount > 0) parts.push(`${result.missingDateCount} missing date${result.missingDateCount === 1 ? "" : "s"}`);
-  if (result.missingClientCount > 0) parts.push(`${result.missingClientCount} missing client${result.missingClientCount === 1 ? "" : "s"}`);
-  if (result.missingProjectCount > 0) parts.push(`${result.missingProjectCount} missing project${result.missingProjectCount === 1 ? "" : "s"}`);
-  return parts;
 }
 
 // ---------------------------------------------------------------------------
@@ -489,6 +459,10 @@ function DriveCard({
       ? Math.min(100 - (usedPercent ?? 0), Math.max(1, (drive.reservedIncomingBytes / effectiveTotalBytes!) * 100))
       : null;
 
+  // Use --drive-color scoped to this card to colorize the capacity bar + dot
+  // + any chrome that should track the drive's identity color.
+  const cardStyle = { "--drive-color": driveColor } as CSSProperties;
+
   const capacityFooter = hasCapacity
     ? `${formatBytes(effectiveUsedBytes!)} of ${formatBytes(effectiveTotalBytes!)}`
     : "Unknown capacity";
@@ -499,193 +473,130 @@ function DriveCard({
     : lastScan
       ? formatDate(lastScan)
       : "Never";
-  const openDrivePath = `/drives/${drive.id}`;
-  const finderPath = drive.mountPath ?? scanSession?.rootPath ?? null;
 
   return (
-    <Paper
-      variant="outlined"
-      onClick={() => navigate(openDrivePath)}
-      onContextMenu={(event) => {
-        void showNativeContextMenu(event, [
-          { text: "Open Drive", action: () => navigate(openDrivePath) },
-          {
-            text: "Show in Finder",
-            enabled: Boolean(finderPath),
-            action: () => void showPathInFinder(finderPath)
-          },
-          {
-            text: "Open in Finder",
-            enabled: Boolean(finderPath),
-            action: () => void openPathInFinder(finderPath)
-          },
-          { separator: true },
-          { text: "Copy Drive Name", action: () => void copyTextToClipboard(drive.displayName) },
-          { text: "Copy Volume Name", action: () => void copyTextToClipboard(drive.volumeName) },
-          {
-            text: "Copy Mount Path",
-            enabled: Boolean(finderPath),
-            action: () => void copyTextToClipboard(finderPath ?? "")
-          }
-        ]);
+    <article
+      className="card cursor-pointer p-5 transition-all duration-150 hover:shadow-[var(--sh-2)]"
+      style={{
+        ...cardStyle,
+        backdropFilter: "blur(12px) saturate(160%)",
+        WebkitBackdropFilter: "blur(12px) saturate(160%)",
+        background: "rgba(255,255,255,0.82)"
       }}
+      onClick={() => navigate(`/drives/${drive.id}`)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          navigate(openDrivePath);
+          navigate(`/drives/${drive.id}`);
         }
       }}
       role="button"
       tabIndex={0}
       aria-label={`Open ${drive.displayName}`}
-      sx={{
-        p: 2.25,
-        cursor: "pointer",
-        transition: "border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease",
-        "&:hover": {
-          borderColor: "primary.light",
-          bgcolor: "action.hover",
-          boxShadow: 1
-        },
-        "&:focus-visible": {
-          outline: "3px solid rgba(25, 118, 210, 0.22)",
-          outlineOffset: 2
-        }
-      }}
     >
-      <Stack spacing={2}>
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start" }}>
-          <Avatar
-            variant="rounded"
-            sx={{
-              width: 42,
-              height: 42,
-              bgcolor: "action.selected",
-              color: "text.secondary",
-              position: "relative",
-              "&::after": {
-                content: '""',
-                position: "absolute",
-                right: 7,
-                bottom: 7,
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                bgcolor: driveColor,
-                border: "2px solid",
-                borderColor: "background.paper"
-              }
-            }}
-          >
-            <Icon name="hardDrive" size={22} color="currentColor" />
-          </Avatar>
-
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Stack direction="row" sx={{ alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-              <Typography variant="h6" component="h3" noWrap sx={{ fontSize: 18, minWidth: 0, maxWidth: "100%" }}>
-                {drive.displayName}
-              </Typography>
-            {health && health !== "healthy" ? (
-                <Chip size="small" color="warning" variant="outlined" label={getDriveHealthLabel(health)} />
-            ) : null}
-              {isScanning ? <Chip size="small" color="info" variant="outlined" label="Running" /> : null}
-              {scanFailed && !isScanning ? <Chip size="small" color="error" variant="outlined" label="Failed" /> : null}
-            </Stack>
-
-            <Typography variant="body2" color="text.secondary" noWrap>
-              {[
-                drive.volumeName !== drive.displayName ? drive.volumeName : null,
-                drive.createdManually ? "Manual" : null,
-                !drive.createdManually && volumeInfo?.filesystemType ? volumeInfo.filesystemType : null
-              ].filter(Boolean).join(" · ")}
-            </Typography>
-          </Box>
-
-          <Box sx={{ color: "text.disabled", pt: 0.5 }}>
-            <Icon name="chevron" size={16} color="currentColor" />
-          </Box>
-        </Stack>
-
-        <Box>
-          <Box
-            role="progressbar"
-            aria-valuenow={usedPercentInt ?? undefined}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={usedPercentInt !== null ? `${usedPercentInt}% storage used` : "Storage usage unknown"}
-            sx={{
-              position: "relative",
-              height: 10,
-              overflow: "hidden",
-              borderRadius: 999,
-              bgcolor: "action.selected"
-            }}
-          >
-            <Box
-              sx={{
-                position: "absolute",
-                insetBlock: 0,
-                left: 0,
-                width: usedPercent !== null ? `${usedPercent}%` : "28%",
-                bgcolor: usedPercent !== null ? driveColor : "action.disabled",
-                opacity: usedPercent !== null ? 1 : 0.35
-              }}
-            />
-            {reservedPercent !== null ? (
-              <Box
-                sx={{
-                  position: "absolute",
-                  insetBlock: 0,
-                  left: `${usedPercent ?? 0}%`,
-                  width: `${reservedPercent}%`,
-                  bgcolor: "warning.main",
-                  opacity: 0.8
-                }}
-              />
-            ) : null}
-          </Box>
-          <Stack direction="row" sx={{ gap: 1.5, mt: 1, alignItems: "center", flexWrap: "wrap" }}>
-            <Typography variant="caption" color="text.primary" sx={{ fontWeight: 500 }}>
-              {usedPercentInt !== null ? `${usedPercentInt}% used` : "Unknown"}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {capacityFooter}
-            </Typography>
-          </Stack>
-        </Box>
-
-        <Box
-          sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 1.5,
-            pt: 1.5,
-            borderTop: 1,
-            borderColor: "divider"
-          }}
+      <div className="flex items-start gap-3">
+        {/* 40×40 icon tile with drive-color dot overlay */}
+        <div
+          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]"
+          style={{ background: "var(--surface-inset)" }}
         >
-          <MetaStat label={projectCount === 1 ? "project" : "projects"} value={projectCount.toString()} />
-          <MetaStat label="free" value={effectiveFreeBytes !== null ? formatBytes(effectiveFreeBytes) : "Unknown"} />
-          {drive.reservedIncomingBytes > 0 ? (
-            <MetaStat label="reserved" value={formatBytes(drive.reservedIncomingBytes)} />
-          ) : null}
-          <MetaStat label="last scan" value={lastScanLabel} />
-        </Box>
-      </Stack>
-    </Paper>
-  );
-}
+          <Icon name="hardDrive" size={20} color="var(--ink-2)" />
+          <span
+            className="absolute"
+            style={{
+              bottom: 6,
+              right: 6,
+              width: 7,
+              height: 7,
+              borderRadius: 4,
+              background: "var(--drive-color)",
+              border: "1.5px solid var(--surface)"
+            }}
+          />
+        </div>
 
-function MetaStat({ label, value }: { label: string; value: string }) {
-  return (
-    <Box sx={{ minWidth: 96 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.2 }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" color="text.primary" noWrap>
-        {value}
-      </Typography>
-    </Box>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3
+              className="truncate text-[15px] font-semibold"
+              style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.005em", color: "var(--ink)" }}
+            >
+            {drive.displayName}
+            </h3>
+            {health && health !== "healthy" ? (
+              <StatusBadge label={getDriveHealthLabel(health)} />
+            ) : null}
+            {isScanning ? <StatusBadge label="Running" /> : null}
+            {scanFailed && !isScanning ? <StatusBadge label="Failed" /> : null}
+          </div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+            {drive.volumeName !== drive.displayName ? <span>{drive.volumeName}</span> : null}
+            {drive.volumeName !== drive.displayName && (drive.createdManually || volumeInfo) ? (
+              <span style={{ color: "var(--ink-4)" }}>·</span>
+            ) : null}
+            {drive.createdManually ? <span>Manual</span> : null}
+            {!drive.createdManually && volumeInfo?.filesystemType ? <span>{volumeInfo.filesystemType}</span> : null}
+          </div>
+        </div>
+
+        <Icon name="chevron" size={14} color="var(--ink-4)" />
+      </div>
+
+      {/* Capacity bar */}
+      <div
+        className="cap-bar lg mt-4"
+        role="progressbar"
+        aria-valuenow={usedPercentInt ?? undefined}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={
+          usedPercentInt !== null ? `${usedPercentInt}% storage used` : "Storage usage unknown"
+        }
+      >
+        {usedPercent !== null ? (
+          <div className="cap-used capacity-bar-fill" style={{ width: `${usedPercent}%` }} />
+        ) : (
+          <div className="cap-used opacity-20" style={{ width: "28%" }} />
+        )}
+        {reservedPercent !== null ? (
+          <div
+            className="cap-reserved"
+            style={{ left: `${usedPercent ?? 0}%`, width: `${reservedPercent}%` }}
+          />
+        ) : null}
+      </div>
+
+      <div className="mt-2.5 flex items-center gap-3 text-[11px]" style={{ color: "var(--ink-3)" }}>
+        <span className="tnum font-medium" style={{ color: "var(--ink-2)" }}>
+          {usedPercentInt !== null ? `${usedPercentInt}% used` : "Unknown"}
+        </span>
+        <span style={{ color: "var(--ink-4)" }}>·</span>
+        <span>{capacityFooter}</span>
+      </div>
+
+      {/* Meta row — inline, hairline-separated, no beige tiles. */}
+      <div
+        className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-[12px] tnum"
+        style={{ borderColor: "var(--hairline)", color: "var(--ink-3)" }}
+      >
+        <span>
+          <span className="font-medium" style={{ color: "var(--ink-2)" }}>{projectCount}</span>{" "}
+          {projectCount === 1 ? "project" : "projects"}
+        </span>
+        <span style={{ color: "var(--ink-4)" }}>·</span>
+        <span>
+          {effectiveFreeBytes !== null ? `${formatBytes(effectiveFreeBytes)} free` : "Unknown free"}
+        </span>
+        {drive.reservedIncomingBytes > 0 ? (
+          <>
+            <span style={{ color: "var(--ink-4)" }}>·</span>
+            <span>{formatBytes(drive.reservedIncomingBytes)} reserved</span>
+          </>
+        ) : null}
+        <span style={{ color: "var(--ink-4)" }}>·</span>
+        <span>Last scan {lastScanLabel}</span>
+      </div>
+    </article>
   );
 }
 
@@ -707,77 +618,49 @@ function CreateDriveForm({
   isMutating: boolean;
 }) {
   return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Stack spacing={2.5}>
-        <Box>
-          <Typography variant="h6">Add manual drive</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Use this when the volume is not mounted or you want to reserve a drive record.
-          </Typography>
-        </Box>
+    <div className="card p-4">
+      <p className="h-section mb-3">Add manual drive</p>
 
-        <Box component="form" onSubmit={onSubmit}>
-          <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" } }}>
-            <TextField
+      <form className="grid gap-4 md:grid-cols-3" onSubmit={onSubmit}>
+        <FormField label="Drive name" required>
+          <input
             required
-            label="Drive name"
             value={form.volumeName}
             onChange={(e) => onChange({ ...form, volumeName: e.target.value })}
+            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
             placeholder="Archive Drive"
           />
-            <TextField
-            label="Display name"
+        </FormField>
+        <FormField label="Display name">
+          <input
             value={form.displayName}
             onChange={(e) => onChange({ ...form, displayName: e.target.value })}
+            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
             placeholder="Studio Archive (optional)"
           />
-            <TextField
-            label="Capacity (TB)"
+        </FormField>
+        <FormField label="Capacity (TB)">
+          <input
             type="number"
+            min="0"
+            step="0.1"
             value={form.capacityTerabytes}
             onChange={(e) => onChange({ ...form, capacityTerabytes: e.target.value })}
+            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
             placeholder="4"
-            slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
           />
-          </Box>
-          <Stack direction="row" sx={{ justifyContent: "flex-end", gap: 1, mt: 2.5 }}>
-            <Button type="button" variant="outlined" onClick={onCancel}>
-            Discard
-            </Button>
-            <Button type="submit" disabled={isMutating}>
-            {isMutating ? "Saving…" : "Create drive"}
-            </Button>
-          </Stack>
-        </Box>
-      </Stack>
-    </Paper>
-  );
-}
+        </FormField>
 
-function FeedbackAlert({
-  tone,
-  title,
-  messages
-}: {
-  tone: "success" | "warning" | "error" | "info";
-  title: string;
-  messages: string[];
-}) {
-  return (
-    <Alert severity={tone}>
-      <AlertTitle>{title}</AlertTitle>
-      {messages.length === 1 ? (
-        <Typography variant="body2">{messages[0]}</Typography>
-      ) : (
-        <Box component="ul" sx={{ m: 0, pl: 2 }}>
-          {messages.map((message) => (
-            <li key={message}>
-              <Typography variant="body2" component="span">{message}</Typography>
-            </li>
-          ))}
-        </Box>
-      )}
-    </Alert>
+        <div className="flex items-center justify-end gap-2 pt-1 md:col-span-3">
+          <button type="button" className="btn btn-sm" onClick={onCancel}>
+            Discard
+          </button>
+          <button type="submit" className="btn btn-sm btn-primary" disabled={isMutating}>
+            {isMutating ? "Saving…" : "Create drive"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -849,5 +732,29 @@ function ImportDriveBanner({
         : ""}
       .
     </div>
+  );
+}
+
+function FormField({
+  label,
+  required,
+  children
+}: {
+  label: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="eyebrow">
+        {label}
+        {required ? (
+          <span className="ml-1" style={{ color: "var(--danger)" }}>
+            *
+          </span>
+        ) : null}
+      </span>
+      {children}
+    </label>
   );
 }

@@ -29,10 +29,10 @@ interface SidebarNavProps {
 }
 
 /**
- * Minimal sidebar. DESIGN.md §4: 220px, vibrancy background, hairline
- * right edge, app mark + wordmark (no sub-label, no boxed brand tile).
- * Active row gets macOS-style filled blue via `.side-item.active`.
- * Search lives in the top bar so the sidebar stays quiet and focused on
+ * Minimal sidebar. DESIGN.md §4: 256px, surface background, hairline
+ * right edge, wordmark only (no monogram, no sub-label, no boxed brand
+ * tile). Active row is ink → action via `.side-item.active`. Search
+ * lives in the top bar so the sidebar stays quiet and focused on
  * navigation.
  */
 export function SidebarNav({
@@ -42,38 +42,25 @@ export function SidebarNav({
 }: SidebarNavProps) {
   return (
     <aside
-      className="sticky top-0 hidden h-screen w-[220px] shrink-0 flex-col overflow-y-auto border-r px-3 pb-4 pt-3 lg:flex"
+      data-tauri-drag-region
+      className="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r px-3 pb-4 pt-3 lg:flex"
       style={{
-        background: "rgba(246, 246, 246, 0.85)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)",
-        borderColor: "var(--hairline)"
+        width: "var(--sidebar-width, 220px)",
+        background: "var(--sidebar)",
+        borderColor: "var(--hairline)",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)"
       }}
     >
       {/* Drag handle spacer aligned to the top-nav height so the window
           can be dragged from the whole top edge. */}
-      <div
-        data-app-drag-region
-        data-tauri-drag-region
-        className="h-5"
-        aria-hidden="true"
-      />
+      <div data-tauri-drag-region className="h-5" aria-hidden="true" />
 
       <div
-        data-app-drag-region
         data-tauri-drag-region
-        className="flex items-center gap-2 px-3 pb-5 pt-2"
+        className="px-3 pb-5 pt-2"
       >
-        <img
-          data-app-drag-region
-          data-tauri-drag-region
-          src="/favicon.png"
-          alt=""
-          className="h-7 w-7 shrink-0 select-none"
-          draggable={false}
-        />
         <span
-          data-app-drag-region
           data-tauri-drag-region
           className="block truncate text-[15px] font-semibold"
           style={{ color: "var(--ink)", letterSpacing: "-0.01em" }}
@@ -82,21 +69,16 @@ export function SidebarNav({
         </span>
       </div>
 
-      <nav
-        data-app-no-drag
-        className="flex flex-col gap-[2px]"
-        aria-label="Primary"
-      >
+      <nav className="flex flex-col gap-[2px]" aria-label="Primary">
         {items.map((item) => (
           <SideItem key={item.label} item={item} />
         ))}
       </nav>
 
-      <div data-app-drag-region data-tauri-drag-region className="flex-1" />
+      <div className="flex-1" />
 
       {footerItems.length > 0 ? (
         <nav
-          data-app-no-drag
           className="flex flex-col gap-[2px] border-t pt-3"
           style={{ borderColor: "var(--hairline)" }}
           aria-label="Secondary"
@@ -150,7 +132,6 @@ function SideItem({ item }: { item: NavItem }) {
   if (item.to) {
     return (
       <NavLink
-        data-app-no-drag
         to={item.to}
         end={item.to === "/"}
         className={({ isActive }) => "side-item" + (isActive ? " active" : "")}
@@ -161,12 +142,7 @@ function SideItem({ item }: { item: NavItem }) {
   }
 
   return (
-    <button
-      data-app-no-drag
-      type="button"
-      className="side-item"
-      onClick={item.onClick}
-    >
+    <button type="button" className="side-item" onClick={item.onClick}>
       {inner(false)}
     </button>
   );

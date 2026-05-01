@@ -4,7 +4,7 @@
 
 /* ──────────────────────────────────────────────────────────────
    Catalog — DESIGN.md source of truth
-   Native macOS feel: system font, Apple blue, vibrancy, dense UI.
+   Cold-neutral canvas, Apple-blue action, Inter, dense transaction UI.
    See /DESIGN.md at repo root. Do not tune values here without
    updating DESIGN.md in the same commit.
 
@@ -14,16 +14,18 @@
    ────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Typography ── */
+  /* ── Typography — SF Pro via WKWebView on macOS ── */
   --font-sans:
-    "Roboto", "Helvetica", "Arial", sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", system-ui, sans-serif;
   --font-display:
-    "Roboto", "Helvetica", "Arial", sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", system-ui, sans-serif;
   --font-mono:
-    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    ui-monospace, "SF Mono", Menlo, "Cascadia Code", monospace;
 
-  /* ── Canvas & surfaces (DESIGN.md §2) ── */
-  --canvas: #f5f5f5;
+  /* ── Canvas & surfaces ── */
+  --canvas: #f2f2f7;
   --surface: #ffffff;
   --surface-raised: #ffffff;
   --surface-container-low: #f3f3f3;
@@ -41,17 +43,15 @@
   --ink-4: #86868b;
 
   /* ── Borders / hairlines (DESIGN.md §2) ── */
-  --hairline: #d1d1d6;
+  --hairline: #e2e2e2;
   --hairline-strong: #d2d2d7;
   --border-soft: #d2d2d7;
   --border-mid: #86868b;
 
-  /* ── Action (Apple blue — DESIGN.md §2) ──
-     --accent / --accent-* retained so existing class definitions
-     still resolve. Semantically all of these are "action". */
+  /* ── Action (Apple UI blue) ── */
   --action: #007AFF;
-  --action-hover: #0062CC;
-  --action-soft: #3395FF;
+  --action-hover: #0062cc;
+  --action-soft: #409cff;
   --action-rgb: 0, 122, 255;
 
   --accent: var(--action);
@@ -93,11 +93,11 @@
   --dens-pad: 16px;
   --dens-gap: 16px;
 
-  /* ── Shell (DESIGN.md §4) ── */
-  --sidebar: var(--surface);
+  /* ── Shell ── */
+  --sidebar: rgba(246, 246, 247, 0.92);
   --sidebar-width: 220px;
   --topnav-height: 52px;
-  --container-max: 980px;
+  --container-max: 1100px;
 
   /* ──────────────────────────────────────────────────────────────
      Drive identity palette — six cool-neutral hues assigned
@@ -201,7 +201,8 @@
    user decides whether the app ships with dark mode at all.
    ────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --canvas: #1d1d1f;
+  --canvas: #1c1c1e;
+  --sidebar: rgba(30, 30, 32, 0.92);
   --surface: #2a2a2c;
   --surface-raised: #2a2a2c;
   --surface-container-low: #272729;
@@ -219,7 +220,7 @@
   --hairline-strong: #48484b;
   --border-soft: #48484b;
   --border-mid: #6e6e73;
-  --accent-soft: rgba(0, 122, 255, 0.18);
+  --accent-soft: rgba(0, 113, 227, 0.18);
   --drive-a: #8ea0b5;
   --drive-b: #a4aab5;
   --drive-c: #8aa69d;
@@ -234,11 +235,12 @@ html {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "kern";
+  font-feature-settings: "cv11", "ss01", "calt", "kern";
 }
 
 body {
   margin: 0;
+  min-width: 1180px;
   min-height: 100vh;
   background: var(--canvas);
   color: var(--ink);
@@ -260,25 +262,6 @@ textarea,
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
-}
-
-[data-app-drag-region],
-.app-titlebar {
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.app-titlebar {
-  height: var(--topnav-height);
-  display: flex;
-  align-items: center;
-}
-
-[data-app-no-drag],
-[data-app-no-drag] *,
-.titlebar-actions,
-.titlebar-actions * {
-  -webkit-app-region: no-drag;
 }
 
 * {
@@ -334,10 +317,10 @@ a {
   line-height: 1.1;
   color: var(--ink);
 }
-/* card-title: 28/600/1.2 */
+/* card-title: 22/600/1.2 */
 .h-title {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -734,10 +717,10 @@ a {
   .side-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
+    gap: 10px;
+    padding: 8px 12px;
     border-radius: var(--radius-lg);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--ink-2);
     cursor: pointer;
@@ -757,9 +740,9 @@ a {
   }
   .side-item.active {
     color: var(--action);
-    background: rgba(0, 122, 255, 0.12);
+    background: transparent;
   }
-  /* macOS-style filled row for active state — no rail bar. */
+  /* No rail bar. Active state is carried by the text color alone. */
   .side-item.active::before {
     content: none;
   }
@@ -847,122 +830,6 @@ a {
     display: inline-block;
   }
 
-  /* ── Inbox focus — one clear message, quiet chrome ── */
-  .inbox-page {
-    display: flex;
-    flex-direction: column;
-    gap: 28px;
-    padding-top: 4px;
-  }
-  .inbox-focus {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 28px;
-    min-height: 164px;
-    padding: 26px 0 28px;
-    border-bottom: 1px solid var(--hairline);
-  }
-  .inbox-focus__copy {
-    min-width: 0;
-    max-width: 760px;
-  }
-  .inbox-focus__title {
-    margin: 0;
-    max-width: 820px;
-    font-family: var(--font-display);
-    font-size: 48px;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.06;
-    color: var(--ink);
-  }
-  .inbox-focus__subtitle {
-    margin: 14px 0 0;
-    max-width: 680px;
-    font-size: 17px;
-    line-height: 1.48;
-    color: var(--ink-2);
-  }
-  .inbox-focus__actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-shrink: 0;
-    padding-bottom: 2px;
-  }
-  .inbox-section {
-    min-width: 0;
-  }
-  .inbox-section__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    min-height: 30px;
-    margin-bottom: 6px;
-  }
-  .inbox-section__body {
-    border-top: 1px solid var(--hairline);
-    padding-top: 6px;
-  }
-
-  /* ── Projects focus + list workspace ── */
-  .project-page {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    padding-top: 4px;
-  }
-  .project-focus {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 28px;
-    min-height: 142px;
-    padding: 20px 0 24px;
-    border-bottom: 1px solid var(--hairline);
-  }
-  .project-focus__copy {
-    min-width: 0;
-    max-width: 780px;
-  }
-  .project-focus__title {
-    margin: 0;
-    font-family: var(--font-display);
-    font-size: 40px;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.08;
-    color: var(--ink);
-  }
-  .project-focus__subtitle {
-    margin: 12px 0 0;
-    max-width: 720px;
-    font-size: 15px;
-    line-height: 1.5;
-    color: var(--ink-2);
-  }
-  .project-focus__actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-shrink: 0;
-    padding-bottom: 2px;
-  }
-  .project-tools {
-    border-bottom: 1px solid var(--hairline);
-    padding-bottom: 14px;
-  }
-  .project-list-shell {
-    overflow: hidden;
-    border-top: 1px solid var(--hairline);
-    border-bottom: 1px solid var(--hairline);
-    background: var(--surface);
-  }
-
   /* ── ActivityTimelineRow — DESIGN.md §6 ──
      Single row cadence used by the Inbox for last activity + recent
      projects. 28px icon tile, 17/400 primary, 14/400 ink-3 secondary,
@@ -973,9 +840,8 @@ a {
     grid-template-columns: 28px minmax(0, 1fr) auto 12px;
     align-items: center;
     column-gap: 14px;
-    min-height: 48px;
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 12px 14px;
+    border-radius: 10px;
     color: var(--ink);
     text-decoration: none;
     transition: background 140ms var(--ease);
@@ -1012,8 +878,8 @@ a {
     gap: 2px;
   }
   .activity-row__primary {
-    font-size: 13.5px;
-    font-weight: 500;
+    font-size: 17px;
+    font-weight: 400;
     line-height: 1.3;
     color: var(--ink);
     letter-spacing: -0.005em;
@@ -1022,7 +888,7 @@ a {
     white-space: nowrap;
   }
   .activity-row__secondary {
-    font-size: 12px;
+    font-size: 14px;
     line-height: 1.3;
     color: var(--ink-3);
     overflow: hidden;

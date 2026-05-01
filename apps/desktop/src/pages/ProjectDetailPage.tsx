@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { categoryValues, type Category, type FolderType, type ProjectScanEvent } from "@drive-project-catalog/domain";
 import { Icon } from "@drive-project-catalog/ui";
 
-import { validateSingleProjectMove } from "../app/catalogValidation";
 import { useCatalogStore } from "../app/providers";
-import { useAsyncAction } from "../app/useAsyncAction";
 import { useOptimisticMutation } from "../app/useOptimisticMutation";
 import {
   formatBytes,
@@ -44,9 +42,6 @@ export function ProjectDetailPage() {
     listProjectScanEvents,
     updateProjectMetadata,
     deleteProject,
-    planProjectMove,
-    confirmProjectMove,
-    cancelProjectMove,
     isLoading,
     isMutating
   } = useCatalogStore();
@@ -61,7 +56,6 @@ export function ProjectDetailPage() {
     category: "",
     folderType: ""
   });
-  const [targetDriveId, setTargetDriveId] = useState("");
   const [feedback, setFeedback] = useState<{ tone: "success" | "warning" | "error" | "info"; title: string; messages: string[] } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Archive & Freeze workflow — opens a modal that walks the user through
@@ -115,7 +109,6 @@ export function ProjectDetailPage() {
       category: selectedProject.category ?? "",
       folderType: selectedProject.folderType
     });
-    setTargetDriveId(selectedProject.targetDriveId ?? "");
   }, [selectedProject]);
 
   useEffect(() => {
@@ -128,59 +121,6 @@ export function ProjectDetailPage() {
   }, [feedback]);
 
   const project = selectedProject;
-
-  // S6/H10 — async actions use useAsyncAction so event handlers never leak
-  // unhandled promise rejections. The hook normalises unknown-shape errors
-  // and keeps the onClick signature synchronous.
-  const confirmMoveAction = useAsyncAction(
-    async () => {
-      if (!project) throw new Error("No project selected");
-      await confirmProjectMove(project.id);
-      return project;
-    },
-    {
-      onSuccess: (p) => {
-        setFeedback({
-          tone: "success",
-          title: "Move confirmed",
-          messages: [
-            `Current drive updated to ${getDriveName(drives, p.targetDriveId)}.`,
-            "Pending move state and reserved incoming impact were cleared."
-          ]
-        });
-      },
-      onError: (error) => {
-        setFeedback({
-          tone: "error",
-          title: "Move confirmation failed",
-          messages: [error.message || "The move could not be confirmed."]
-        });
-      }
-    }
-  );
-
-  const cancelMoveAction = useAsyncAction(
-    async () => {
-      if (!project) throw new Error("No project selected");
-      await cancelProjectMove(project.id);
-    },
-    {
-      onSuccess: () => {
-        setFeedback({
-          tone: "info",
-          title: "Move cancelled",
-          messages: ["Pending move state and target drive were cleared."]
-        });
-      },
-      onError: (error) => {
-        setFeedback({
-          tone: "error",
-          title: "Move cancellation failed",
-          messages: [error.message || "The move could not be cancelled."]
-        });
-      }
-    }
-  );
 
   const metadataMutation = useOptimisticMutation(
     (payload: Parameters<typeof updateProjectMetadata>[0]) => updateProjectMetadata(payload),
@@ -199,20 +139,6 @@ export function ProjectDetailPage() {
         })
     }
   );
-
-  const moveValidation = useMemo(
-    () =>
-      project
-        ? validateSingleProjectMove({
-            project,
-            targetDriveId,
-            drives,
-            allProjects: projects
-          })
-        : { errors: [], warnings: [] },
-    [drives, project, projects, targetDriveId]
-  );
-  const targetDrive = drives.find((drive) => drive.id === targetDriveId) ?? null;
 
   if (isLoading) {
     return <LoadingState label="Loading project detail" />;
@@ -250,47 +176,8 @@ export function ProjectDetailPage() {
     });
   }
 
-  async function handlePlanMove(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!targetDriveId) {
-      return;
-    }
-    if (moveValidation.errors.length > 0) {
-      setFeedback({
-        tone: "error",
-        title: "Move planning blocked",
-        messages: moveValidation.errors
-      });
-      return;
-    }
-
-    try {
-      await planProjectMove(currentProject.id, targetDriveId);
-      setFeedback({
-        tone: moveValidation.warnings.length > 0 ? "warning" : "success",
-        title: "Move target updated",
-        messages: [
-          `Target drive set to ${targetDrive?.displayName ?? "the selected drive"}.`,
-          ...(moveValidation.warnings.length > 0
-            ? moveValidation.warnings
-            : [
-                currentProject.sizeBytes === null
-                  ? "Reserved impact remains unknown until a size is available."
-                  : `Reserved impact: ${formatBytes(currentProject.sizeBytes)}.`
-              ])
-        ]
-      });
-    } catch (error) {
-      setFeedback({ tone: "error", title: "Move planning failed", messages: [error instanceof Error ? error.message : "The move could not be planned."] });
-    }
-  }
-
-  const moveImpactLabel =
-    currentProject.sizeBytes === null
-      ? "Unknown"
-      : formatBytes(currentProject.sizeBytes);
-  const currentDriveName = getDriveName(drives, currentProject.currentDriveId);
-  const targetDriveName = getDriveName(drives, currentProject.targetDriveId);
+  const currentDriveName = getDriveName(drives.find((d) => d.id === currentProject.currentDriveId));
+  const targetDriveName = getDriveName(drives.find((d) => d.id === currentProject.targetDriveId));
   const isMovePending = currentProject.moveStatus === "pending";
   const relatedProjects = projects
     .filter((candidate) => {
@@ -481,7 +368,7 @@ export function ProjectDetailPage() {
             <MetaField label="Current drive" value={currentDriveName} />
             <MetaField
               label={isMovePending ? "Target drive" : "Size"}
-              value={isMovePending ? targetDriveName : formatBytes(currentProject.sizeBytes)}
+              value={isMovePending ? targetDriveName : (currentProject.sizeBytes !== null ? formatBytes(currentProject.sizeBytes) : "Unknown")}
               tone={isMovePending ? "accent" : undefined}
             />
             <MetaField label="Type" value={getFolderTypeLabel(currentProject.folderType)} />
@@ -492,49 +379,6 @@ export function ProjectDetailPage() {
 
       {feedback ? (
         <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
-      ) : null}
-
-      {isMovePending ? (
-        <div
-          className="rounded-[16px] border px-5 py-4"
-          style={{
-            borderColor: "var(--accent)",
-            background: "var(--accent-soft)"
-          }}
-        >
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="eyebrow" style={{ color: "var(--accent-ink)" }}>
-                Move in progress
-              </div>
-              <div className="mt-1 text-[14px] font-semibold tracking-[-0.01em]" style={{ color: "var(--ink)" }}>
-                {currentDriveName} → {targetDriveName}
-              </div>
-              <p className="mt-2 text-[12.5px] leading-[1.5]" style={{ color: "var(--ink-2)" }}>
-                {targetDriveName} has reserved {moveImpactLabel} for this move. Drag the folder outside the app, then confirm to update the catalog.
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn btn-sm"
-                disabled={isMutating || cancelMoveAction.isPending}
-                onClick={cancelMoveAction.run}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                disabled={isMutating || confirmMoveAction.isPending}
-                onClick={confirmMoveAction.run}
-              >
-                <Icon name="check" size={11} color="currentColor" />
-                Confirm moved
-              </button>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -604,7 +448,7 @@ export function ProjectDetailPage() {
                         {getProjectName(relatedProject)}
                       </p>
                       <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
-                        {formatParsedDate(relatedProject.correctedDate ?? relatedProject.parsedDate)} · {formatBytes(relatedProject.sizeBytes)}
+                        {formatParsedDate(relatedProject.correctedDate ?? relatedProject.parsedDate)} · {relatedProject.sizeBytes !== null ? formatBytes(relatedProject.sizeBytes) : "Unknown"}
                       </p>
                     </div>
                     <Icon name="chevron" size={12} color="var(--ink-4)" />
@@ -702,66 +546,6 @@ export function ProjectDetailPage() {
               </form>
             </SectionCard>
           </div>
-
-          <SectionCard
-            title="Move"
-            description="Plan moves virtually. Target drives reserve incoming space until you confirm the physical move."
-          >
-            <dl className="mb-5 grid gap-x-6 gap-y-3 grid-cols-3">
-              <MetaField label="Current" value={currentDriveName} />
-              <MetaField
-                label="Target"
-                value={isMovePending ? targetDriveName : "—"}
-                tone={isMovePending ? "accent" : undefined}
-              />
-              <MetaField label="Impact" value={moveImpactLabel} />
-            </dl>
-
-            {isMovePending ? (
-              <p className="text-[12.5px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
-                To replan this move, cancel it first from the rail above.
-              </p>
-            ) : (
-              <form className="grid gap-4" onSubmit={handlePlanMove}>
-                <FormField label="Target drive">
-                  <select
-                    value={targetDriveId}
-                    onChange={(event) => setTargetDriveId(event.target.value)}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
-                  >
-                    <option value="">Select a drive</option>
-                    {drives
-                      .filter((drive) => drive.id !== currentProject.currentDriveId)
-                      .map((drive) => (
-                        <option key={drive.id} value={drive.id}>
-                          {drive.displayName}
-                        </option>
-                      ))}
-                  </select>
-                </FormField>
-                {moveValidation.errors.length > 0 ? (
-                  <FeedbackNotice tone="error" title="Move validation" messages={moveValidation.errors} />
-                ) : null}
-                {moveValidation.warnings.length > 0 ? (
-                  <FeedbackNotice tone="warning" title="Move cautions" messages={moveValidation.warnings} />
-                ) : null}
-                {currentProject.sizeBytes === null && targetDriveId ? (
-                  <p className="text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
-                    This project has an unknown size. The target drive will reserve an unknown incoming impact.
-                  </p>
-                ) : null}
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="submit"
-                    className="btn btn-sm btn-primary"
-                    disabled={!targetDriveId || isMutating}
-                  >
-                    Set target drive
-                  </button>
-                </div>
-              </form>
-            )}
-          </SectionCard>
 
           <div className="card px-5 py-4">
             <div className="flex items-start justify-between gap-4">
