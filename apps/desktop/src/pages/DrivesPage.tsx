@@ -362,13 +362,13 @@ export function DrivesPage() {
               <Icon name="hardDrive" size={18} color="var(--ink-2)" />
             </span>
             <h2
-              className="text-[28px] font-semibold leading-tight"
+              className="text-[22px] font-semibold leading-tight"
               style={{ color: "var(--ink)", letterSpacing: "-0.01em", margin: 0 }}
             >
               Add your first drive.
             </h2>
             <p
-              className="mt-3 text-[17px] leading-[1.47]"
+              className="mt-3 text-[14px] leading-relaxed"
               style={{ color: "var(--ink-2)", margin: 0 }}
             >
               Scanning a connected drive creates the drive record and imports its top-level
@@ -476,8 +476,13 @@ function DriveCard({
 
   return (
     <article
-      className="card cursor-pointer p-5 transition-colors duration-150 hover:bg-[color:var(--surface-muted)] hover:shadow-[var(--sh-2)]"
-      style={cardStyle}
+      className="card cursor-pointer p-5 transition-all duration-150 hover:shadow-[var(--sh-2)]"
+      style={{
+        ...cardStyle,
+        backdropFilter: "blur(12px) saturate(160%)",
+        WebkitBackdropFilter: "blur(12px) saturate(160%)",
+        background: "rgba(255,255,255,0.82)"
+      }}
       onClick={() => navigate(`/drives/${drive.id}`)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -513,9 +518,9 @@ function DriveCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3
-            className="truncate text-[18px] font-semibold"
-            style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.01em", color: "var(--ink)" }}
-          >
+              className="truncate text-[15px] font-semibold"
+              style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.005em", color: "var(--ink)" }}
+            >
             {drive.displayName}
             </h3>
             {health && health !== "healthy" ? (

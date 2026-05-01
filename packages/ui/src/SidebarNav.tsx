@@ -43,10 +43,13 @@ export function SidebarNav({
   return (
     <aside
       data-tauri-drag-region
-      className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r px-3 pb-4 pt-3 lg:flex"
+      className="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r px-3 pb-4 pt-3 lg:flex"
       style={{
+        width: "var(--sidebar-width, 220px)",
         background: "var(--sidebar)",
-        borderColor: "var(--hairline)"
+        borderColor: "var(--hairline)",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)"
       }}
     >
       {/* Drag handle spacer aligned to the top-nav height so the window

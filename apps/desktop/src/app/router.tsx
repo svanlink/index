@@ -1,10 +1,8 @@
-import { createBrowserRouter, createMemoryRouter } from "react-router-dom";
+import { createBrowserRouter, createMemoryRouter, Navigate } from "react-router-dom";
 import { DrivesPage } from "../pages/DrivesPage";
-import { DashboardPage } from "../pages/DashboardPage";
 import { DriveDetailPage } from "../pages/DriveDetailPage";
 import { ProjectDetailPage } from "../pages/ProjectDetailPage";
 import { ProjectsPage } from "../pages/ProjectsPage";
-import { SettingsPage } from "../pages/SettingsPage";
 import { RootLayout } from "./RootLayout";
 
 const appRoutes = [
@@ -12,12 +10,11 @@ const appRoutes = [
     path: "/",
     element: <RootLayout />,
     children: [
-      { index: true, element: <DashboardPage /> },
+      { index: true, element: <Navigate to="/projects" replace /> },
       { path: "projects", element: <ProjectsPage /> },
       { path: "projects/:projectId", element: <ProjectDetailPage /> },
       { path: "drives", element: <DrivesPage /> },
-      { path: "drives/:driveId", element: <DriveDetailPage /> },
-      { path: "settings", element: <SettingsPage /> }
+      { path: "drives/:driveId", element: <DriveDetailPage /> }
     ]
   }
 ];

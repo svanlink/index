@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@drive-project-catalog/ui";
 import { useShortcut } from "../app/useShortcut";
@@ -13,7 +13,7 @@ import {
   type FolderType,
   type Project
 } from "@drive-project-catalog/domain";
-import { buildBatchActionPreview, validateManualProjectForm } from "../app/catalogValidation";
+import { validateManualProjectForm } from "../app/catalogValidation";
 import { useCatalogStore } from "../app/providers";
 import {
   formatBytes,
@@ -47,17 +47,10 @@ interface ProjectFormState {
   currentDriveId: string;
 }
 
-interface BatchState {
-  assignDriveId: string;
-  category: Category | "";
-  targetDriveId: string;
-}
-
 const initialProjectForm: ProjectFormState = {
   parsedDate: "", parsedClient: "", parsedProject: "",
   category: "", sizeGigabytes: "", currentDriveId: ""
 };
-const initialBatchState: BatchState = { assignDriveId: "", category: "", targetDriveId: "" };
 
 // ---------------------------------------------------------------------------
 // Page
@@ -68,16 +61,13 @@ export function ProjectsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     projects, drives, isLoading, isMutating,
-    createProject, assignProjectsToDrive, setProjectsCategory, planProjectsMove, deleteProjects
+    createProject
   } = useCatalogStore();
 
   const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(initialProjectForm);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [batchState, setBatchState] = useState<BatchState>(initialBatchState);
   const [feedback, setFeedback] = useState<{ tone: "success" | "warning" | "error" | "info"; title: string; messages: string[] } | null>(null);
-  const [batchPreview, setBatchPreview] = useState<ReturnType<typeof buildBatchActionPreview> | null>(null);
 
   // Cmd+N — toggle create form (disabled while a mutation is in flight)
   useShortcut({ key: "n", meta: true, onTrigger: () => setIsCreateOpen((c) => !c), enabled: !isMutating });
@@ -132,18 +122,10 @@ export function ProjectsPage() {
     [categoryFilter, folderTypeFilter, driveFilter, drives, projects, search, showDuplicate, showMissing, showMovePending, showUnassigned, targetDriveFilter]
   );
 
-  const selectedProjects = useMemo(
-    () => projects.filter((p) => selectedIds.includes(p.id)),
-    [projects, selectedIds]
-  );
-
   const manualProjectValidation = useMemo(
     () => validateManualProjectForm(projectForm),
     [projectForm]
   );
-
-  const allVisibleSelected =
-    filteredProjects.length > 0 && filteredProjects.every((p) => selectedIds.includes(p.id));
 
   // Auto-dismiss feedback
   useEffect(() => {
@@ -151,8 +133,6 @@ export function ProjectsPage() {
     const id = window.setTimeout(() => setFeedback(null), 2800);
     return () => window.clearTimeout(id);
   }, [feedback]);
-
-  useEffect(() => { setBatchPreview(null); }, [batchState, selectedIds]);
 
   useEffect(() => {
     const nextSearch = searchParams.get("q") ?? "";
@@ -187,72 +167,10 @@ export function ProjectsPage() {
     }
   }
 
-  const openBatchPreview = useCallback((kind: Parameters<typeof buildBatchActionPreview>[0]["kind"]) => {
-    const preview = buildBatchActionPreview({
-      kind, selectedProjects, drives,
-      assignDriveId: batchState.assignDriveId || null,
-      category: batchState.category,
-      targetDriveId: batchState.targetDriveId || null
-    });
-    if (preview.errors.length > 0) {
-      setFeedback({ tone: "error", title: preview.title, messages: preview.errors });
-      setBatchPreview(null);
-      return;
-    }
-    setBatchPreview(preview);
-  }, [batchState.assignDriveId, batchState.category, batchState.targetDriveId, drives, selectedProjects]);
-
-  const confirmBatchPreview = useCallback(async () => {
-    if (!batchPreview) return;
-    try {
-      if (batchPreview.kind === "assign-drive") {
-        await assignProjectsToDrive(selectedIds, batchState.assignDriveId || null);
-      } else if (batchPreview.kind === "set-category") {
-        await setProjectsCategory(selectedIds, batchState.category as Category);
-      } else if (batchPreview.kind === "delete") {
-        await deleteProjects(selectedIds);
-      } else {
-        await planProjectsMove(selectedIds, batchState.targetDriveId);
-      }
-      setFeedback({
-        tone: batchPreview.warnings.length > 0 ? "warning" : "success",
-        title: batchPreview.kind === "assign-drive" ? "Drive assignment applied"
-          : batchPreview.kind === "set-category" ? "Category update applied"
-          : batchPreview.kind === "delete" ? "Projects deleted"
-          : "Move plan applied",
-        messages: batchPreview.warnings.length > 0
-          ? [...batchPreview.confirmations, ...batchPreview.warnings]
-          : batchPreview.confirmations
-      });
-      setSelectedIds([]);
-      setBatchPreview(null);
-    } catch (error) {
-      setFeedback({ tone: "error", title: "Batch action failed", messages: [error instanceof Error ? error.message : "The batch action could not be completed."] });
-    }
-  }, [assignProjectsToDrive, batchPreview, batchState.assignDriveId, batchState.category, batchState.targetDriveId, deleteProjects, planProjectsMove, selectedIds, setProjectsCategory]);
-
   function updateQueryParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value); else next.delete(key);
     setSearchParams(next);
-  }
-
-  function toggleSelection(id: string) {
-    setSelectedIds((current) =>
-      current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
-    );
-  }
-
-  function toggleAllVisible() {
-    if (allVisibleSelected) {
-      setSelectedIds((current) => current.filter((id) => !filteredProjects.some((p) => p.id === id)));
-    } else {
-      setSelectedIds((current) => {
-        const next = new Set(current);
-        filteredProjects.forEach((p) => next.add(p.id));
-        return [...next];
-      });
-    }
   }
 
   function clearAllFilters() {
@@ -296,13 +214,13 @@ export function ProjectsPage() {
           <Icon name="folder" size={20} color="var(--ink)" />
         </div>
         <h1
-          className="text-[28px] font-semibold"
-          style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.015em", lineHeight: 1.15 }}
+          className="text-[22px] font-semibold"
+          style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}
         >
           No projects yet.
         </h1>
         <p
-          className="mt-2 max-w-[48ch] text-[17px] leading-[1.47]"
+          className="mt-2 max-w-[48ch] text-[14px] leading-relaxed"
           style={{ color: "var(--ink-2)", margin: "8px 0 0" }}
         >
           Scan a connected drive to index its folders, or create a manual project
@@ -450,22 +368,6 @@ export function ProjectsPage() {
         </div>
       ) : null}
 
-      {/* ── Batch action bar ── */}
-      {selectedIds.length > 0 ? (
-        <BatchActionBar
-          selectedCount={selectedIds.length}
-          drives={drives}
-          state={batchState}
-          preview={batchPreview}
-          isMutating={isMutating}
-          onChange={setBatchState}
-          onPreview={openBatchPreview}
-          onConfirm={() => void confirmBatchPreview()}
-          onCancelPreview={() => setBatchPreview(null)}
-          onClearSelection={() => setSelectedIds([])}
-        />
-      ) : null}
-
       {/* ── Project list ── */}
       <div className="card overflow-hidden">
         {isLoading ? (
@@ -499,19 +401,9 @@ export function ProjectsPage() {
           <>
             {/* Table controls strip */}
             <div
-              className="flex items-center justify-between gap-4 border-b px-4 py-3"
+              className="flex items-center justify-end gap-4 border-b px-4 py-3"
               style={{ borderColor: "var(--hairline)" }}
             >
-              <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium" style={{ color: "var(--ink-3)" }}>
-                <input
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={toggleAllVisible}
-                  aria-label="Select all visible"
-                  className="accent-[color:var(--accent)]"
-                />
-                {allVisibleSelected ? "Deselect all" : "Select all"}
-              </label>
               <p className="tnum text-[11px]" style={{ color: "var(--ink-3)" }}>
                 {hasActiveFilters || search.trim() ? (
                   <>
@@ -538,8 +430,6 @@ export function ProjectsPage() {
                   key={project.id}
                   project={project}
                   drives={drives}
-                  isSelected={selectedIds.includes(project.id)}
-                  onToggleSelected={toggleSelection}
                 />
               ))}
             </div>
@@ -556,21 +446,18 @@ export function ProjectsPage() {
 
 function ProjectRow({
   project,
-  drives,
-  isSelected,
-  onToggleSelected
+  drives
 }: {
   project: Project;
   drives: Drive[];
-  isSelected: boolean;
-  onToggleSelected(id: string): void;
 }) {
   const displayName = getDisplayProject(project);
   const displayClient = getDisplayClient(project);
   const displayDate = formatParsedDate(project.correctedDate ?? project.parsedDate);
   const isPersonalFolder = project.folderType === "personal_folder";
-  const statusBadges = getProjectStatusBadges(project).filter((b) => b !== "Normal");
-  const driveName = getDriveName(drives, project.currentDriveId);
+  const statusBadges = getProjectStatusBadges(project).filter((b: string) => b !== "Normal");
+  const currentDrive = project.currentDriveId ? drives.find((d) => d.id === project.currentDriveId) : null;
+  const driveName = getDriveName(currentDrive);
   const driveColor = getDriveColor(project.currentDriveId);
   const targetDrive = project.targetDriveId
     ? drives.find((d) => d.id === project.targetDriveId)
@@ -617,25 +504,13 @@ function ProjectRow({
   return (
     <div
       role="listitem"
-      className={`proj-row group grid items-center gap-3 border-b px-4 py-3 ${isSelected ? "bg-[color:var(--accent-soft)]" : ""}`}
+      className="proj-row group grid items-center gap-3 border-b px-4 py-3"
       style={{
-        gridTemplateColumns: "28px minmax(0,1fr) minmax(170px,220px) 88px minmax(140px,180px) 16px",
+        gridTemplateColumns: "minmax(0,1fr) minmax(170px,220px) 88px minmax(140px,180px) 16px",
         borderColor: "var(--hairline)",
         boxShadow: statusAccent
       }}
-      aria-selected={isSelected}
     >
-      {/* Checkbox column — shows on hover or when row is already selected */}
-      <div className="flex items-center justify-center">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={() => onToggleSelected(project.id)}
-          aria-label={`Select ${project.folderName}`}
-          className={`accent-[color:var(--accent)] transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
-        />
-      </div>
-
       {/* Project — avatar + title + subtitle */}
       <Link
         to={`/projects/${project.id}`}
@@ -707,12 +582,12 @@ function ProjectRow({
 
       {/* Size — right-aligned tabular numbers */}
       <div className="tnum text-right text-[12.5px]" style={{ color: "var(--ink-2)" }}>
-        {formatBytes(project.sizeBytes)}
+        {project.sizeBytes != null ? formatBytes(project.sizeBytes) : "—"}
       </div>
 
       {/* Status chips — stack to the right */}
       <div className="flex flex-wrap justify-end gap-1 overflow-hidden">
-        {statusBadges.map((b) => (
+        {statusBadges.map((b: string) => (
           <StatusBadge key={b} label={b} />
         ))}
       </div>
@@ -727,180 +602,6 @@ function ProjectRow({
       >
         <Icon name="chevron" size={12} />
       </Link>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Batch action bar
-// ---------------------------------------------------------------------------
-
-function BatchActionBar({
-  selectedCount,
-  drives,
-  state,
-  preview,
-  isMutating,
-  onChange,
-  onPreview,
-  onConfirm,
-  onCancelPreview,
-  onClearSelection
-}: {
-  selectedCount: number;
-  drives: Drive[];
-  state: BatchState;
-  preview: ReturnType<typeof buildBatchActionPreview> | null;
-  isMutating: boolean;
-  onChange(s: BatchState): void;
-  onPreview(kind: Parameters<typeof buildBatchActionPreview>[0]["kind"]): void;
-  onConfirm(): void;
-  onCancelPreview(): void;
-  onClearSelection(): void;
-}) {
-  return (
-    <div
-      className="card overflow-hidden px-4 py-3"
-      style={{
-        borderColor: "rgba(var(--accent-rgb), 0.22)",
-        background: "color-mix(in srgb, var(--accent-soft) 38%, var(--surface))"
-      }}
-    >
-      {preview ? (
-        <div className="space-y-3">
-          <FeedbackNotice tone="info" title={preview.title} messages={[preview.summary, ...preview.confirmations]} />
-          {preview.warnings.length > 0 ? (
-            <FeedbackNotice tone="warning" title="Review warnings" messages={preview.warnings} />
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-sm btn-primary" disabled={isMutating} onClick={onConfirm}>
-              {isMutating ? "Applying…" : "Confirm action"}
-            </button>
-            <button type="button" className="btn btn-sm" onClick={onCancelPreview}>
-              Back
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          {/* Selection count */}
-          <div className="flex items-center gap-2">
-            <span
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
-              style={{ background: "var(--ink)" }}
-            >
-              {selectedCount}
-            </span>
-            <span className="text-[12.5px] font-medium" style={{ color: "var(--ink)" }}>
-              selected
-            </span>
-            <button
-              type="button"
-              className="text-[11px] transition hover:opacity-75"
-              style={{ color: "var(--ink-3)" }}
-              onClick={onClearSelection}
-            >
-              Clear
-            </button>
-          </div>
-
-          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
-
-          {/* Assign drive */}
-          <BatchAction
-            label="Assign drive"
-            onReview={() => onPreview("assign-drive")}
-            disabled={isMutating}
-          >
-            <select
-              value={state.assignDriveId}
-              onChange={(e) => onChange({ ...state, assignDriveId: e.target.value })}
-              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
-            >
-              <option value="">Unassigned</option>
-              {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
-            </select>
-          </BatchAction>
-
-          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
-
-          {/* Set category */}
-          <BatchAction
-            label="Set category"
-            onReview={() => onPreview("set-category")}
-            disabled={isMutating}
-          >
-            <select
-              value={state.category}
-              onChange={(e) => onChange({ ...state, category: e.target.value as Category | "" })}
-              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
-            >
-              <option value="">Choose category</option>
-              {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </BatchAction>
-
-          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
-
-          {/* Plan move */}
-          <BatchAction
-            label="Plan move"
-            onReview={() => onPreview("plan-move")}
-            disabled={isMutating}
-          >
-            <select
-              value={state.targetDriveId}
-              onChange={(e) => onChange({ ...state, targetDriveId: e.target.value })}
-              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
-            >
-              <option value="">Target drive</option>
-              {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
-            </select>
-          </BatchAction>
-
-          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
-
-          {/* Delete — destructive standalone action, no parameter needed */}
-          <button
-            type="button"
-            className="btn btn-sm btn-danger"
-            onClick={() => onPreview("delete")}
-            disabled={isMutating}
-          >
-            <Icon name="trash" size={11} />
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BatchAction({
-  label,
-  children,
-  onReview,
-  disabled
-}: {
-  label: string;
-  children: ReactNode;
-  onReview(): void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] font-medium" style={{ color: "var(--ink-3)" }}>
-        {label}
-      </span>
-      {children}
-      <button
-        type="button"
-        className="btn btn-sm"
-        disabled={disabled}
-        onClick={onReview}
-      >
-        Review
-      </button>
     </div>
   );
 }

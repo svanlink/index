@@ -1,5 +1,3 @@
-@import "@fontsource-variable/inter";
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -16,18 +14,18 @@
    ────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Typography ── */
+  /* ── Typography — SF Pro via WKWebView on macOS ── */
   --font-sans:
-    "Inter Variable", "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
     "Helvetica Neue", system-ui, sans-serif;
   --font-display:
-    "Inter Variable", "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont,
-    system-ui, sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", system-ui, sans-serif;
   --font-mono:
-    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    ui-monospace, "SF Mono", Menlo, "Cascadia Code", monospace;
 
-  /* ── Canvas & surfaces (DESIGN.md §2) ── */
-  --canvas: #f9f9f9;
+  /* ── Canvas & surfaces ── */
+  --canvas: #f2f2f7;
   --surface: #ffffff;
   --surface-raised: #ffffff;
   --surface-container-low: #f3f3f3;
@@ -50,13 +48,11 @@
   --border-soft: #d2d2d7;
   --border-mid: #86868b;
 
-  /* ── Action (Apple blue — DESIGN.md §2) ──
-     --accent / --accent-* retained so existing class definitions
-     still resolve. Semantically all of these are "action". */
-  --action: #0071e3;
-  --action-hover: #0066cc;
-  --action-soft: #2997ff;
-  --action-rgb: 0, 113, 227;
+  /* ── Action (Apple UI blue) ── */
+  --action: #007AFF;
+  --action-hover: #0062cc;
+  --action-soft: #409cff;
+  --action-rgb: 0, 122, 255;
 
   --accent: var(--action);
   --accent-ink: var(--action-hover);
@@ -97,11 +93,11 @@
   --dens-pad: 16px;
   --dens-gap: 16px;
 
-  /* ── Shell (DESIGN.md §4) ── */
-  --sidebar: var(--surface);
-  --sidebar-width: 256px;
-  --topnav-height: 56px;
-  --container-max: 980px;
+  /* ── Shell ── */
+  --sidebar: rgba(246, 246, 247, 0.92);
+  --sidebar-width: 220px;
+  --topnav-height: 52px;
+  --container-max: 1100px;
 
   /* ──────────────────────────────────────────────────────────────
      Drive identity palette — six cool-neutral hues assigned
@@ -205,7 +201,8 @@
    user decides whether the app ships with dark mode at all.
    ────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --canvas: #1d1d1f;
+  --canvas: #1c1c1e;
+  --sidebar: rgba(30, 30, 32, 0.92);
   --surface: #2a2a2c;
   --surface-raised: #2a2a2c;
   --surface-container-low: #272729;
@@ -248,9 +245,8 @@ body {
   background: var(--canvas);
   color: var(--ink);
   font-family: var(--font-sans);
-  /* DESIGN.md §3: body-primary is 17/400/1.47 */
-  font-size: 17px;
-  line-height: 1.47;
+  font-size: 14px;
+  line-height: 1.5;
   /* Native desktop feel: no text selection drag, no bounce scroll */
   user-select: none;
   -webkit-user-select: none;
@@ -321,10 +317,10 @@ a {
   line-height: 1.1;
   color: var(--ink);
 }
-/* card-title: 28/600/1.2 */
+/* card-title: 22/600/1.2 */
 .h-title {
   font-family: var(--font-display);
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;

@@ -601,7 +601,7 @@ export function MetricCard({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p
-        className="tnum truncate text-[17px]"
+        className="tnum truncate text-[15px]"
         style={{ color: "var(--ink)", margin: "4px 0 0" }}
       >
         {value}

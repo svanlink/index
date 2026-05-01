@@ -69,9 +69,9 @@ export function TopUtilityBar({
       className="sticky top-0 z-20 flex h-14 items-center border-b px-6"
       style={{
         borderColor: "var(--hairline)",
-        background: "rgba(255, 255, 255, 0.72)",
-        backdropFilter: "blur(20px)",
-        WebkitBackdropFilter: "blur(20px)"
+        background: "rgba(242, 242, 247, 0.82)",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)"
       }}
     >
       <div
