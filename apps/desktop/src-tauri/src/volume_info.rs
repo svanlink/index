@@ -83,15 +83,16 @@ fn parse_diskutil_info(path: &str) -> Option<DiskutilInfo> {
         return None;
     }
 
-    Some(DiskutilInfo { filesystem_type, volume_name, volume_uuid })
+    Some(DiskutilInfo {
+        filesystem_type,
+        volume_name,
+        volume_uuid,
+    })
 }
 
 /// Returns `(total_bytes, free_bytes)` from `df -Pk <path>`.
 fn parse_df_bytes(path: &str) -> Option<(u64, u64)> {
-    let output = Command::new("df")
-        .args(["-Pk", path])
-        .output()
-        .ok()?;
+    let output = Command::new("df").args(["-Pk", path]).output().ok()?;
 
     if !output.status.success() {
         return None;

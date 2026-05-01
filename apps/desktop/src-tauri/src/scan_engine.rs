@@ -64,7 +64,7 @@ const IGNORED_SYSTEM_FOLDERS: &[&str] = &[
 /// Every folder is classified — none are silently discarded.
 #[derive(Debug, Clone)]
 enum FolderClassification {
-    /// New standard: `YYYY-MM-DD_ClientName_ProjectName`
+    /// New standard: `YYYY-MM-DD_ClientName - ProjectName`
     /// Legacy:       `YYMMDD_ClientName_ProjectName` (client ≠ "Internal")
     Client {
         date: String,
@@ -72,10 +72,7 @@ enum FolderClassification {
         project: String,
     },
     /// Legacy: `YYMMDD_Internal_ProjectName`
-    PersonalProject {
-        date: String,
-        project: String,
-    },
+    PersonalProject { date: String, project: String },
     /// Anything that does not match the structured patterns
     PersonalFolder,
 }
@@ -102,7 +99,9 @@ impl FolderClassification {
     fn parsed_client(&self) -> Option<&str> {
         match self {
             FolderClassification::Client { client, .. } => Some(client.as_str()),
-            FolderClassification::PersonalProject { .. } | FolderClassification::PersonalFolder => None,
+            FolderClassification::PersonalProject { .. } | FolderClassification::PersonalFolder => {
+                None
+            }
         }
     }
 
@@ -224,7 +223,10 @@ impl AppScanState {
 
     fn list_snapshots(&self) -> Vec<ScanSnapshot> {
         let sessions = self.sessions.lock().expect("scan state poisoned");
-        let mut snapshots: Vec<_> = sessions.values().map(|session| session.snapshot()).collect();
+        let mut snapshots: Vec<_> = sessions
+            .values()
+            .map(|session| session.snapshot())
+            .collect();
         snapshots.sort_by(|left, right| right.started_at.cmp(&left.started_at));
         snapshots
     }
@@ -255,7 +257,10 @@ impl ScanSession {
     }
 
     fn snapshot(&self) -> ScanSnapshot {
-        self.snapshot.lock().expect("scan snapshot poisoned").clone()
+        self.snapshot
+            .lock()
+            .expect("scan snapshot poisoned")
+            .clone()
     }
 
     /// Cooperative cancellation request.
@@ -334,7 +339,11 @@ impl ScanSession {
             parsed_project: classification.parsed_project().map(str::to_string),
             source_drive_name,
             scan_timestamp: timestamp_now(),
-            size_status: if index_only { "unknown".to_string() } else { "pending".to_string() },
+            size_status: if index_only {
+                "unknown".to_string()
+            } else {
+                "pending".to_string()
+            },
             size_bytes: None,
             size_error: None,
         });
@@ -348,7 +357,11 @@ impl ScanSession {
             snapshot.size_jobs_pending -= 1;
         }
 
-        if let Some(project) = snapshot.projects.iter_mut().find(|project| project.id == project_id) {
+        if let Some(project) = snapshot
+            .projects
+            .iter_mut()
+            .find(|project| project.id == project_id)
+        {
             match result {
                 Ok(size_bytes) => {
                     project.size_status = "ready".to_string();
@@ -453,15 +466,29 @@ pub fn start_scan(
 ) -> Result<ScanStartResponse, String> {
     let root_path = PathBuf::from(&request.root_path);
     if !root_path.exists() {
+        log::warn!("scan rejected: root does not exist: {}", request.root_path);
         return Err(format!("scan root does not exist: {}", request.root_path));
     }
     if !root_path.is_dir() {
-        return Err(format!("scan root is not a directory: {}", request.root_path));
+        log::warn!(
+            "scan rejected: root is not a directory: {}",
+            request.root_path
+        );
+        return Err(format!(
+            "scan root is not a directory: {}",
+            request.root_path
+        ));
     }
 
     let scan_id = state.next_scan_id();
     let drive_name = derive_drive_name(&root_path);
-    let scan_mode = request.scan_mode.unwrap_or_else(|| "index_only".to_string());
+    let scan_mode = request
+        .scan_mode
+        .unwrap_or_else(|| "index_only".to_string());
+    log::info!(
+        "scan started: id={scan_id} drive={drive_name} mode={scan_mode} root={}",
+        root_path.display()
+    );
     let session = Arc::new(ScanSession::new(
         scan_id.clone(),
         root_path.to_string_lossy().to_string(),
@@ -477,9 +504,27 @@ pub fn start_scan(
         // get overwritten by mark_completed when execute_scan actually
         // succeeded) or arrive after (and become no-ops). See H5.
         match execute_scan(root_path, drive_name, Arc::clone(&session)) {
-            Ok(()) => session.mark_completed(),
-            Err(error) if error == CANCELLED_ERROR => session.mark_cancelled(),
-            Err(error) => session.mark_failed(error),
+            Ok(()) => {
+                let snapshot = session.snapshot();
+                log::info!(
+                    "scan completed: id={} folders={} matches={} size_jobs_pending={}",
+                    snapshot.scan_id,
+                    snapshot.folders_scanned,
+                    snapshot.matches_found,
+                    snapshot.size_jobs_pending
+                );
+                session.mark_completed();
+            }
+            Err(error) if error == CANCELLED_ERROR => {
+                let snapshot = session.snapshot();
+                log::info!("scan cancelled: id={}", snapshot.scan_id);
+                session.mark_cancelled();
+            }
+            Err(error) => {
+                let snapshot = session.snapshot();
+                log::error!("scan failed: id={} error={error}", snapshot.scan_id);
+                session.mark_failed(error);
+            }
         }
     });
 
@@ -490,16 +535,23 @@ pub fn start_scan(
 }
 
 #[tauri::command]
-pub fn cancel_scan(scan_id: String, state: State<'_, AppScanState>) -> Result<ScanSnapshot, String> {
+pub fn cancel_scan(
+    scan_id: String,
+    state: State<'_, AppScanState>,
+) -> Result<ScanSnapshot, String> {
     let session = state
         .get_session(&scan_id)
         .ok_or_else(|| format!("unknown scan id: {scan_id}"))?;
+    log::info!("scan cancellation requested: id={scan_id}");
     session.cancel();
     Ok(session.snapshot())
 }
 
 #[tauri::command]
-pub fn get_scan_snapshot(scan_id: String, state: State<'_, AppScanState>) -> Result<ScanSnapshot, String> {
+pub fn get_scan_snapshot(
+    scan_id: String,
+    state: State<'_, AppScanState>,
+) -> Result<ScanSnapshot, String> {
     let session = state
         .get_session(&scan_id)
         .ok_or_else(|| format!("unknown scan id: {scan_id}"))?;
@@ -511,7 +563,11 @@ pub fn list_scan_snapshots(state: State<'_, AppScanState>) -> Vec<ScanSnapshot> 
     state.list_snapshots()
 }
 
-fn execute_scan(root_path: PathBuf, drive_name: String, session: Arc<ScanSession>) -> Result<(), String> {
+fn execute_scan(
+    root_path: PathBuf,
+    drive_name: String,
+    session: Arc<ScanSession>,
+) -> Result<(), String> {
     scan_directory(&root_path, &root_path, 0, &drive_name, &session)?;
     Ok(())
 }
@@ -527,8 +583,12 @@ fn scan_directory(
         return Err(CANCELLED_ERROR.to_string());
     }
 
-    let entries = fs::read_dir(current_path)
-        .map_err(|error| format!("failed to read directory {}: {error}", current_path.display()))?;
+    let entries = fs::read_dir(current_path).map_err(|error| {
+        format!(
+            "failed to read directory {}: {error}",
+            current_path.display()
+        )
+    })?;
 
     for entry in entries {
         if session.is_cancelled() {
@@ -536,9 +596,12 @@ fn scan_directory(
         }
 
         let entry = entry.map_err(|error| format!("failed to read directory entry: {error}"))?;
-        let file_type = entry
-            .file_type()
-            .map_err(|error| format!("failed to read file type for {}: {error}", entry.path().display()))?;
+        let file_type = entry.file_type().map_err(|error| {
+            format!(
+                "failed to read file type for {}: {error}",
+                entry.path().display()
+            )
+        })?;
         if !file_type.is_dir() {
             // Symlinks are also skipped: DirEntry::file_type() returns the symlink type itself,
             // not the target, so symlinks to directories have is_dir() == false here.
@@ -611,12 +674,17 @@ fn calculate_directory_size(path: &Path, session: &ScanSession) -> Result<u64, S
     calculate_directory_size_inner(path, session, &mut entry_count)
 }
 
-fn calculate_directory_size_inner(path: &Path, session: &ScanSession, entry_count: &mut u64) -> Result<u64, String> {
+fn calculate_directory_size_inner(
+    path: &Path,
+    session: &ScanSession,
+    entry_count: &mut u64,
+) -> Result<u64, String> {
     if session.is_cancelled() {
         return Err(CANCELLED_ERROR.to_string());
     }
 
-    let entries = fs::read_dir(path).map_err(|error| format!("failed to size {}: {error}", path.display()))?;
+    let entries = fs::read_dir(path)
+        .map_err(|error| format!("failed to size {}: {error}", path.display()))?;
     let mut total_size = 0_u64;
 
     for entry in entries {
@@ -631,10 +699,14 @@ fn calculate_directory_size_inner(path: &Path, session: &ScanSession, entry_coun
             return Ok(total_size);
         }
 
-        let entry = entry.map_err(|error| format!("failed to size entry in {}: {error}", path.display()))?;
-        let metadata = entry
-            .metadata()
-            .map_err(|error| format!("failed to read metadata for {}: {error}", entry.path().display()))?;
+        let entry = entry
+            .map_err(|error| format!("failed to size entry in {}: {error}", path.display()))?;
+        let metadata = entry.metadata().map_err(|error| {
+            format!(
+                "failed to read metadata for {}: {error}",
+                entry.path().display()
+            )
+        })?;
 
         if metadata.is_file() {
             total_size += metadata.len();
@@ -678,7 +750,7 @@ fn is_ten_char_iso_date(value: &str) -> bool {
 /// Rules (evaluated in order):
 ///
 /// **New standard (preferred)**
-///   1. `YYYY-MM-DD_ClientName_ProjectName` → `Client`
+///   1. `YYYY-MM-DD_ClientName - ProjectName` → `Client`
 ///
 /// **Legacy (backward-compatible)**
 ///   2. `YYMMDD_ClientName_ProjectName` (client ≠ "Internal") → `Client`
@@ -687,40 +759,47 @@ fn is_ten_char_iso_date(value: &str) -> bool {
 /// **Fallback**
 ///   4. Anything else → `PersonalFolder`
 fn classify_folder_name(name: &str) -> FolderClassification {
+    const CLIENT_PROJECT_SEPARATOR: &str = " - ";
+
+    if let Some((date, rest)) = name.split_once('_') {
+        if let Some((client, project)) = rest.split_once(CLIENT_PROJECT_SEPARATOR) {
+            if client.is_empty() || project.is_empty() {
+                return FolderClassification::PersonalFolder;
+            }
+
+            if is_ten_char_iso_date(date) {
+                return FolderClassification::Client {
+                    date: date.to_string(),
+                    client: client.to_string(),
+                    project: project.to_string(),
+                };
+            }
+        }
+    }
+
     let parts: Vec<&str> = name.split('_').collect();
 
-    // All structured conventions produce exactly 3 tokens when split by '_'.
-    // YYYY-MM-DD dates contain hyphens (not underscores), so they remain a
-    // single token after the split.
+    // Legacy conventions produce exactly 3 tokens when split by '_'.
     if parts.len() == 3 {
-        let date    = parts[0];
-        let client  = parts[1];
+        let date = parts[0];
+        let client = parts[1];
         let project = parts[2];
 
         if client.is_empty() || project.is_empty() {
             return FolderClassification::PersonalFolder;
         }
 
-        // ── New standard: YYYY-MM-DD_Client_Project ─────────────────────────
-        if is_ten_char_iso_date(date) {
-            return FolderClassification::Client {
-                date:    date.to_string(),
-                client:  client.to_string(),
-                project: project.to_string(),
-            };
-        }
-
         // ── Legacy: YYMMDD_Client_Project or YYMMDD_Internal_Project ────────
         if is_six_ascii_digits(date) {
             return if client == "Internal" {
                 FolderClassification::PersonalProject {
-                    date:    date.to_string(),
+                    date: date.to_string(),
                     project: project.to_string(),
                 }
             } else {
                 FolderClassification::Client {
-                    date:    date.to_string(),
-                    client:  client.to_string(),
+                    date: date.to_string(),
+                    client: client.to_string(),
                     project: project.to_string(),
                 }
             };
@@ -747,24 +826,31 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    // ── New standard: YYYY-MM-DD_Client_Project ─────────────────────────────
+    // ── New standard: YYYY-MM-DD_Client - Project ───────────────────────────
 
     #[test]
     fn classifies_new_standard_yyyy_mm_dd_folders() {
-        let c = classify_folder_name("2024-03-12_Richemont_EventRecap");
+        let c = classify_folder_name("2024-03-12_Richemont - EventRecap");
         assert!(matches!(c, FolderClassification::Client { .. }));
         assert_eq!(c.folder_type_str(), "client");
         assert_eq!(c.parsed_date(), Some("2024-03-12"));
         assert_eq!(c.parsed_client(), Some("Richemont"));
         assert_eq!(c.parsed_project(), Some("EventRecap"));
 
-        let c = classify_folder_name("2024-06-05_Decathlon_RunningCampaign");
+        let c = classify_folder_name("2024-06-05_Decathlon - RunningCampaign");
         assert_eq!(c.parsed_date(), Some("2024-06-05"));
         assert_eq!(c.parsed_client(), Some("Decathlon"));
 
-        let c = classify_folder_name("2023-09-11_Fuerteventura_SurfDoc");
+        let c = classify_folder_name("2023-09-11_Fuerteventura - SurfDoc");
         assert_eq!(c.parsed_date(), Some("2023-09-11"));
         assert_eq!(c.parsed_client(), Some("Fuerteventura"));
+    }
+
+    #[test]
+    fn rejects_old_iso_underscore_shape_as_non_standard() {
+        let c = classify_folder_name("2024-03-12_Richemont_EventRecap");
+        assert!(matches!(c, FolderClassification::PersonalFolder));
+        assert_eq!(c.folder_type_str(), "personal_folder");
     }
 
     // ── Legacy YYMMDD format (backward-compat) ───────────────────────────────
@@ -815,7 +901,10 @@ mod tests {
 
         // Internal-like but not exact case (legacy path treats it as client)
         let c = classify_folder_name("240401_internal_Archive");
-        assert!(matches!(c, FolderClassification::Client { .. }), "lowercase 'internal' is a client name, not personal_project");
+        assert!(
+            matches!(c, FolderClassification::Client { .. }),
+            "lowercase 'internal' is a client name, not personal_project"
+        );
     }
 
     // ── index_only mode ──────────────────────────────────────────────────────
@@ -825,7 +914,11 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let root = temp.path();
         fs::create_dir(root.join("240401_Apple_ProductShoot")).expect("project");
-        fs::write(root.join("240401_Apple_ProductShoot").join("file.mov"), vec![0_u8; 256]).expect("file");
+        fs::write(
+            root.join("240401_Apple_ProductShoot").join("file.mov"),
+            vec![0_u8; 256],
+        )
+        .expect("file");
 
         let session = Arc::new(ScanSession::new(
             "scan-index-only".to_string(),
@@ -834,19 +927,29 @@ mod tests {
             "index_only".to_string(),
         ));
 
-        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
-            .expect("scan should succeed");
+        execute_scan(
+            root.to_path_buf(),
+            "Drive A".to_string(),
+            Arc::clone(&session),
+        )
+        .expect("scan should succeed");
 
         let snapshot = session.snapshot();
         assert_eq!(snapshot.scan_mode, "index_only");
-        assert_eq!(snapshot.size_jobs_pending, 0, "index_only must not spawn size workers");
+        assert_eq!(
+            snapshot.size_jobs_pending, 0,
+            "index_only must not spawn size workers"
+        );
         assert!(
             snapshot.projects.iter().all(|p| p.size_status == "unknown"),
             "all projects must have size_status=unknown in index_only mode"
         );
         // No size workers should have been registered
         let workers = session.size_workers.lock().expect("workers");
-        assert!(workers.is_empty(), "no size worker handles registered in index_only mode");
+        assert!(
+            workers.is_empty(),
+            "no size worker handles registered in index_only mode"
+        );
     }
 
     #[test]
@@ -872,7 +975,11 @@ mod tests {
         fs::create_dir(&direct_project).expect("direct project");
         fs::write(direct_project.join("capture.mov"), vec![0_u8; 128]).expect("direct file");
         fs::create_dir(direct_project.join("nested")).expect("nested direct");
-        fs::write(direct_project.join("nested").join("grade.cube"), vec![0_u8; 32]).expect("nested file");
+        fs::write(
+            direct_project.join("nested").join("grade.cube"),
+            vec![0_u8; 32],
+        )
+        .expect("nested file");
 
         let nested_container = root.join("Archive");
         fs::create_dir(&nested_container).expect("nested container");
@@ -895,7 +1002,12 @@ mod tests {
             "index_with_size".to_string(),
         ));
 
-        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session)).expect("scan should succeed");
+        execute_scan(
+            root.to_path_buf(),
+            "Drive A".to_string(),
+            Arc::clone(&session),
+        )
+        .expect("scan should succeed");
 
         for _ in 0..50 {
             if session.snapshot().size_jobs_pending == 0 {
@@ -910,19 +1022,40 @@ mod tests {
         // Finds: 240401_Apple_ProductShoot (client), Archive (personal_folder), Deep (personal_folder).
         assert_eq!(snapshot.matches_found, 3);
         assert_eq!(snapshot.projects.len(), 3);
-        assert!(snapshot.projects.iter().all(|project| project.size_status == "ready"));
+        assert!(snapshot
+            .projects
+            .iter()
+            .all(|project| project.size_status == "ready"));
 
         // Top-level structured project is present
-        assert!(snapshot.projects.iter().any(|p| p.folder_name == "240401_Apple_ProductShoot" && p.folder_type == "client"));
+        assert!(snapshot
+            .projects
+            .iter()
+            .any(|p| p.folder_name == "240401_Apple_ProductShoot" && p.folder_type == "client"));
 
         // Top-level unstructured containers are recorded as personal_folder
-        assert!(snapshot.projects.iter().any(|p| p.folder_name == "Archive" && p.folder_type == "personal_folder"));
-        assert!(snapshot.projects.iter().any(|p| p.folder_name == "Deep" && p.folder_type == "personal_folder"));
+        assert!(snapshot
+            .projects
+            .iter()
+            .any(|p| p.folder_name == "Archive" && p.folder_type == "personal_folder"));
+        assert!(snapshot
+            .projects
+            .iter()
+            .any(|p| p.folder_name == "Deep" && p.folder_type == "personal_folder"));
 
         // Nothing below the top level is walked
-        assert!(!snapshot.projects.iter().any(|p| p.folder_name == "240320_Nike_Ad"));
-        assert!(!snapshot.projects.iter().any(|p| p.folder_name == "LevelTwo"));
-        assert!(!snapshot.projects.iter().any(|p| p.folder_name == "240228_Too_Deep"));
+        assert!(!snapshot
+            .projects
+            .iter()
+            .any(|p| p.folder_name == "240320_Nike_Ad"));
+        assert!(!snapshot
+            .projects
+            .iter()
+            .any(|p| p.folder_name == "LevelTwo"));
+        assert!(!snapshot
+            .projects
+            .iter()
+            .any(|p| p.folder_name == "240228_Too_Deep"));
 
         let direct = snapshot
             .projects
@@ -937,7 +1070,11 @@ mod tests {
         let temp = tempdir().expect("tempdir");
         let root = temp.path();
         fs::create_dir(root.join("240401_Apple_ProductShoot")).expect("project");
-        fs::write(root.join("240401_Apple_ProductShoot").join("capture.mov"), vec![0_u8; 128]).expect("file");
+        fs::write(
+            root.join("240401_Apple_ProductShoot").join("capture.mov"),
+            vec![0_u8; 128],
+        )
+        .expect("file");
 
         let session = Arc::new(ScanSession::new(
             "scan-cancel".to_string(),
@@ -971,8 +1108,12 @@ mod tests {
             "index_with_size".to_string(),
         ));
 
-        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
-            .expect("scan should succeed");
+        execute_scan(
+            root.to_path_buf(),
+            "Drive A".to_string(),
+            Arc::clone(&session),
+        )
+        .expect("scan should succeed");
 
         // cancel() wins to lock and writes "cancelled"
         session.cancel();
@@ -1006,8 +1147,12 @@ mod tests {
             "index_with_size".to_string(),
         ));
 
-        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
-            .expect("scan should succeed");
+        execute_scan(
+            root.to_path_buf(),
+            "Drive A".to_string(),
+            Arc::clone(&session),
+        )
+        .expect("scan should succeed");
         session.mark_completed();
         assert!(session.is_finalized());
 
@@ -1087,8 +1232,12 @@ mod tests {
             "index_with_size".to_string(),
         ));
 
-        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
-            .expect("scan should succeed");
+        execute_scan(
+            root.to_path_buf(),
+            "Drive A".to_string(),
+            Arc::clone(&session),
+        )
+        .expect("scan should succeed");
 
         // At least one worker should have been spawned.
         {
@@ -1128,8 +1277,12 @@ mod tests {
             "index_with_size".to_string(),
         ));
 
-        execute_scan(root.to_path_buf(), "Drive A".to_string(), Arc::clone(&session))
-            .expect("scan should succeed");
+        execute_scan(
+            root.to_path_buf(),
+            "Drive A".to_string(),
+            Arc::clone(&session),
+        )
+        .expect("scan should succeed");
 
         // Size workers may still be running — don't wait for them here.
         // Arc::try_unwrap succeeds only when this is the sole reference,

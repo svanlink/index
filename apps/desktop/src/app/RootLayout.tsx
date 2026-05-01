@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AppShell, type NavItem } from "@drive-project-catalog/ui";
-import { getDisplayProject } from "@drive-project-catalog/domain";
+import { AppShell, type NavItem, type SearchResultItem } from "@drive-project-catalog/ui";
+import { getDisplayClient, getDisplayProject } from "@drive-project-catalog/domain";
 import { useCatalogStore } from "./providers";
 import { useScanWorkflow } from "./scanWorkflow";
 import { useShortcut } from "./useShortcut";
+import { useVolumeMountedListener } from "./useVolumeMountedListener";
+import { useWindowDragRegions } from "./useWindowDragRegions";
 
 /**
  * Sections are routes that belong to one of the top-level nav entries. Detail
@@ -14,8 +16,11 @@ import { useShortcut } from "./useShortcut";
  */
 const sectionLabels: Record<string, string> = {
   "/": "Inbox",
+  "/tasks": "Tasks",
   "/projects": "Projects",
   "/drives": "Drives",
+  "/compare": "Compare Discs",
+  "/rename": "Rename Review",
   "/settings": "Settings"
 };
 
@@ -31,6 +36,7 @@ export function RootLayout() {
   const navItems: NavItem[] = useMemo(
     () => [
       { label: "Inbox", to: "/", icon: "home" },
+      { label: "Tasks", to: "/tasks", icon: "command" },
       { label: "Projects", to: "/projects", icon: "folder", count: projects.length },
       {
         label: "Drives",
@@ -38,7 +44,9 @@ export function RootLayout() {
         icon: "hardDrive",
         count: drives.length,
         scanActive: activeSession?.status === "running"
-      }
+      },
+      { label: "Rename Review", to: "/rename", icon: "edit" },
+      { label: "Compare Discs", to: "/compare", icon: "duplicate" }
     ],
     [projects.length, drives.length, activeSession?.status]
   );
@@ -83,6 +91,99 @@ export function RootLayout() {
     };
   }, [location.pathname, params.projectId, params.driveId, projects, drives]);
 
+  const searchResults = useMemo<SearchResultItem[]>(() => {
+    const query = globalSearch.trim().toLowerCase();
+    if (!query) return [];
+
+    const results: SearchResultItem[] = [];
+    const remember = new Set<string>();
+    const push = (item: SearchResultItem) => {
+      if (remember.has(item.id) || results.length >= 10) return;
+      remember.add(item.id);
+      results.push(item);
+    };
+
+    for (const project of projects) {
+      const haystack = [
+        getDisplayProject(project),
+        getDisplayClient(project),
+        project.folderName,
+        project.folderPath,
+        project.parsedDate,
+        project.correctedDate,
+        project.category,
+        project.namingStatus,
+        project.missingStatus,
+        project.duplicateStatus
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(query)) continue;
+      const drive = drives.find((candidate) => candidate.id === project.currentDriveId);
+      push({
+        id: `project:${project.id}`,
+        icon: "folder",
+        label: getDisplayProject(project),
+        detail: `${getDisplayClient(project)} · ${drive?.displayName ?? "Unassigned"}`,
+        onSelect: () => navigate(`/projects/${project.id}`)
+      });
+    }
+
+    for (const drive of drives) {
+      const label = drive.displayName || drive.volumeName;
+      const haystack = `${label} ${drive.volumeName} ${drive.mountPath ?? ""}`.toLowerCase();
+      if (!haystack.includes(query)) continue;
+      push({
+        id: `drive:${drive.id}`,
+        icon: "hardDrive",
+        label,
+        detail: drive.mountPath ?? (drive.volumeName ? `/Volumes/${drive.volumeName}` : "Drive"),
+        onSelect: () => navigate(`/drives/${drive.id}`)
+      });
+    }
+
+    if ("rename review".includes(query) || "rename".includes(query)) {
+      push({
+        id: "route:rename",
+        icon: "edit",
+        label: "Rename Review",
+        detail: "Review folder rename suggestions",
+        onSelect: () => navigate("/rename")
+      });
+    }
+
+    if ("tasks task center operations run preview history".includes(query) || "task".includes(query)) {
+      push({
+        id: "route:tasks",
+        icon: "command",
+        label: "Tasks",
+        detail: "Run catalog operations and review task state",
+        onSelect: () => navigate("/tasks")
+      });
+    }
+
+    if ("compare discs mirror".includes(query) || "compare".includes(query) || "mirror".includes(query)) {
+      push({
+        id: "route:compare",
+        icon: "duplicate",
+        label: "Compare Discs",
+        detail: "Check mirror differences between two drives",
+        onSelect: () => navigate("/compare")
+      });
+    }
+
+    push({
+      id: "search:projects",
+      icon: "search",
+      label: `Search all projects for "${globalSearch.trim()}"`,
+      detail: "Open project list with this query",
+      onSelect: () => navigate(`/projects?q=${encodeURIComponent(globalSearch.trim())}`)
+    });
+
+    return results;
+  }, [drives, globalSearch, navigate, projects]);
+
   // Keep the omnibox in lock-step with the URL. On /projects the query mirrors
   // the search param; elsewhere the input is cleared so returning to the page
   // doesn't resurrect a stale search from a previous session.
@@ -120,6 +221,11 @@ export function RootLayout() {
   useShortcut({ key: "r", meta: true, onTrigger: () => void refresh() });
   useShortcut({ key: ",", meta: true, onTrigger: () => navigate("/settings") });
 
+  // Background "Watch Mode" — listens for /Volumes mount events from the Rust
+  // FSEvents watcher and routes the user to the new drive automatically.
+  useVolumeMountedListener();
+  useWindowDragRegions();
+
   return (
     <AppShell
       navItems={navItems}
@@ -131,6 +237,7 @@ export function RootLayout() {
       searchPlaceholder="Search projects, drives, or folders"
       onSearchChange={setGlobalSearch}
       onSearchSubmit={submitGlobalSearch}
+      searchResults={searchResults}
     >
       <Outlet />
     </AppShell>

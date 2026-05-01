@@ -1,5 +1,13 @@
-import { useEffect, useRef, type FormEvent, type ReactNode } from "react";
-import { Icon } from "./Icon";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Icon, type IconName } from "./Icon";
+
+export interface SearchResultItem {
+  id: string;
+  icon: IconName;
+  label: string;
+  detail: string;
+  onSelect(): void;
+}
 
 export interface TopUtilityBarProps {
   /** Human label for the current route section (e.g. "Projects"). */
@@ -13,6 +21,7 @@ export interface TopUtilityBarProps {
   searchPlaceholder?: string;
   onSearchChange?(value: string): void;
   onSearchSubmit?(value: string): void;
+  searchResults?: SearchResultItem[];
   /** Focus the omnibox on `/` when true. */
   searchShortcutEnabled?: boolean;
 }
@@ -35,9 +44,11 @@ export function TopUtilityBar({
   searchPlaceholder = "Search projects, drives, or folders",
   onSearchChange,
   onSearchSubmit,
+  searchResults = [],
   searchShortcutEnabled = true
 }: TopUtilityBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   useEffect(() => {
     if (!searchShortcutEnabled || !onSearchChange) return;
@@ -62,19 +73,21 @@ export function TopUtilityBar({
   }
 
   const showSearch = Boolean(onSearchChange);
+  const showResults = isSearchFocused && searchValue.trim().length > 0 && searchResults.length > 0;
 
   return (
     <header
-      data-tauri-drag-region
-      className="sticky top-0 z-20 flex h-14 items-center border-b px-6"
+      data-app-drag-region
+      className="app-titlebar sticky top-0 z-20 flex h-[52px] items-center border-b px-4"
       style={{
         borderColor: "var(--hairline)",
-        background: "rgba(255, 255, 255, 0.72)",
+        background: "rgba(246, 246, 246, 0.92)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)"
       }}
     >
       <div
+        data-app-drag-region
         className="grid min-w-0 flex-1 items-center gap-6"
         style={{
           gridTemplateColumns: showSearch
@@ -84,10 +97,12 @@ export function TopUtilityBar({
       >
         {/* Breadcrumb — plain text, no pill, no border. */}
         <div
+          data-app-drag-region
           data-tauri-drag-region
           className="flex min-w-0 items-center gap-2"
         >
           <span
+            data-app-drag-region
             data-tauri-drag-region
             className="truncate text-[14px] font-semibold"
             style={{ color: "var(--ink)", letterSpacing: "-0.005em" }}
@@ -97,6 +112,7 @@ export function TopUtilityBar({
           {sectionDetail ? (
             <>
               <span
+                data-app-drag-region
                 data-tauri-drag-region
                 aria-hidden="true"
                 className="shrink-0"
@@ -105,6 +121,7 @@ export function TopUtilityBar({
                 <Icon name="chevron" size={11} color="currentColor" />
               </span>
               <span
+                data-app-drag-region
                 data-tauri-drag-region
                 className="truncate text-[14px]"
                 style={{ color: "var(--ink-2)" }}
@@ -118,6 +135,7 @@ export function TopUtilityBar({
 
         {showSearch ? (
           <form
+            data-app-no-drag
             onSubmit={handleSubmit}
             className="relative min-w-0"
             role="search"
@@ -133,6 +151,8 @@ export function TopUtilityBar({
                 type="search"
                 value={searchValue}
                 onChange={(event) => onSearchChange?.(event.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => window.setTimeout(() => setIsSearchFocused(false), 120)}
                 placeholder={searchPlaceholder}
                 aria-label={searchPlaceholder}
                 className="w-full bg-transparent outline-none"
@@ -145,12 +165,47 @@ export function TopUtilityBar({
                 /
               </span>
             </label>
+            {showResults ? (
+              <div
+                className="absolute left-0 right-0 top-[38px] z-50 overflow-hidden rounded-[10px] border bg-[color:var(--surface)] shadow-[var(--sh-pop)]"
+                style={{ borderColor: "var(--hairline)" }}
+              >
+                <ul className="max-h-[340px] overflow-y-auto p-1" role="listbox">
+                  {searchResults.map((result) => (
+                    <li key={result.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left transition-colors hover:bg-[color:var(--surface-container-low)]"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setIsSearchFocused(false);
+                          result.onSelect();
+                        }}
+                      >
+                        <Icon name={result.icon} size={15} color="var(--ink-3)" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] font-medium" style={{ color: "var(--ink)" }}>
+                            {result.label}
+                          </span>
+                          <span className="block truncate text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+                            {result.detail}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </form>
         ) : (
-          <div data-tauri-drag-region aria-hidden="true" />
+          <div data-app-drag-region data-tauri-drag-region aria-hidden="true" />
         )}
 
-        <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
+        <div
+          data-app-no-drag
+          className="titlebar-actions ml-auto flex shrink-0 items-center justify-end gap-2"
+        >
           {action}
         </div>
       </div>

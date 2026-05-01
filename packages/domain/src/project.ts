@@ -77,7 +77,7 @@ export interface Project {
 
   /**
    * Human-readable naming status.
-   * - `"valid"`   — matches the official `YYYY-MM-DD_Client_Project` convention
+   * - `"valid"`   — matches the official `YYYY-MM-DD_Client - Project` convention
    * - `"legacy"`  — matches the old `YYMMDD_Client_Project` / `YYMMDD_Internal_Project` convention
    * - `"invalid"` — does not match any structured convention (personal_folder fallback)
    * - `"unknown"` — pre-migration row with NULL naming_status (only from DB reads)
@@ -85,4 +85,3 @@ export interface Project {
    */
   namingStatus?: "valid" | "legacy" | "invalid" | "unknown" | null;
 }
-

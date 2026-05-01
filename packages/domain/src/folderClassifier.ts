@@ -15,7 +15,7 @@
  * ## Rules (evaluated in order)
  *
  * **New standard (preferred)**
- *   1. `YYYY-MM-DD_ClientName_ProjectName` → `client`
+ *   1. `YYYY-MM-DD_ClientName - ProjectName` → `client`
  *      Date must be exactly 10 chars in ISO format (e.g. `2024-03-12`).
  *
  * **Legacy (backward-compatible, not preferred)**
@@ -42,7 +42,7 @@ export type NamingConfidence = "high" | "medium" | "low";
 /**
  * Human-readable naming status for the folder.
  *
- * - `"valid"`   — matches the official `YYYY-MM-DD_Client_Project` convention.
+ * - `"valid"`   — matches the official `YYYY-MM-DD_Client - Project` convention.
  * - `"legacy"`  — matches the old `YYMMDD_Client_Project` / `YYMMDD_Internal_Project` convention.
  * - `"invalid"` — does not match any structured convention (personal_folder fallback).
  * - `"unknown"` — status could not be determined (e.g. pre-migration DB row with NULL).
@@ -58,7 +58,7 @@ export interface FolderClassification {
    * The canonical form of the folder name in the new-standard convention.
    *
    * - New-standard folders: same as the input (already canonical).
-   * - Legacy client folders: `YYYY-MM-DD_Client_Project` (proposed rename target,
+   * - Legacy client folders: `YYYY-MM-DD_Client - Project` (proposed rename target,
    *   century assumed to be 20xx).
    * - Legacy personal_project: `null` — no client field to promote.
    * - personal_folder: `null`.
@@ -86,6 +86,8 @@ const PERSONAL_FOLDER: FolderClassification = {
   namingConfidence: "low",
   namingStatus: "invalid"
 };
+
+const CLIENT_PROJECT_SEPARATOR = " - ";
 
 /**
  * Returns true when `value` is exactly 10 characters matching `YYYY-MM-DD`:
@@ -129,11 +131,39 @@ function legacyDateToIso(yymmdd: string): string {
  * Never throws — every name produces a classification.
  */
 export function classifyFolderName(name: string): FolderClassification {
+  const firstUnderscore = name.indexOf("_");
+
+  if (firstUnderscore > 0) {
+    const date = name.slice(0, firstUnderscore);
+    const rest = name.slice(firstUnderscore + 1);
+    const separatorIndex = rest.indexOf(CLIENT_PROJECT_SEPARATOR);
+
+    if (separatorIndex >= 0) {
+      const client = rest.slice(0, separatorIndex);
+      const project = rest.slice(separatorIndex + CLIENT_PROJECT_SEPARATOR.length);
+
+      if (client.length === 0 || project.length === 0) {
+        return PERSONAL_FOLDER;
+      }
+
+      if (isTenCharIsoDate(date)) {
+        return {
+          folderType: "client",
+          parsedDate: date,
+          parsedClient: client,
+          parsedProject: project,
+          normalizedName: name,
+          namingConvention: "new_standard",
+          namingConfidence: "high",
+          namingStatus: "valid"
+        };
+      }
+    }
+  }
+
   const parts = name.split("_");
 
-  // All structured conventions are exactly 3 parts when split by underscore.
-  // YYYY-MM-DD dates contain dashes (not underscores), so they remain a single
-  // token after the split.
+  // Legacy conventions are exactly 3 parts when split by underscore.
   if (parts.length === 3) {
     const date    = parts[0]!;
     const client  = parts[1]!;
@@ -141,20 +171,6 @@ export function classifyFolderName(name: string): FolderClassification {
 
     if (client.length === 0 || project.length === 0) {
       return PERSONAL_FOLDER;
-    }
-
-    // ── New standard: YYYY-MM-DD_Client_Project ───────────────────────────
-    if (isTenCharIsoDate(date)) {
-      return {
-        folderType: "client",
-        parsedDate: date,
-        parsedClient: client,
-        parsedProject: project,
-        normalizedName: name, // already canonical
-        namingConvention: "new_standard",
-        namingConfidence: "high",
-        namingStatus: "valid"
-      };
     }
 
     // ── Legacy: YYMMDD_Client_Project or YYMMDD_Internal_Project ─────────
@@ -180,7 +196,7 @@ export function classifyFolderName(name: string): FolderClassification {
         parsedProject: project,
         // Proposed rename target in the canonical new-standard form.
         // Century 20xx assumed — purely informational for the rename engine.
-        normalizedName: `${legacyDateToIso(date)}_${client}_${project}`,
+        normalizedName: `${legacyDateToIso(date)}_${client}${CLIENT_PROJECT_SEPARATOR}${project}`,
         namingConvention: "legacy",
         namingConfidence: "medium",
         namingStatus: "legacy"

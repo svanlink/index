@@ -1,8 +1,13 @@
+import type { RenameSuggestion, RenameSuggestionStatus } from "@drive-project-catalog/domain";
 import {
   applyDriveDeleteToSnapshot,
   applyProjectDeleteToSnapshot
 } from "./cascadeDelete";
-import type { CatalogSnapshot, LocalPersistenceAdapter } from "./localPersistence";
+import type {
+  CatalogSnapshot,
+  LocalPersistenceAdapter,
+  RenameUndoEntry
+} from "./localPersistence";
 
 const clone = <T>(value: T): T => structuredClone(value);
 const upsertById = <T extends { id: string }>(items: T[], input: T) => {
@@ -28,6 +33,7 @@ const upsertByScanId = <T extends { scanId: string }>(items: T[], input: T) => {
 
 export class InMemoryLocalPersistence implements LocalPersistenceAdapter {
   #snapshot: CatalogSnapshot;
+  #renameSuggestions: RenameSuggestion[] = [];
 
   constructor(seed: CatalogSnapshot) {
     this.#snapshot = clone(seed);
@@ -129,5 +135,47 @@ export class InMemoryLocalPersistence implements LocalPersistenceAdapter {
     // (H3 parity — sessions with `requestedDriveId === null` are
     // preserved, projects are nullified rather than deleted).
     this.#snapshot = applyDriveDeleteToSnapshot(this.#snapshot, driveId);
+  }
+
+  async listRenameSuggestions(): Promise<RenameSuggestion[]> {
+    return clone(this.#renameSuggestions);
+  }
+
+  async upsertRenameSuggestion(suggestion: RenameSuggestion): Promise<void> {
+    this.#renameSuggestions = upsertById(this.#renameSuggestions, suggestion);
+  }
+
+  async updateRenameSuggestionStatus(
+    id: string,
+    status: RenameSuggestionStatus,
+    updatedAt: string
+  ): Promise<void> {
+    this.#renameSuggestions = this.#renameSuggestions.map((s) =>
+      s.id === id ? { ...s, status, updatedAt } : s
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Time-travel undo for rename suggestions — mirrors the SQLite adapter so
+  // tests and dev setups behave identically. The history is kept in
+  // applied_at-DESC order on read, but stored in insertion order.
+  // ---------------------------------------------------------------------------
+
+  #renameUndoHistory: RenameUndoEntry[] = [];
+
+  async recordRenameUndoEntry(entry: RenameUndoEntry): Promise<void> {
+    this.#renameUndoHistory = upsertById(this.#renameUndoHistory, entry);
+  }
+
+  async getLatestRenameUndoEntry(): Promise<RenameUndoEntry | null> {
+    if (this.#renameUndoHistory.length === 0) return null;
+    const sorted = [...this.#renameUndoHistory].sort((a, b) =>
+      b.appliedAt.localeCompare(a.appliedAt)
+    );
+    return clone(sorted[0]);
+  }
+
+  async deleteRenameUndoEntry(id: string): Promise<void> {
+    this.#renameUndoHistory = this.#renameUndoHistory.filter((e) => e.id !== id);
   }
 }

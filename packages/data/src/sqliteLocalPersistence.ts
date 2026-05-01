@@ -4,11 +4,17 @@ import type {
   FolderType,
   Project,
   ProjectScanEvent,
+  RenameSuggestion,
+  RenameSuggestionStatus,
   ScanProjectRecord,
   ScanRecord,
   ScanSessionSnapshot
 } from "@drive-project-catalog/domain";
-import type { CatalogSnapshot, LocalPersistenceAdapter } from "./localPersistence";
+import type {
+  CatalogSnapshot,
+  LocalPersistenceAdapter,
+  RenameUndoEntry
+} from "./localPersistence";
 
 export interface SqlQueryResult {
   rowsAffected: number;
@@ -653,6 +659,42 @@ const migrations: Migration[] = [
         await database.execute("ALTER TABLE projects ADD COLUMN naming_status TEXT");
       }
     }
+  },
+  {
+    version: 11,
+    // Add confidence column to rename_suggestions (Phase 3).
+    // The table was created in migration 9 without this column. All existing
+    // rows (none in practice — the write service is new in Phase 3) default
+    // to "medium". ALTER TABLE ADD COLUMN is not idempotent in SQLite —
+    // guard via tableExists + pragma check.
+    run: async (database: SqlDatabase) => {
+      if (!(await tableExists(database, "rename_suggestions"))) return;
+      const columns = await database.select<{ name: string }>("PRAGMA table_info(rename_suggestions)");
+      if (!columns.some((col) => col.name === "confidence")) {
+        await database.execute(
+          "ALTER TABLE rename_suggestions ADD COLUMN confidence TEXT NOT NULL DEFAULT 'medium'"
+        );
+      }
+    }
+  },
+  {
+    version: 12,
+    // Time-travel undo for rename suggestions. Captures the previous status
+    // each time a suggestion is approved or dismissed so the user can revert
+    // a single mistake without regenerating the suggestion. The rename engine
+    // never touches the disk, so undo is purely metadata — no filesystem
+    // state needs to be restored.
+    statements: [
+      `CREATE TABLE IF NOT EXISTS rename_undo_history (
+        id TEXT PRIMARY KEY,
+        suggestion_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        previous_status TEXT NOT NULL,
+        applied_status TEXT NOT NULL,
+        applied_at TEXT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_rename_undo_history_applied_at ON rename_undo_history (applied_at DESC)`
+    ]
   }
 ];
 
@@ -879,6 +921,102 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
     });
   }
 
+  async listRenameSuggestions(): Promise<RenameSuggestion[]> {
+    const database = await this.#ensureReady();
+    const rows = await database.select<RenameSuggestionRow>(
+      "SELECT id, project_id, current_name, suggested_name, reason, confidence, status, created_at, updated_at FROM rename_suggestions ORDER BY created_at DESC"
+    );
+    return rows.map(mapRenameSuggestionRow);
+  }
+
+  async upsertRenameSuggestion(suggestion: RenameSuggestion): Promise<void> {
+    const database = await this.#ensureReady();
+    await database.execute(
+      `INSERT INTO rename_suggestions (id, project_id, current_name, suggested_name, reason, confidence, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         current_name  = excluded.current_name,
+         suggested_name = excluded.suggested_name,
+         reason        = excluded.reason,
+         confidence    = excluded.confidence,
+         status        = excluded.status,
+         updated_at    = excluded.updated_at`,
+      [
+        suggestion.id,
+        suggestion.projectId,
+        suggestion.currentName,
+        suggestion.suggestedName,
+        suggestion.reason,
+        suggestion.confidence,
+        suggestion.status,
+        suggestion.createdAt,
+        suggestion.updatedAt
+      ]
+    );
+  }
+
+  async updateRenameSuggestionStatus(
+    id: string,
+    status: RenameSuggestionStatus,
+    updatedAt: string
+  ): Promise<void> {
+    const database = await this.#ensureReady();
+    await database.execute(
+      "UPDATE rename_suggestions SET status = ?, updated_at = ? WHERE id = ?",
+      [status, updatedAt, id]
+    );
+  }
+
+  async recordRenameUndoEntry(entry: RenameUndoEntry): Promise<void> {
+    const database = await this.#ensureReady();
+    await database.execute(
+      `INSERT INTO rename_undo_history
+         (id, suggestion_id, project_id, previous_status, applied_status, applied_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         previous_status = excluded.previous_status,
+         applied_status  = excluded.applied_status,
+         applied_at      = excluded.applied_at`,
+      [
+        entry.id,
+        entry.suggestionId,
+        entry.projectId,
+        entry.previousStatus,
+        entry.appliedStatus,
+        entry.appliedAt
+      ]
+    );
+  }
+
+  async getLatestRenameUndoEntry(): Promise<RenameUndoEntry | null> {
+    const database = await this.#ensureReady();
+    const rows = await database.select<{
+      id: string;
+      suggestion_id: string;
+      project_id: string;
+      previous_status: string;
+      applied_status: string;
+      applied_at: string;
+    }>(
+      "SELECT id, suggestion_id, project_id, previous_status, applied_status, applied_at FROM rename_undo_history ORDER BY applied_at DESC LIMIT 1"
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      suggestionId: row.suggestion_id,
+      projectId: row.project_id,
+      previousStatus: row.previous_status as RenameSuggestionStatus,
+      appliedStatus: row.applied_status as RenameSuggestionStatus,
+      appliedAt: row.applied_at
+    };
+  }
+
+  async deleteRenameUndoEntry(id: string): Promise<void> {
+    const database = await this.#ensureReady();
+    await database.execute("DELETE FROM rename_undo_history WHERE id = ?", [id]);
+  }
+
   async #ensureReady() {
     if (!this.#readyPromise) {
       this.#readyPromise = (async () => {
@@ -1084,6 +1222,19 @@ type ProjectRow = {
   naming_status: string | null;
 };
 
+type RenameSuggestionRow = {
+  id: string;
+  project_id: string;
+  current_name: string;
+  suggested_name: string;
+  reason: string;
+  // Migration 11 column — DEFAULT 'medium' on rows that predate the column
+  confidence: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
 type ScanRow = {
   id: string;
   drive_id: string | null;
@@ -1230,6 +1381,20 @@ function mapProjectScanEventRow(row: ProjectScanEventRow) {
     observedDriveName: row.observed_drive_name,
     observedFolderType: (row.observed_folder_type as FolderType | null) ?? null,
     observedAt: row.observed_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function mapRenameSuggestionRow(row: RenameSuggestionRow): RenameSuggestion {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    currentName: row.current_name,
+    suggestedName: row.suggested_name,
+    reason: row.reason,
+    confidence: (row.confidence ?? "medium") as RenameSuggestion["confidence"],
+    status: row.status as RenameSuggestion["status"],
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };

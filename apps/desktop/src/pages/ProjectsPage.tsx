@@ -1,5 +1,33 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Alert,
+  AlertTitle,
+  Avatar,
+  Box,
+  Button,
+  Checkbox,
+  Chip,
+  Divider,
+  FormControl,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Skeleton,
+  Stack,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tabs,
+  TextField,
+  Typography
+} from "@mui/material";
 import { Icon } from "@drive-project-catalog/ui";
 import { useShortcut } from "../app/useShortcut";
 import { filterProjectCatalog, UNASSIGNED_DRIVE_FILTER_VALUE } from "@drive-project-catalog/data";
@@ -14,6 +42,12 @@ import {
   type Project
 } from "@drive-project-catalog/domain";
 import { buildBatchActionPreview, validateManualProjectForm } from "../app/catalogValidation";
+import {
+  copyTextToClipboard,
+  openPathInFinder,
+  showNativeContextMenu,
+  showPathInFinder
+} from "../app/nativeContextMenu";
 import { useCatalogStore } from "../app/providers";
 import {
   formatBytes,
@@ -21,7 +55,6 @@ import {
   getDriveName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { FeedbackNotice, ProjectRowSkeleton, SectionCard, StatusBadge } from "./pagePrimitives";
 import { getDriveColor } from "./driveColor";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +85,8 @@ interface BatchState {
   category: Category | "";
   targetDriveId: string;
 }
+
+type ProjectSortKey = "date-desc" | "date-asc" | "name-asc" | "name-desc" | "drive-asc" | "updated-desc";
 
 const initialProjectForm: ProjectFormState = {
   parsedDate: "", parsedClient: "", parsedProject: "",
@@ -91,6 +126,15 @@ export function ProjectsPage() {
   const showMissing = searchParams.get("missing") === "1";
   const showDuplicate = searchParams.get("duplicate") === "1";
   const showMovePending = searchParams.get("movePending") === "1";
+  const sortParam = searchParams.get("sort");
+  const sortKey: ProjectSortKey =
+    sortParam === "date-asc" ||
+    sortParam === "name-asc" ||
+    sortParam === "name-desc" ||
+    sortParam === "drive-asc" ||
+    sortParam === "updated-desc"
+      ? sortParam
+      : "date-desc";
   const hasActiveFilters = !!(categoryFilter || folderTypeFilter || driveFilter || targetDriveFilter || showUnassigned || showMissing || showDuplicate || showMovePending);
 
   const statusCounts = useMemo(
@@ -132,6 +176,11 @@ export function ProjectsPage() {
     [categoryFilter, folderTypeFilter, driveFilter, drives, projects, search, showDuplicate, showMissing, showMovePending, showUnassigned, targetDriveFilter]
   );
 
+  const visibleProjects = useMemo(
+    () => sortProjects(filteredProjects, drives, sortKey),
+    [drives, filteredProjects, sortKey]
+  );
+
   const selectedProjects = useMemo(
     () => projects.filter((p) => selectedIds.includes(p.id)),
     [projects, selectedIds]
@@ -143,7 +192,7 @@ export function ProjectsPage() {
   );
 
   const allVisibleSelected =
-    filteredProjects.length > 0 && filteredProjects.every((p) => selectedIds.includes(p.id));
+    visibleProjects.length > 0 && visibleProjects.every((p) => selectedIds.includes(p.id));
 
   // Auto-dismiss feedback
   useEffect(() => {
@@ -245,11 +294,11 @@ export function ProjectsPage() {
 
   function toggleAllVisible() {
     if (allVisibleSelected) {
-      setSelectedIds((current) => current.filter((id) => !filteredProjects.some((p) => p.id === id)));
+      setSelectedIds((current) => current.filter((id) => !visibleProjects.some((p) => p.id === id)));
     } else {
       setSelectedIds((current) => {
         const next = new Set(current);
-        filteredProjects.forEach((p) => next.add(p.id));
+        visibleProjects.forEach((p) => next.add(p.id));
         return [...next];
       });
     }
@@ -288,68 +337,64 @@ export function ProjectsPage() {
   // still reachable via Cmd+N or the secondary button.
   if (!isLoading && projects.length === 0 && !isCreateOpen) {
     return (
-      <div className="pt-8">
-        <div
-          className="mb-5 flex h-11 w-11 items-center justify-center rounded-[10px]"
-          style={{ background: "var(--surface-container-low)" }}
-        >
-          <Icon name="folder" size={20} color="var(--ink)" />
-        </div>
-        <h1
-          className="text-[28px] font-semibold"
-          style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.015em", lineHeight: 1.15 }}
-        >
-          No projects yet.
-        </h1>
-        <p
-          className="mt-2 max-w-[48ch] text-[17px] leading-[1.47]"
-          style={{ color: "var(--ink-2)", margin: "8px 0 0" }}
-        >
-          Scan a connected drive to index its folders, or create a manual project
-          to start building the catalog.
-        </p>
-        <div className="mt-6 flex items-center gap-2">
-          <Link to="/drives" className="btn btn-primary">
-            <Icon name="scan" size={13} color="currentColor" />
-            Scan a drive
-          </Link>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setIsCreateOpen(true)}
-          >
-            New project
-          </button>
-        </div>
-      </div>
+      <Paper variant="outlined" sx={{ p: 4, maxWidth: 620 }}>
+        <Stack spacing={2.5}>
+          <Avatar sx={{ bgcolor: "primary.main", width: 44, height: 44 }}>
+            <Icon name="folder" size={22} color="currentColor" />
+          </Avatar>
+          <Box>
+            <Typography variant="h4" component="h1" gutterBottom>
+              No projects yet.
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              Scan a connected drive to index its folders, or create a manual project
+              to start building the catalog.
+            </Typography>
+          </Box>
+          <Stack direction="row" sx={{ gap: 1 }}>
+            <Button component={Link} to="/drives" startIcon={<Icon name="scan" size={16} />}>
+              Scan a drive
+            </Button>
+            <Button variant="outlined" onClick={() => setIsCreateOpen(true)}>
+              New project
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
     );
   }
 
   return (
-    <div className="space-y-6 pt-2">
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {/* sr-only h1 for WCAG 2.4.6 and test identification. The top-nav
           breadcrumb names this section for sighted users; the h1 exists for
           screen readers and automated tests only. */}
       <h1 className="sr-only">Projects</h1>
-      {/* Action strip — AppShell chrome owns the "Projects" title. This page
-          only offers the action that can't live in chrome: creating a manual
-          project. The counts users actually need land in the status-tab
-          counts below, not in a stat grid. */}
-      {(projects.length > 0 || isCreateOpen) && !isLoading ? (
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            className="btn btn-sm btn-primary"
-            onClick={() => setIsCreateOpen((c) => !c)}
-          >
-            <Icon name="plus" size={12} color="currentColor" />
+
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+        <Stack direction="row" sx={{ alignItems: "baseline", gap: 1.5 }}>
+          <Typography variant="h5" component="h2">
+            Project list
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {hasActiveFilters || search.trim()
+              ? `${visibleProjects.length} of ${projects.length}`
+              : `${projects.length}`}{" "}
+            {projects.length === 1 ? "project" : "projects"}
+          </Typography>
+        </Stack>
+        <Stack direction="row" sx={{ gap: 1 }}>
+          <Button component={Link} to="/drives" variant="outlined" startIcon={<Icon name="scan" size={16} />}>
+            Scan drive
+          </Button>
+          <Button startIcon={<Icon name="plus" size={16} />} onClick={() => setIsCreateOpen((c) => !c)}>
             {isCreateOpen ? "Discard" : "New project"}
-          </button>
-        </div>
-      ) : null}
+          </Button>
+        </Stack>
+      </Stack>
 
       {feedback ? (
-        <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
+        <FeedbackAlert tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
       ) : null}
 
       {isCreateOpen ? (
@@ -365,89 +410,91 @@ export function ProjectsPage() {
       ) : null}
 
       {showChrome ? (
-        <div>
+        <Paper variant="outlined" sx={{ overflow: "hidden" }}>
           {statusTabs.length > 1 ? (
-            <div
-              className="flex flex-wrap items-center gap-0"
-              style={{ borderBottom: "1px solid var(--hairline)" }}
-            >
-              {statusTabs.map((tab) => {
-                const isActive = activeStatusTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => selectStatusTab(tab.id)}
-                    className="flex items-center gap-1.5 pb-3 pt-[10px] pr-5 text-[14px] transition-colors"
-                    style={{
-                      borderBottom: isActive ? "2px solid var(--ink)" : "2px solid transparent",
-                      color: isActive ? "var(--ink)" : "var(--ink-3)",
-                      fontWeight: isActive ? 500 : 400,
-                      marginBottom: -1
-                    }}
-                  >
-                    <span>{tab.label}</span>
-                    {tab.count > 0 ? (
-                      <span
-                        className="tnum text-[12px]"
-                        style={{ color: isActive ? "var(--ink-3)" : "var(--ink-4)" }}
-                      >
-                        {tab.count}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
+            <Tabs value={activeStatusTab} onChange={(_, value: string) => selectStatusTab(value)} variant="scrollable">
+              {statusTabs.map((tab) => (
+                <Tab key={tab.id} value={tab.id} label={`${tab.label} ${tab.count}`} />
+              ))}
+            </Tabs>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-2 pt-3">
-            <CompactSelect
-              value={folderTypeFilter}
-              onChange={(v) => updateQueryParam("folderType", v)}
-              placeholder="All types"
-            >
-              <option value="">All types</option>
-              {folderTypeValues.map((t) => (
-                <option key={t} value={t}>{FOLDER_TYPE_LABELS[t]}</option>
-              ))}
-            </CompactSelect>
+          <Stack
+            direction="row"
+            sx={{ alignItems: "center", gap: 1.5, flexWrap: "wrap", p: 2, borderTop: statusTabs.length > 1 ? 1 : 0, borderColor: "divider" }}
+          >
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel id="project-type-filter-label">Type</InputLabel>
+              <Select
+                labelId="project-type-filter-label"
+                label="Type"
+                value={folderTypeFilter}
+                onChange={(event) => updateQueryParam("folderType", event.target.value)}
+              >
+                <MenuItem value="">All types</MenuItem>
+                {folderTypeValues.map((type) => (
+                  <MenuItem key={type} value={type}>{FOLDER_TYPE_LABELS[type]}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-            <CompactSelect
-              value={categoryFilter}
-              onChange={(v) => updateQueryParam("category", v)}
-              placeholder="All categories"
-            >
-              <option value="">All categories</option>
-              {categoryValues.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </CompactSelect>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel id="project-category-filter-label">Category</InputLabel>
+              <Select
+                labelId="project-category-filter-label"
+                label="Category"
+                value={categoryFilter}
+                onChange={(event) => updateQueryParam("category", event.target.value)}
+              >
+                <MenuItem value="">All categories</MenuItem>
+                {categoryValues.map((category) => (
+                  <MenuItem key={category} value={category}>{category}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-            <CompactSelect
-              value={driveFilter}
-              onChange={(v) => updateQueryParam("drive", v)}
-              placeholder="All drives"
-            >
-              <option value="">All drives</option>
-              <option value={UNASSIGNED_DRIVE_FILTER_VALUE}>Unassigned</option>
-              {drives.map((d) => (
-                <option key={d.id} value={d.id}>{d.displayName}</option>
-              ))}
-            </CompactSelect>
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel id="project-drive-filter-label">Drive</InputLabel>
+              <Select
+                labelId="project-drive-filter-label"
+                label="Drive"
+                value={driveFilter}
+                onChange={(event) => updateQueryParam("drive", event.target.value)}
+              >
+                <MenuItem value="">All drives</MenuItem>
+                <MenuItem value={UNASSIGNED_DRIVE_FILTER_VALUE}>Unassigned</MenuItem>
+                {drives.map((drive) => (
+                  <MenuItem key={drive.id} value={drive.id}>{drive.displayName}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {hasActiveFilters ? (
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                className="text-[13px] transition-colors"
-                style={{ color: "var(--ink-3)" }}
-              >
+              <Button variant="text" onClick={clearAllFilters}>
                 Clear filters
-              </button>
+              </Button>
             ) : null}
-          </div>
-        </div>
+
+            <Box sx={{ flex: 1 }} />
+
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel id="project-sort-label">Sort</InputLabel>
+              <Select
+                labelId="project-sort-label"
+                label="Sort"
+                value={sortKey}
+                onChange={(event) => updateQueryParam("sort", event.target.value)}
+              >
+                <MenuItem value="date-desc">Date newest</MenuItem>
+                <MenuItem value="date-asc">Date oldest</MenuItem>
+                <MenuItem value="name-asc">Name A-Z</MenuItem>
+                <MenuItem value="name-desc">Name Z-A</MenuItem>
+                <MenuItem value="drive-asc">Drive A-Z</MenuItem>
+                <MenuItem value="updated-desc">Recently updated</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+        </Paper>
       ) : null}
 
       {/* ── Batch action bar ── */}
@@ -467,86 +514,69 @@ export function ProjectsPage() {
       ) : null}
 
       {/* ── Project list ── */}
-      <div className="card overflow-hidden">
+      <Paper variant="outlined" sx={{ overflow: "hidden" }}>
         {isLoading ? (
-          <div aria-busy="true" aria-label="Loading projects">
-            {[0, 1, 2, 3, 4, 5].map((i) => <ProjectRowSkeleton key={i} />)}
-          </div>
-        ) : filteredProjects.length === 0 ? (
-          <div
-            className="flex flex-col items-center gap-1 px-4 py-16 text-center"
-          >
-            <p
-              className="text-[13.5px] font-semibold"
-              style={{ color: "var(--ink)" }}
-            >
-              No results
-            </p>
-            <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-              Try a broader search or{" "}
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                className="font-medium underline-offset-2 hover:underline"
-                style={{ color: "var(--ink-2)" }}
-              >
-                clear filters
-              </button>
-              .
-            </p>
-          </div>
+          <Box aria-busy="true" aria-label="Loading projects">
+            {[0, 1, 2, 3, 4, 5].map((index) => (
+              <Stack key={index} direction="row" sx={{ alignItems: "center", gap: 2, px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>
+                <Skeleton variant="rounded" width={18} height={18} />
+                <Skeleton variant="circular" width={32} height={32} />
+                <Skeleton width="24%" />
+                <Skeleton width="18%" />
+                <Skeleton width="28%" />
+                <Skeleton width="8%" />
+              </Stack>
+            ))}
+          </Box>
+        ) : visibleProjects.length === 0 ? (
+          <Stack sx={{ alignItems: "center", gap: 1, px: 4, py: 8, textAlign: "center" }}>
+            <Typography variant="subtitle1">No results</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Try a broader search or clear the current filters.
+            </Typography>
+            <Button variant="text" onClick={clearAllFilters}>
+              Clear filters
+            </Button>
+          </Stack>
         ) : (
           <>
-            {/* Table controls strip */}
-            <div
-              className="flex items-center justify-between gap-4 border-b px-4 py-3"
-              style={{ borderColor: "var(--hairline)" }}
-            >
-              <label className="flex cursor-pointer items-center gap-2 text-[11px] font-medium" style={{ color: "var(--ink-3)" }}>
-                <input
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={toggleAllVisible}
-                  aria-label="Select all visible"
-                  className="accent-[color:var(--accent)]"
-                />
-                {allVisibleSelected ? "Deselect all" : "Select all"}
-              </label>
-              <p className="tnum text-[11px]" style={{ color: "var(--ink-3)" }}>
-                {hasActiveFilters || search.trim() ? (
-                  <>
-                    <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{filteredProjects.length}</span>
-                    {" of "}
-                    <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{projects.length}</span>
-                    {" "}
-                    {projects.length === 1 ? "project" : "projects"}
-                  </>
-                ) : (
-                  <>
-                    <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{projects.length}</span>
-                    {" "}
-                    {projects.length === 1 ? "project" : "projects"}
-                  </>
-                )}
-              </p>
-            </div>
-
-            {/* Things-3 flat list — each row is a click target, checkbox reveals on hover */}
-            <div role="list">
-              {filteredProjects.map((project) => (
-                <ProjectRow
-                  key={project.id}
-                  project={project}
-                  drives={drives}
-                  isSelected={selectedIds.includes(project.id)}
-                  onToggleSelected={toggleSelection}
-                />
-              ))}
-            </div>
+            <TableContainer sx={{ maxHeight: "calc(100vh - 260px)" }}>
+              <Table stickyHeader size="small" aria-label="Projects list">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisible}
+                        slotProps={{ input: { "aria-label": "Select all visible projects" } }}
+                      />
+                    </TableCell>
+                    <TableCell>Project</TableCell>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Stored in</TableCell>
+                    <TableCell align="right">Size</TableCell>
+                    <TableCell>Created</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right" />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {visibleProjects.map((project) => (
+                    <ProjectTableRow
+                      key={project.id}
+                      project={project}
+                      drives={drives}
+                      isSelected={selectedIds.includes(project.id)}
+                      onToggleSelected={toggleSelection}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </>
         )}
-      </div>
-    </div>
+      </Paper>
+    </Box>
   );
 }
 
@@ -554,7 +584,7 @@ export function ProjectsPage() {
 // Project row
 // ---------------------------------------------------------------------------
 
-function ProjectRow({
+function ProjectTableRow({
   project,
   drives,
   isSelected,
@@ -565,170 +595,207 @@ function ProjectRow({
   isSelected: boolean;
   onToggleSelected(id: string): void;
 }) {
+  const navigate = useNavigate();
   const displayName = getDisplayProject(project);
-  const displayClient = getDisplayClient(project);
   const displayDate = formatParsedDate(project.correctedDate ?? project.parsedDate);
-  const isPersonalFolder = project.folderType === "personal_folder";
-  const statusBadges = getProjectStatusBadges(project).filter((b) => b !== "Normal");
   const driveName = getDriveName(drives, project.currentDriveId);
   const driveColor = getDriveColor(project.currentDriveId);
-  const targetDrive = project.targetDriveId
-    ? drives.find((d) => d.id === project.targetDriveId)
-    : null;
-  const targetDriveName = targetDrive?.displayName ?? null;
-  const targetDriveColor = targetDrive ? getDriveColor(targetDrive.id) : null;
-
-  const isMissing = project.missingStatus === "missing";
-  const isDuplicate = project.duplicateStatus === "duplicate";
-  const statusAccent = isMissing
-    ? "inset 3px 0 0 var(--danger)"
-    : isDuplicate
-      ? "inset 3px 0 0 var(--warn)"
-      : undefined;
-
-  // Primary line: `Client · Name` for structured entries, folder name for
-  // personal_folder. The primary line keeps the density users want in a
-  // flat list — one horizontal scan answers "what is this?"
-  const primaryLine = isPersonalFolder ? project.folderName : displayClient !== "—" ? displayClient : displayName;
-  const secondaryLine = isPersonalFolder
-    ? project.folderPath || ""
-    : displayClient !== "—"
-      ? displayName
-      : project.folderName !== displayName
-        ? project.folderName
-        : "";
-
-  // Cat/category accent color for the left avatar. Soft category colors so the
-  // primary drive-color dot stays the most saturated on the row.
-  const avatarPalette: Record<string, { bg: string; color: string }> = {
-    photo: { bg: "var(--info-soft)", color: "var(--info)" },
-    video: { bg: "var(--accent-soft)", color: "var(--accent-ink)" },
-    design: { bg: "var(--ok-soft)", color: "var(--ok)" },
-    mixed: { bg: "var(--warn-soft)", color: "var(--warn)" },
-    personal: { bg: "var(--danger-soft)", color: "var(--danger)" }
-  };
-  const avatar =
-    avatarPalette[project.category ?? ""] ?? {
-      bg: "var(--surface-inset)",
-      color: "var(--ink-3)"
-    };
-  const avatarLetter = (primaryLine || "?")[0]?.toUpperCase() ?? "?";
+  const statusBadges = getProjectStatusBadges(project).filter((badge) => badge !== "Normal");
+  const openProjectPath = `/projects/${project.id}`;
+  const title = getProjectDisplayTitle(project);
+  const created = formatProjectDateTime(project.createdAt);
+  const folderPath = project.folderPath ?? "No folder path";
 
   return (
-    <div
-      role="listitem"
-      className={`proj-row group grid items-center gap-3 border-b px-4 py-3 ${isSelected ? "bg-[color:var(--accent-soft)]" : ""}`}
-      style={{
-        gridTemplateColumns: "28px minmax(0,1fr) minmax(170px,220px) 88px minmax(140px,180px) 16px",
-        borderColor: "var(--hairline)",
-        boxShadow: statusAccent
+    <TableRow
+      hover
+      selected={isSelected}
+      sx={{ cursor: "default" }}
+      onDoubleClick={() => navigate(openProjectPath)}
+      onContextMenu={(event) => {
+        void showNativeContextMenu(event, [
+          { text: "Open Project", action: () => navigate(openProjectPath) },
+          {
+            text: "Show in Finder",
+            enabled: Boolean(project.folderPath),
+            action: () => void showPathInFinder(project.folderPath)
+          },
+          {
+            text: "Open Folder",
+            enabled: Boolean(project.folderPath),
+            action: () => void openPathInFinder(project.folderPath)
+          },
+          { separator: true },
+          { text: "Copy Project Name", action: () => void copyTextToClipboard(displayName) },
+          {
+            text: "Copy Folder Path",
+            enabled: Boolean(project.folderPath),
+            action: () => void copyTextToClipboard(project.folderPath ?? "")
+          },
+          { separator: true },
+          {
+            text: isSelected ? "Deselect Project" : "Select Project",
+            action: () => onToggleSelected(project.id)
+          }
+        ]);
       }}
-      aria-selected={isSelected}
     >
-      {/* Checkbox column — shows on hover or when row is already selected */}
-      <div className="flex items-center justify-center">
-        <input
-          type="checkbox"
+      <TableCell padding="checkbox">
+        <Checkbox
           checked={isSelected}
           onChange={() => onToggleSelected(project.id)}
-          aria-label={`Select ${project.folderName}`}
-          className={`accent-[color:var(--accent)] transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"}`}
+          slotProps={{ input: { "aria-label": `Select ${project.folderName}` } }}
         />
-      </div>
+      </TableCell>
 
-      {/* Project — avatar + title + subtitle */}
-      <Link
-        to={`/projects/${project.id}`}
-        className="flex min-w-0 items-center gap-3"
-        aria-label={`Open ${project.folderName}`}
-      >
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[11.5px] font-semibold"
-          style={{ background: avatar.bg, color: avatar.color }}
-        >
-          {avatarLetter}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div
-            className="truncate text-[13px] font-medium leading-snug"
-            style={{ color: "var(--ink)" }}
-          >
-            {primaryLine}
-            {!isPersonalFolder && displayClient !== "—" && displayName ? (
-              <span className="ml-1" style={{ color: "var(--ink-3)", fontWeight: 400 }}>
-                · {displayName}
-              </span>
-            ) : null}
-          </div>
-          {secondaryLine || displayDate !== "—" ? (
-            <div className="mt-0.5 flex gap-2 text-[11px]" style={{ color: "var(--ink-3)" }}>
-              {displayDate !== "—" ? (
-                <span className="tnum shrink-0">{displayDate}</span>
-              ) : null}
-              {displayDate !== "—" && secondaryLine ? (
-                <span style={{ color: "var(--ink-4)" }}>·</span>
-              ) : null}
-              {secondaryLine ? (
-                <span className="truncate">{secondaryLine}</span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </Link>
+      <TableCell sx={{ minWidth: 280, maxWidth: 420 }}>
+        <Stack direction="row" sx={{ alignItems: "center", gap: 1.5, minWidth: 0 }}>
+          <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.main", fontSize: 14 }}>
+            {(title || "?")[0]?.toUpperCase() ?? "?"}
+          </Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              component={Link}
+              to={openProjectPath}
+              variant="body2"
+              noWrap
+              sx={{ display: "block", color: "text.primary", fontWeight: 500 }}
+            >
+              {title}
+            </Typography>
+          </Box>
+        </Stack>
+      </TableCell>
 
-      {/* Drive — drive-dot + name, with optional "→ target" for pending moves */}
-      <div className="min-w-0 text-[12.5px]">
-        {project.currentDriveId ? (
-          <div className="flex items-center gap-2">
-            <span
-              className="drive-dot"
-              style={{ "--drive-color": driveColor, width: 8, height: 8 } as CSSProperties}
-            />
-            <span className="truncate" style={{ color: "var(--ink-2)" }}>
-              {driveName}
-            </span>
-            {targetDriveName && project.moveStatus === "pending" ? (
-              <>
-                <Icon name="arrowRight" size={10} color="var(--ink-4)" />
-                <span
-                  className="drive-dot"
-                  style={{ "--drive-color": targetDriveColor ?? "var(--ink-3)", width: 7, height: 7 } as CSSProperties}
-                />
-                <span className="truncate" style={{ color: "var(--ink-3)" }}>
-                  {targetDriveName}
-                </span>
-              </>
-            ) : null}
-          </div>
-        ) : (
-          <span style={{ color: "var(--warn)" }}>Unassigned</span>
-        )}
-      </div>
+      <TableCell sx={{ whiteSpace: "nowrap" }}>
+        <Typography variant="body2">{displayDate}</Typography>
+        <Typography variant="caption" color="text.secondary">
+          project date
+        </Typography>
+      </TableCell>
 
-      {/* Size — right-aligned tabular numbers */}
-      <div className="tnum text-right text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+      <TableCell sx={{ minWidth: 260, maxWidth: 360 }}>
+        <Stack direction="row" sx={{ alignItems: "flex-start", gap: 1, minWidth: 0 }}>
+          <Box
+            sx={{
+              width: 9,
+              height: 9,
+              borderRadius: "50%",
+              bgcolor: project.currentDriveId ? driveColor : "warning.main",
+              mt: 0.7,
+              flexShrink: 0
+            }}
+          />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" noWrap>
+              {project.currentDriveId ? driveName : "Unassigned"}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+              {folderPath}
+            </Typography>
+          </Box>
+        </Stack>
+      </TableCell>
+
+      <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
         {formatBytes(project.sizeBytes)}
-      </div>
+      </TableCell>
 
-      {/* Status chips — stack to the right */}
-      <div className="flex flex-wrap justify-end gap-1 overflow-hidden">
-        {statusBadges.map((b) => (
-          <StatusBadge key={b} label={b} />
-        ))}
-      </div>
+      <TableCell sx={{ whiteSpace: "nowrap" }}>
+        <Typography variant="body2">{created.date}</Typography>
+        <Typography variant="caption" color="text.secondary">
+          {created.time}
+        </Typography>
+      </TableCell>
 
-      {/* Chevron */}
-      <Link
-        to={`/projects/${project.id}`}
-        className="link-card flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        style={{ color: "var(--ink-4)" }}
-        aria-label={`Open ${project.folderName}`}
-        tabIndex={-1}
-      >
-        <Icon name="chevron" size={12} />
-      </Link>
-    </div>
+      <TableCell sx={{ minWidth: 160 }}>
+        <Stack direction="row" sx={{ gap: 0.5, flexWrap: "wrap" }}>
+          {statusBadges.length > 0 ? (
+            statusBadges.map((badge) => (
+              <Chip key={badge} label={badge} size="small" variant="outlined" />
+            ))
+          ) : (
+            <Chip label="Normal" size="small" color="success" variant="outlined" />
+          )}
+        </Stack>
+      </TableCell>
+
+      <TableCell align="right">
+        <IconButton component={Link} to={openProjectPath} size="small" aria-label={`Open ${project.folderName}`}>
+          <Icon name="chevron" size={16} />
+        </IconButton>
+      </TableCell>
+    </TableRow>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Sorting
+// ---------------------------------------------------------------------------
+
+function sortProjects(projects: Project[], drives: Drive[], sortKey: ProjectSortKey): Project[] {
+  const sorted = [...projects];
+  sorted.sort((left, right) => {
+    const byName = compareText(getProjectSortName(left), getProjectSortName(right));
+    if (sortKey === "name-asc") return byName || compareText(left.id, right.id);
+    if (sortKey === "name-desc") return -byName || compareText(left.id, right.id);
+
+    if (sortKey === "drive-asc") {
+      return (
+        compareText(getDriveName(drives, left.currentDriveId), getDriveName(drives, right.currentDriveId)) ||
+        byName ||
+        compareText(left.id, right.id)
+      );
+    }
+
+    if (sortKey === "updated-desc") {
+      return compareText(right.updatedAt, left.updatedAt) || byName || compareText(left.id, right.id);
+    }
+
+    const leftDate = getProjectSortDate(left);
+    const rightDate = getProjectSortDate(right);
+    const byDate =
+      sortKey === "date-asc"
+        ? compareText(leftDate, rightDate)
+        : compareText(rightDate, leftDate);
+    return byDate || byName || compareText(left.id, right.id);
+  });
+  return sorted;
+}
+
+function compareText(left: string, right: string): number {
+  return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function getProjectSortName(project: Project): string {
+  return getProjectDisplayTitle(project);
+}
+
+function getProjectDisplayTitle(project: Project): string {
+  if (project.folderType === "personal_folder") return project.folderName;
+
+  const client = getDisplayClient(project);
+  const name = getDisplayProject(project);
+  if (client === "—") return name;
+  if (name.toLocaleLowerCase().startsWith(client.toLocaleLowerCase())) return name;
+  return `${client} ${name}`;
+}
+
+function getProjectSortDate(project: Project): string {
+  const date = project.correctedDate ?? project.parsedDate ?? "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  if (/^\d{6}$/.test(date)) return `20${date.slice(0, 2)}-${date.slice(2, 4)}-${date.slice(4, 6)}`;
+  return "";
+}
+
+function formatProjectDateTime(iso: string | null | undefined) {
+  if (!iso) return { date: "—", time: "" };
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return { date: "—", time: "" };
+  return {
+    date: date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+    time: date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -759,149 +826,97 @@ function BatchActionBar({
   onClearSelection(): void;
 }) {
   return (
-    <div
-      className="card overflow-hidden px-4 py-3"
-      style={{
-        borderColor: "rgba(var(--accent-rgb), 0.22)",
-        background: "color-mix(in srgb, var(--accent-soft) 38%, var(--surface))"
-      }}
-    >
+    <Paper variant="outlined" sx={{ p: 2 }}>
       {preview ? (
-        <div className="space-y-3">
-          <FeedbackNotice tone="info" title={preview.title} messages={[preview.summary, ...preview.confirmations]} />
+        <Stack spacing={2}>
+          <FeedbackAlert tone="info" title={preview.title} messages={[preview.summary, ...preview.confirmations]} />
           {preview.warnings.length > 0 ? (
-            <FeedbackNotice tone="warning" title="Review warnings" messages={preview.warnings} />
+            <FeedbackAlert tone="warning" title="Review warnings" messages={preview.warnings} />
           ) : null}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-sm btn-primary" disabled={isMutating} onClick={onConfirm}>
+          <Stack direction="row" sx={{ gap: 1, flexWrap: "wrap" }}>
+            <Button disabled={isMutating} onClick={onConfirm}>
               {isMutating ? "Applying…" : "Confirm action"}
-            </button>
-            <button type="button" className="btn btn-sm" onClick={onCancelPreview}>
+            </Button>
+            <Button variant="outlined" onClick={onCancelPreview}>
               Back
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Stack>
+        </Stack>
       ) : (
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          {/* Selection count */}
-          <div className="flex items-center gap-2">
-            <span
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
-              style={{ background: "var(--ink)" }}
-            >
-              {selectedCount}
-            </span>
-            <span className="text-[12.5px] font-medium" style={{ color: "var(--ink)" }}>
-              selected
-            </span>
-            <button
-              type="button"
-              className="text-[11px] transition hover:opacity-75"
-              style={{ color: "var(--ink-3)" }}
-              onClick={onClearSelection}
-            >
-              Clear
-            </button>
-          </div>
+        <Stack direction="row" sx={{ alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+          <Chip color="primary" label={`${selectedCount} selected`} />
+          <Button variant="text" onClick={onClearSelection}>
+            Clear
+          </Button>
 
-          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
+          <Divider orientation="vertical" flexItem />
 
-          {/* Assign drive */}
-          <BatchAction
-            label="Assign drive"
-            onReview={() => onPreview("assign-drive")}
-            disabled={isMutating}
-          >
-            <select
+          <FormControl size="small" sx={{ minWidth: 170 }}>
+            <InputLabel id="batch-assign-drive-label">Assign drive</InputLabel>
+            <Select
+              labelId="batch-assign-drive-label"
+              label="Assign drive"
               value={state.assignDriveId}
-              onChange={(e) => onChange({ ...state, assignDriveId: e.target.value })}
-              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
+              onChange={(event) => onChange({ ...state, assignDriveId: event.target.value })}
             >
-              <option value="">Unassigned</option>
-              {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
-            </select>
-          </BatchAction>
+              <MenuItem value="">Unassigned</MenuItem>
+              {drives.map((drive) => (
+                <MenuItem key={drive.id} value={drive.id}>{drive.displayName}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button variant="outlined" disabled={isMutating} onClick={() => onPreview("assign-drive")}>
+            Review
+          </Button>
 
-          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
+          <Divider orientation="vertical" flexItem />
 
-          {/* Set category */}
-          <BatchAction
-            label="Set category"
-            onReview={() => onPreview("set-category")}
-            disabled={isMutating}
-          >
-            <select
+          <FormControl size="small" sx={{ minWidth: 170 }}>
+            <InputLabel id="batch-category-label">Category</InputLabel>
+            <Select
+              labelId="batch-category-label"
+              label="Category"
               value={state.category}
-              onChange={(e) => onChange({ ...state, category: e.target.value as Category | "" })}
-              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
+              onChange={(event) => onChange({ ...state, category: event.target.value as Category | "" })}
             >
-              <option value="">Choose category</option>
-              {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </BatchAction>
+              <MenuItem value="">Choose category</MenuItem>
+              {categoryValues.map((category) => (
+                <MenuItem key={category} value={category}>{category}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button variant="outlined" disabled={isMutating} onClick={() => onPreview("set-category")}>
+            Review
+          </Button>
 
-          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
+          <Divider orientation="vertical" flexItem />
 
-          {/* Plan move */}
-          <BatchAction
-            label="Plan move"
-            onReview={() => onPreview("plan-move")}
-            disabled={isMutating}
-          >
-            <select
+          <FormControl size="small" sx={{ minWidth: 170 }}>
+            <InputLabel id="batch-target-drive-label">Target drive</InputLabel>
+            <Select
+              labelId="batch-target-drive-label"
+              label="Target drive"
               value={state.targetDriveId}
-              onChange={(e) => onChange({ ...state, targetDriveId: e.target.value })}
-              className="field-shell cursor-pointer bg-transparent px-2.5 py-1.5 text-[12.5px] outline-none"
+              onChange={(event) => onChange({ ...state, targetDriveId: event.target.value })}
             >
-              <option value="">Target drive</option>
-              {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
-            </select>
-          </BatchAction>
+              <MenuItem value="">Target drive</MenuItem>
+              {drives.map((drive) => (
+                <MenuItem key={drive.id} value={drive.id}>{drive.displayName}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button variant="outlined" disabled={isMutating} onClick={() => onPreview("plan-move")}>
+            Review
+          </Button>
 
-          <div className="h-4 w-px" style={{ background: "var(--hairline)" }} />
+          <Divider orientation="vertical" flexItem />
 
-          {/* Delete — destructive standalone action, no parameter needed */}
-          <button
-            type="button"
-            className="btn btn-sm btn-danger"
-            onClick={() => onPreview("delete")}
-            disabled={isMutating}
-          >
-            <Icon name="trash" size={11} />
+          <Button color="error" variant="outlined" disabled={isMutating} onClick={() => onPreview("delete")} startIcon={<Icon name="trash" size={16} />}>
             Delete
-          </button>
-        </div>
+          </Button>
+        </Stack>
       )}
-    </div>
-  );
-}
-
-function BatchAction({
-  label,
-  children,
-  onReview,
-  disabled
-}: {
-  label: string;
-  children: ReactNode;
-  onReview(): void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] font-medium" style={{ color: "var(--ink-3)" }}>
-        {label}
-      </span>
-      {children}
-      <button
-        type="button"
-        className="btn btn-sm"
-        disabled={disabled}
-        onClick={onReview}
-      >
-        Review
-      </button>
-    </div>
+    </Paper>
   );
 }
 
@@ -927,90 +942,120 @@ function CreateProjectForm({
   onCancel(): void;
 }) {
   return (
-    <SectionCard
-      title="New manual project"
-      description="Manual projects join the catalog immediately and can be assigned to a drive later."
-    >
+    <Paper variant="outlined" sx={{ p: 3 }}>
+      <Stack spacing={2.5}>
+        <Box>
+          <Typography variant="h6">New manual project</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Manual projects join the catalog immediately and can be assigned to a drive later.
+          </Typography>
+        </Box>
+
       {validation.errors.length > 0 ? (
-        <div className="mb-4">
-          <FeedbackNotice tone="error" title="Creation requirements" messages={validation.errors} />
-        </div>
+        <FeedbackAlert tone="error" title="Creation requirements" messages={validation.errors} />
       ) : null}
       {validation.warnings.length > 0 ? (
-        <div className="mb-4">
-          <FeedbackNotice tone="info" title="Note" messages={validation.warnings} />
-        </div>
+        <FeedbackAlert tone="info" title="Note" messages={validation.warnings} />
       ) : null}
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={onSubmit}>
-        <FormField label="Date (YYYY-MM-DD)">
-          <input required maxLength={10} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="2024-03-12" />
-        </FormField>
-        <FormField label="Client">
-          <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="Apple" />
-        </FormField>
-        <FormField label="Project">
-          <input required value={form.parsedProject} onChange={(e) => onChange({ ...form, parsedProject: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="ProductShoot" />
-        </FormField>
-        <FormField label="Category">
-          <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value as Category | "" })} className="field-shell w-full bg-transparent px-3 py-2 outline-none">
-            <option value="">Choose category</option>
-            {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </FormField>
-        <FormField label="Size (GB)">
-          <input type="number" min="0" step="0.1" value={form.sizeGigabytes} onChange={(e) => onChange({ ...form, sizeGigabytes: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="120" />
-        </FormField>
-        <FormField label="Drive">
-          <select value={form.currentDriveId} onChange={(e) => onChange({ ...form, currentDriveId: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none">
-            <option value="">Unassigned</option>
-            {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
-          </select>
-        </FormField>
-        <div className="md:col-span-2 xl:col-span-3 flex items-center justify-end gap-2">
-          <button type="button" className="btn btn-sm" onClick={onCancel}>Discard</button>
-          <button type="submit" className="btn btn-sm btn-primary" disabled={isMutating}>{isMutating ? "Saving…" : "Create project"}</button>
-        </div>
-      </form>
-    </SectionCard>
+
+        <Box component="form" onSubmit={onSubmit}>
+          <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)", xl: "repeat(3, 1fr)" } }}>
+            <TextField
+              required
+              label="Date (YYYY-MM-DD)"
+              value={form.parsedDate}
+              onChange={(event) => onChange({ ...form, parsedDate: event.target.value })}
+              placeholder="2024-03-12"
+              slotProps={{ htmlInput: { maxLength: 10 } }}
+            />
+            <TextField
+              required
+              label="Client"
+              value={form.parsedClient}
+              onChange={(event) => onChange({ ...form, parsedClient: event.target.value })}
+              placeholder="Apple"
+            />
+            <TextField
+              required
+              label="Project"
+              value={form.parsedProject}
+              onChange={(event) => onChange({ ...form, parsedProject: event.target.value })}
+              placeholder="ProductShoot"
+            />
+            <FormControl>
+              <InputLabel id="new-project-category-label">Category</InputLabel>
+              <Select
+                labelId="new-project-category-label"
+                label="Category"
+                value={form.category}
+                onChange={(event) => onChange({ ...form, category: event.target.value as Category | "" })}
+              >
+                <MenuItem value="">Choose category</MenuItem>
+                {categoryValues.map((category) => (
+                  <MenuItem key={category} value={category}>{category}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Size (GB)"
+              type="number"
+              value={form.sizeGigabytes}
+              onChange={(event) => onChange({ ...form, sizeGigabytes: event.target.value })}
+              placeholder="120"
+              slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+            />
+            <FormControl>
+              <InputLabel id="new-project-drive-label">Drive</InputLabel>
+              <Select
+                labelId="new-project-drive-label"
+                label="Drive"
+                value={form.currentDriveId}
+                onChange={(event) => onChange({ ...form, currentDriveId: event.target.value })}
+              >
+                <MenuItem value="">Unassigned</MenuItem>
+                {drives.map((drive) => (
+                  <MenuItem key={drive.id} value={drive.id}>{drive.displayName}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+          <Stack direction="row" sx={{ justifyContent: "flex-end", gap: 1, mt: 2.5 }}>
+            <Button type="button" variant="outlined" onClick={onCancel}>
+              Discard
+            </Button>
+            <Button type="submit" disabled={isMutating}>
+              {isMutating ? "Saving…" : "Create project"}
+            </Button>
+          </Stack>
+        </Box>
+      </Stack>
+    </Paper>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Shared primitives
-// ---------------------------------------------------------------------------
-
-function FormField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="eyebrow">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function CompactSelect({
-  value,
-  onChange,
-  placeholder,
-  children
+function FeedbackAlert({
+  tone,
+  title,
+  messages
 }: {
-  value: string;
-  onChange(v: string): void;
-  placeholder: string;
-  children: ReactNode;
+  tone: "success" | "warning" | "error" | "info";
+  title: string;
+  messages: string[];
 }) {
-  const isActive = value !== "";
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`field-shell cursor-pointer bg-transparent px-3 py-1.5 text-[12.5px] outline-none${isActive ? " field-shell--active" : ""}`}
-      style={{
-        color: isActive ? "var(--ink)" : "var(--ink-3)"
-      }}
-      aria-label={placeholder}
-    >
-      {children}
-    </select>
+    <Alert severity={tone}>
+      <AlertTitle>{title}</AlertTitle>
+      {messages.length === 1 ? (
+        <Typography variant="body2">{messages[0]}</Typography>
+      ) : (
+        <Box component="ul" sx={{ m: 0, pl: 2 }}>
+          {messages.map((message) => (
+            <li key={message}>
+              <Typography variant="body2" component="span">{message}</Typography>
+            </li>
+          ))}
+        </Box>
+      )}
+    </Alert>
   );
 }

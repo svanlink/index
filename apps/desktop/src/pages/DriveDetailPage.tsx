@@ -10,6 +10,7 @@ import {
   pickVolumeRoot,
   type VolumeFolderEntry
 } from "../app/volumeImportCommands";
+import { showPathInFinder } from "../app/nativeContextMenu";
 import { useCatalogStore } from "../app/providers";
 import { useScanWorkflow } from "../app/scanWorkflow";
 import { formatBytes, formatDate, formatParsedDate, getProjectName, getProjectStatusBadges } from "./dashboardHelpers";
@@ -200,12 +201,19 @@ export function DriveDetailPage() {
         const parts = [
           `${result.importedCount} folder${result.importedCount === 1 ? "" : "s"} added to "${drive.displayName}".`
         ];
+        if (result.cleanupReviewCount > 0) {
+          parts.push(`${result.cleanupReviewCount} need cleanup and were sent to Rename Review.`);
+        }
+        const issueParts = buildImportCleanupIssueParts(result);
+        if (issueParts.length > 0) {
+          parts.push(`Detected: ${issueParts.join(", ")}.`);
+        }
         if (result.skippedCount > 0) {
           parts.push(`${result.skippedCount} already in catalog were skipped.`);
         }
         setFeedback({
-          tone: "success",
-          title: "Folders imported",
+          tone: result.cleanupReviewCount > 0 ? "warning" : "success",
+          title: result.cleanupReviewCount > 0 ? "Folders imported with cleanup needed" : "Folders imported",
           messages: parts
         });
       }
@@ -223,6 +231,7 @@ export function DriveDetailPage() {
   const canStartScan = isScanAvailable && !activeSession && Boolean(draftRootPath.trim());
   const canImportFromVolume = isDesktopScanAvailable();
   const scanPlaceholder = drive.volumeName ? `/Volumes/${drive.volumeName}` : "/Volumes/…";
+  const finderPath = driveRootPath ?? (drive.volumeName ? `/Volumes/${drive.volumeName}` : null);
 
   const remainingAfterReserve =
     drive.freeBytes === null ? null : Math.max(drive.freeBytes - drive.reservedIncomingBytes, 0);
@@ -264,6 +273,15 @@ export function DriveDetailPage() {
             Drives
           </Link>
           <div className="flex-1" />
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => void showPathInFinder(finderPath)}
+            disabled={!finderPath}
+          >
+            <Icon name="folder" size={11} color="currentColor" />
+            Show in Finder
+          </button>
           <button
             type="button"
             className="btn btn-sm"
@@ -502,6 +520,24 @@ export function DriveDetailPage() {
       </div>
     </div>
   );
+}
+
+function buildImportCleanupIssueParts(result: {
+  duplicateCount: number;
+  legacyNameCount: number;
+  invalidNameCount: number;
+  missingDateCount: number;
+  missingClientCount: number;
+  missingProjectCount: number;
+}) {
+  const parts: string[] = [];
+  if (result.legacyNameCount > 0) parts.push(`${result.legacyNameCount} legacy name${result.legacyNameCount === 1 ? "" : "s"}`);
+  if (result.invalidNameCount > 0) parts.push(`${result.invalidNameCount} invalid name${result.invalidNameCount === 1 ? "" : "s"}`);
+  if (result.duplicateCount > 0) parts.push(`${result.duplicateCount} duplicate${result.duplicateCount === 1 ? "" : "s"}`);
+  if (result.missingDateCount > 0) parts.push(`${result.missingDateCount} missing date${result.missingDateCount === 1 ? "" : "s"}`);
+  if (result.missingClientCount > 0) parts.push(`${result.missingClientCount} missing client${result.missingClientCount === 1 ? "" : "s"}`);
+  if (result.missingProjectCount > 0) parts.push(`${result.missingProjectCount} missing project${result.missingProjectCount === 1 ? "" : "s"}`);
+  return parts;
 }
 
 // ---------------------------------------------------------------------------

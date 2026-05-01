@@ -1,9 +1,11 @@
 import {
   applyDerivedProjectStates,
   classifyFolderName,
+  generateRenameCandidates,
   type Drive,
   type Project,
   type ProjectScanEvent,
+  type RenameSuggestionStatus,
   type ScanRecord,
   type ScanSessionSnapshot
 } from "@drive-project-catalog/domain";
@@ -28,11 +30,13 @@ import type {
   CreateProjectInput,
   DashboardSnapshot,
   DriveUpsert,
+  GenerateRenameSuggestionsResult,
   ImportFoldersFromVolumeInput,
   ImportFoldersFromVolumeResult,
   ProjectListFilters,
   ProjectUpsert,
   ReclassifyLegacyFolderTypesResult,
+  UndoRenameOperationResult,
   UpdateProjectMetadataInput
 } from "./repository";
 import { ingestScanSessionSnapshot } from "./scanIngestionService";
@@ -323,14 +327,32 @@ export class LocalCatalogRepository implements CatalogRepository {
         .filter((project) => project.currentDriveId === input.driveId && project.folderPath !== null)
         .map((project) => project.folderPath as string)
     );
+    const existingNamesOnDrive = new Set(
+      existingProjects
+        .filter((project) => project.currentDriveId === input.driveId)
+        .map((project) => project.folderName.trim().toLowerCase())
+    );
+    const pendingSuggestions = new Set(
+      (await this.persistence.listRenameSuggestions())
+        .filter((suggestion) => suggestion.status === "pending")
+        .map((suggestion) => suggestion.projectId)
+    );
 
     const result: ImportFoldersFromVolumeResult = {
       importedCount: 0,
       skippedCount: 0,
-      importedProjectIds: []
+      importedProjectIds: [],
+      cleanupReviewCount: 0,
+      duplicateCount: 0,
+      legacyNameCount: 0,
+      invalidNameCount: 0,
+      missingDateCount: 0,
+      missingClientCount: 0,
+      missingProjectCount: 0
     };
 
     const seenPathsThisBatch = new Set<string>();
+    const seenNamesThisBatch = new Set<string>();
     const now = new Date().toISOString();
 
     for (const folder of input.folders) {
@@ -345,15 +367,40 @@ export class LocalCatalogRepository implements CatalogRepository {
 
       if (existingPathsOnDrive.has(trimmedPath) || seenPathsThisBatch.has(trimmedPath)) {
         result.skippedCount += 1;
+        result.duplicateCount += 1;
         continue;
       }
       seenPathsThisBatch.add(trimmedPath);
 
       const classification = classifyFolderName(trimmedName);
+      const normalizedNameKey = trimmedName.toLowerCase();
+      const isDuplicateName = existingNamesOnDrive.has(normalizedNameKey) || seenNamesThisBatch.has(normalizedNameKey);
+      seenNamesThisBatch.add(normalizedNameKey);
+      existingNamesOnDrive.add(normalizedNameKey);
+
+      if (isDuplicateName) {
+        result.duplicateCount += 1;
+      }
+      if (classification.namingStatus === "legacy") {
+        result.legacyNameCount += 1;
+      }
+      if (classification.namingStatus === "invalid") {
+        result.invalidNameCount += 1;
+      }
+      if (!classification.parsedDate) {
+        result.missingDateCount += 1;
+      }
+      if (!classification.parsedClient) {
+        result.missingClientCount += 1;
+      }
+      if (!classification.parsedProject) {
+        result.missingProjectCount += 1;
+      }
+
       const project: Project = {
         id: `project-import-${slugify(trimmedName)}-${crypto.randomUUID().slice(0, 8)}`,
         folderType: classification.folderType,
-        isStandardized: classification.folderType !== "personal_folder",
+        isStandardized: classification.namingStatus === "valid",
         folderName: trimmedName,
         folderPath: trimmedPath,
         parsedDate: classification.parsedDate,
@@ -374,6 +421,9 @@ export class LocalCatalogRepository implements CatalogRepository {
         isManual: true,
         lastSeenAt: now,
         lastScannedAt: null,
+        normalizedName: classification.normalizedName,
+        namingConfidence: classification.namingConfidence,
+        namingStatus: classification.namingStatus,
         createdAt: now,
         updatedAt: now
       };
@@ -381,6 +431,23 @@ export class LocalCatalogRepository implements CatalogRepository {
       await this.saveProject(project);
       result.importedCount += 1;
       result.importedProjectIds.push(project.id);
+
+      const candidate = generateRenameCandidates([project])[0] ?? buildImportCleanupCandidate(project, isDuplicateName);
+      if (candidate && !pendingSuggestions.has(candidate.projectId)) {
+        await this.persistence.upsertRenameSuggestion({
+          id: crypto.randomUUID(),
+          projectId: candidate.projectId,
+          currentName: candidate.currentName,
+          suggestedName: candidate.suggestedName,
+          reason: candidate.reason,
+          confidence: candidate.confidence,
+          status: "pending",
+          createdAt: now,
+          updatedAt: now
+        });
+        pendingSuggestions.add(candidate.projectId);
+        result.cleanupReviewCount += 1;
+      }
     }
 
     return result;
@@ -548,6 +615,113 @@ export class LocalCatalogRepository implements CatalogRepository {
     }
 
     return result;
+  }
+
+  async listRenameSuggestions() {
+    return this.persistence.listRenameSuggestions();
+  }
+
+  /**
+   * Walk all projects through the smart rename engine and persist a new
+   * `RenameSuggestion` row for every actionable candidate that does not
+   * already have a pending suggestion. Projects with an existing pending
+   * suggestion are skipped so re-running the action is idempotent.
+   *
+   * This method never performs a physical rename. It is safe to call
+   * multiple times — surplus suggestions (approved / dismissed) are
+   * intentionally not replaced so the review history is preserved.
+   */
+  async generateRenameSuggestions(): Promise<GenerateRenameSuggestionsResult> {
+    const projects = await this.persistence.listProjects();
+    const existing = await this.persistence.listRenameSuggestions();
+
+    const pendingProjectIds = new Set(
+      existing.filter((s) => s.status === "pending").map((s) => s.projectId)
+    );
+
+    const candidates = generateRenameCandidates(projects);
+
+    const result: GenerateRenameSuggestionsResult = {
+      examinedCount: projects.length,
+      newSuggestionsCount: 0,
+      skippedAlreadySuggestedCount: 0
+    };
+
+    const now = new Date().toISOString();
+
+    for (const candidate of candidates) {
+      if (pendingProjectIds.has(candidate.projectId)) {
+        result.skippedAlreadySuggestedCount += 1;
+        continue;
+      }
+
+      await this.persistence.upsertRenameSuggestion({
+        id: crypto.randomUUID(),
+        projectId: candidate.projectId,
+        currentName: candidate.currentName,
+        suggestedName: candidate.suggestedName,
+        reason: candidate.reason,
+        confidence: candidate.confidence,
+        status: "pending",
+        createdAt: now,
+        updatedAt: now
+      });
+
+      result.newSuggestionsCount += 1;
+    }
+
+    return result;
+  }
+
+  async updateRenameSuggestionStatus(id: string, status: RenameSuggestionStatus): Promise<void> {
+    const now = new Date().toISOString();
+    // Time-travel undo (Phase 3.5): capture the previous status before mutating
+    // so a single misclick is recoverable. The history is metadata-only — the
+    // rename engine never touches the disk, so undo never needs a filesystem
+    // rollback. We snapshot synchronously before the status flip; if the
+    // history insert fails, the user-visible mutation still proceeds (best-effort
+    // history). Failures are logged so they don't surface as a noisy error in UI.
+    try {
+      const all = await this.persistence.listRenameSuggestions();
+      const current = all.find((s) => s.id === id);
+      if (current) {
+        await this.persistence.recordRenameUndoEntry({
+          id: `undo:${crypto.randomUUID()}`,
+          suggestionId: id,
+          projectId: current.projectId,
+          previousStatus: current.status,
+          appliedStatus: status,
+          appliedAt: now
+        });
+      }
+    } catch (e) {
+      console.warn("[rename-undo] failed to record history entry", e);
+    }
+    await this.persistence.updateRenameSuggestionStatus(id, status, now);
+  }
+
+  async undoLastRenameOperation(): Promise<UndoRenameOperationResult | null> {
+    const entry = await this.persistence.getLatestRenameUndoEntry();
+    if (!entry) return null;
+
+    const now = new Date().toISOString();
+    await this.persistence.updateRenameSuggestionStatus(
+      entry.suggestionId,
+      entry.previousStatus,
+      now
+    );
+    await this.persistence.deleteRenameUndoEntry(entry.id);
+
+    const all = await this.persistence.listRenameSuggestions();
+    const restored = all.find((s) => s.id === entry.suggestionId) ?? null;
+
+    return {
+      suggestionId: entry.suggestionId,
+      projectId: entry.projectId,
+      restoredStatus: entry.previousStatus,
+      previousAppliedStatus: entry.appliedStatus,
+      restoredSuggestion: restored
+    };
   }
 
   async deleteProject(projectId: string): Promise<void> {
@@ -867,6 +1041,75 @@ export class LocalCatalogRepository implements CatalogRepository {
       this.#activeSyncPromise = null;
     }
   }
+}
+
+interface ImportCleanupCandidate {
+  projectId: string;
+  currentName: string;
+  suggestedName: string;
+  reason: string;
+  confidence: "high" | "medium" | "low";
+}
+
+function buildImportCleanupCandidate(project: Project, isDuplicateName: boolean): ImportCleanupCandidate | null {
+  const reasons: string[] = [];
+
+  if (!project.namingStatus || project.namingStatus === "invalid" || project.namingStatus === "unknown") {
+    reasons.push("Folder name does not match the required YYYY-MM-DD_Client - Project convention.");
+  }
+  if (!project.parsedDate) {
+    reasons.push("Date is missing; edit the suggested name before renaming.");
+  }
+  if (!project.parsedClient) {
+    reasons.push("Client is missing; edit the suggested name before renaming.");
+  }
+  if (!project.parsedProject) {
+    reasons.push("Project name is missing; edit the suggested name before renaming.");
+  }
+  if (isDuplicateName) {
+    reasons.push("Another imported folder has the same name; review it before deciding the final name.");
+  }
+
+  if (reasons.length === 0) return null;
+
+  const template = buildImportCleanupTemplate(project);
+  const suggestedName = isDuplicateName && template === project.folderName
+    ? `${template} Duplicate`
+    : template;
+
+  return {
+    projectId: project.id,
+    currentName: project.folderName,
+    suggestedName,
+    reason: reasons.join(" "),
+    confidence: "low"
+  };
+}
+
+function buildImportCleanupTemplate(project: Project) {
+  const date = normalizeDateTemplate(project.parsedDate);
+  const client = cleanNamePart(project.parsedClient) ?? "Client";
+  const projectName = cleanNamePart(project.parsedProject) ?? cleanNamePart(project.folderName) ?? "Project";
+  return `${date}_${client} - ${projectName}`;
+}
+
+function normalizeDateTemplate(value: string | null | undefined) {
+  if (!value) return "YYYY-MM-DD";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (/^\d{6}$/.test(value)) {
+    return `20${value.slice(0, 2)}-${value.slice(2, 4)}-${value.slice(4, 6)}`;
+  }
+  return "YYYY-MM-DD";
+}
+
+function cleanNamePart(value: string | null | undefined) {
+  const cleaned = value
+    ?.trim()
+    .replace(/[/:\\]/g, "-")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned ? cleaned : null;
 }
 
 function buildStartupMessage(params: {

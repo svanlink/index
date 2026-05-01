@@ -17,6 +17,12 @@ import {
   getProjectStatusBadges
 } from "./dashboardHelpers";
 import { ConfirmModal, EmptyState, FeedbackNotice, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
+import {
+  archiveProject,
+  pickArchiveRoot,
+  type ArchiveResult
+} from "../app/archiveCommands";
+import { showPathInFinder } from "../app/nativeContextMenu";
 
 interface ProjectMetadataFormState {
   correctedDate: string;
@@ -25,6 +31,9 @@ interface ProjectMetadataFormState {
   category: Category | "";
   folderType: FolderType | "";
 }
+
+/** State machine for the Archive & Freeze workflow modal. */
+type ArchiveStage = "idle" | "picking" | "running" | "done" | "error";
 
 export function ProjectDetailPage() {
   const {
@@ -55,6 +64,14 @@ export function ProjectDetailPage() {
   const [targetDriveId, setTargetDriveId] = useState("");
   const [feedback, setFeedback] = useState<{ tone: "success" | "warning" | "error" | "info"; title: string; messages: string[] } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Archive & Freeze workflow — opens a modal that walks the user through
+  // selecting an archive root, hashes every file, moves the folder, and
+  // marks the destination immutable via `chflags uchg`. The Rust side
+  // handles the heavy lifting in a background task.
+  const [archiveStage, setArchiveStage] = useState<ArchiveStage>("idle");
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [archiveResult, setArchiveResult] = useState<ArchiveResult | null>(null);
+  const [lockAfterArchive, setLockAfterArchive] = useState(true);
 
   useEffect(() => {
     selectProject(projectId || null);
@@ -299,6 +316,61 @@ export function ProjectDetailPage() {
     }
   }
 
+  // ── Archive & Freeze ────────────────────────────────────────────────────
+  // Two-step flow: (1) user picks the archive root via the native folder
+  // picker, (2) Rust hashes the folder, writes the manifest, moves it, and
+  // optionally locks it. Stage transitions are explicit so the modal can
+  // render the right copy/affordances at each step.
+
+  async function handleStartArchive() {
+    setArchiveError(null);
+    setArchiveResult(null);
+    setArchiveStage("picking");
+
+    if (!currentProject.folderPath) {
+      setArchiveStage("error");
+      setArchiveError(
+        "This project has no on-disk folder path. Re-import the folder before archiving."
+      );
+      return;
+    }
+
+    let archiveRoot: string | null = null;
+    try {
+      archiveRoot = await pickArchiveRoot();
+    } catch (e) {
+      setArchiveStage("error");
+      setArchiveError(e instanceof Error ? e.message : "Could not open folder picker.");
+      return;
+    }
+
+    if (!archiveRoot) {
+      // User cancelled.
+      setArchiveStage("idle");
+      return;
+    }
+
+    setArchiveStage("running");
+    try {
+      const result = await archiveProject({
+        folderPath: currentProject.folderPath,
+        archiveRoot,
+        lockAfterArchive
+      });
+      setArchiveResult(result);
+      setArchiveStage("done");
+    } catch (e) {
+      setArchiveStage("error");
+      setArchiveError(e instanceof Error ? e.message : "The archive operation failed.");
+    }
+  }
+
+  function closeArchiveModal() {
+    setArchiveStage("idle");
+    setArchiveError(null);
+    setArchiveResult(null);
+  }
+
   const statusBadges = getProjectStatusBadges(currentProject);
   const displayClient = currentProject.correctedClient ?? currentProject.parsedClient ?? "No client";
   const displayDate = formatParsedDate(currentProject.correctedDate ?? currentProject.parsedDate);
@@ -316,6 +388,19 @@ export function ProjectDetailPage() {
         />
       ) : null}
 
+      {archiveStage !== "idle" ? (
+        <ArchiveWorkflowModal
+          stage={archiveStage}
+          error={archiveError}
+          result={archiveResult}
+          lockAfterArchive={lockAfterArchive}
+          folderPath={currentProject.folderPath}
+          onLockChange={setLockAfterArchive}
+          onClose={closeArchiveModal}
+          onRetry={() => void handleStartArchive()}
+        />
+      ) : null}
+
       <div className="card overflow-hidden">
         <div
           className="flex flex-wrap items-center gap-2 border-b px-5 py-4"
@@ -329,6 +414,15 @@ export function ProjectDetailPage() {
           <button
             type="button"
             className="btn btn-sm"
+            onClick={() => void showPathInFinder(currentProject.folderPath)}
+            disabled={!currentProject.folderPath}
+          >
+            <Icon name="folder" size={11} />
+            Show in Finder
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
             onClick={() =>
               document
                 .getElementById("project-metadata-card")
@@ -337,6 +431,16 @@ export function ProjectDetailPage() {
           >
             <Icon name="edit" size={11} />
             Edit metadata
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => void handleStartArchive()}
+            disabled={archiveStage === "picking" || archiveStage === "running"}
+            title="Generate SHA-256 manifest, move to archive drive, and lock"
+          >
+            <Icon name="download" size={11} />
+            Archive…
           </button>
           <button type="button" className="btn btn-sm btn-danger" onClick={() => setShowDeleteConfirm(true)}>
             <Icon name="trash" size={11} />
@@ -771,5 +875,304 @@ function ActivityTimeline({ events }: { events: ProjectScanEvent[] }) {
         ))}
       </div>
     </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Archive workflow modal — single component that renders the right surface
+// for each `ArchiveStage`. We keep it co-located so the page-specific state
+// machine and copy live next to the affordance that triggers them.
+// ───────────────────────────────────────────────────────────────────────────
+
+interface ArchiveWorkflowModalProps {
+  stage: ArchiveStage;
+  error: string | null;
+  result: ArchiveResult | null;
+  lockAfterArchive: boolean;
+  folderPath: string | null | undefined;
+  onLockChange(value: boolean): void;
+  onClose(): void;
+  onRetry(): void;
+}
+
+function ArchiveWorkflowModal({
+  stage,
+  error,
+  result,
+  lockAfterArchive,
+  folderPath,
+  onLockChange,
+  onClose,
+  onRetry
+}: ArchiveWorkflowModalProps) {
+  const isClosable = stage !== "running" && stage !== "picking";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Archive project"
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0, 0, 0, 0.4)",
+        backdropFilter: "blur(2px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 50
+      }}
+      onClick={isClosable ? onClose : undefined}
+    >
+      <div
+        className="card"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(520px, 92vw)",
+          maxHeight: "90vh",
+          overflow: "auto",
+          padding: 24,
+          background: "var(--surface)"
+        }}
+      >
+        {stage === "picking" ? (
+          <ArchiveStagePicking />
+        ) : stage === "running" ? (
+          <ArchiveStageRunning folderPath={folderPath ?? undefined} />
+        ) : stage === "done" && result ? (
+          <ArchiveStageDone result={result} onClose={onClose} />
+        ) : stage === "error" ? (
+          <ArchiveStageError error={error} onRetry={onRetry} onClose={onClose} />
+        ) : (
+          <ArchiveStageReady
+            folderPath={folderPath ?? undefined}
+            lockAfterArchive={lockAfterArchive}
+            onLockChange={onLockChange}
+            onClose={onClose}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ArchiveStageReady({
+  folderPath,
+  lockAfterArchive,
+  onLockChange,
+  onClose
+}: {
+  folderPath?: string;
+  lockAfterArchive: boolean;
+  onLockChange: (value: boolean) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <p className="eyebrow mb-1">Archive &amp; Freeze</p>
+      <h3 className="h-title mb-2" style={{ fontSize: 20 }}>
+        Finalize this project
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5 }}>
+        Generates a SHA-256 manifest of every file, moves the folder to your
+        chosen archive drive, and locks it against accidental changes.
+      </p>
+      {folderPath && (
+        <p
+          className="mono mt-3"
+          style={{
+            fontSize: 12,
+            color: "var(--ink-3)",
+            background: "var(--surface-container-low)",
+            padding: "6px 8px",
+            borderRadius: 4,
+            border: "1px solid var(--hairline)"
+          }}
+        >
+          {folderPath}
+        </p>
+      )}
+      <label
+        className="mt-4 flex items-center gap-2"
+        style={{ fontSize: 13, color: "var(--ink-2)" }}
+      >
+        <input
+          type="checkbox"
+          checked={lockAfterArchive}
+          onChange={(e) => onLockChange(e.target.checked)}
+        />
+        Lock with <span className="mono">chflags uchg</span> after move
+      </label>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" className="btn" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </>
+  );
+}
+
+function ArchiveStagePicking() {
+  return (
+    <>
+      <p className="eyebrow mb-1">Archive &amp; Freeze</p>
+      <h3 className="h-title mb-2" style={{ fontSize: 20 }}>
+        Choose archive destination
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--ink-3)" }}>
+        Pick the drive or folder where this project should live as an archive.
+      </p>
+    </>
+  );
+}
+
+function ArchiveStageRunning({ folderPath }: { folderPath?: string }) {
+  return (
+    <>
+      <p className="eyebrow mb-1">Archive &amp; Freeze</p>
+      <h3 className="h-title mb-2" style={{ fontSize: 20 }}>
+        Hashing and moving…
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5 }}>
+        Computing SHA-256 for every file, then moving the folder. Don't unmount
+        the source or destination drive until this completes.
+      </p>
+      {folderPath && (
+        <p
+          className="mono mt-3"
+          style={{ fontSize: 12, color: "var(--ink-4)", wordBreak: "break-all" }}
+        >
+          {folderPath}
+        </p>
+      )}
+      <div
+        className="mt-4"
+        style={{
+          height: 4,
+          width: "100%",
+          background: "var(--surface-container)",
+          borderRadius: 2,
+          overflow: "hidden",
+          position: "relative"
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(90deg, transparent, var(--action), transparent)",
+            animation: "archive-shimmer 1.4s ease-in-out infinite"
+          }}
+        />
+      </div>
+      <style>{`
+        @keyframes archive-shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+      `}</style>
+    </>
+  );
+}
+
+function ArchiveStageDone({
+  result,
+  onClose
+}: {
+  result: ArchiveResult;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <p className="eyebrow mb-1" style={{ color: "var(--ok)" }}>
+        Archive complete
+      </p>
+      <h3 className="h-title mb-2" style={{ fontSize: 20 }}>
+        Folder is safely archived
+      </h3>
+      <dl
+        className="mt-3 space-y-2"
+        style={{ fontSize: 13, color: "var(--ink-2)" }}
+      >
+        <div className="flex justify-between gap-3">
+          <dt style={{ color: "var(--ink-3)" }}>Files hashed</dt>
+          <dd className="tnum">{result.totalFiles.toLocaleString()}</dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt style={{ color: "var(--ink-3)" }}>Total size</dt>
+          <dd className="tnum">
+            {(result.totalBytes / 1024 / 1024).toFixed(2)} MB
+          </dd>
+        </div>
+        <div className="flex justify-between gap-3">
+          <dt style={{ color: "var(--ink-3)" }}>Locked</dt>
+          <dd>{result.locked ? "Yes (chflags uchg)" : "No"}</dd>
+        </div>
+      </dl>
+      <p
+        className="mono mt-4"
+        style={{
+          fontSize: 11,
+          color: "var(--ink-4)",
+          wordBreak: "break-all"
+        }}
+      >
+        {result.archivedPath}
+      </p>
+      <p
+        className="mt-2"
+        style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}
+      >
+        Manifest written to <span className="mono">.archive-manifest.json</span> at
+        the archive root.
+      </p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" className="btn btn-primary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </>
+  );
+}
+
+function ArchiveStageError({
+  error,
+  onRetry,
+  onClose
+}: {
+  error: string | null;
+  onRetry: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <p className="eyebrow mb-1" style={{ color: "var(--danger)" }}>
+        Archive failed
+      </p>
+      <h3 className="h-title mb-2" style={{ fontSize: 20 }}>
+        Something went wrong
+      </h3>
+      <p
+        style={{
+          fontSize: 13,
+          color: "var(--ink-2)",
+          background: "var(--danger-soft)",
+          padding: 10,
+          borderRadius: 4,
+          lineHeight: 1.5
+        }}
+      >
+        {error ?? "An unexpected error occurred."}
+      </p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" className="btn" onClick={onClose}>
+          Close
+        </button>
+        <button type="button" className="btn btn-primary" onClick={onRetry}>
+          Retry
+        </button>
+      </div>
+    </>
   );
 }

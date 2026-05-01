@@ -8,12 +8,12 @@ import { classifyFolderName } from "./folderClassifier";
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// New standard: YYYY-MM-DD_Client_Project
+// New standard: YYYY-MM-DD_Client - Project
 // ---------------------------------------------------------------------------
 
 describe("classifyFolderName — new standard YYYY-MM-DD format", () => {
-  it("classifies 2024-03-12_Richemont_EventRecap as client with high confidence", () => {
-    const c = classifyFolderName("2024-03-12_Richemont_EventRecap");
+  it("classifies 2024-03-12_Richemont - EventRecap as client with high confidence", () => {
+    const c = classifyFolderName("2024-03-12_Richemont - EventRecap");
     expect(c.folderType).toBe("client");
     expect(c.parsedDate).toBe("2024-03-12");
     expect(c.parsedClient).toBe("Richemont");
@@ -22,8 +22,8 @@ describe("classifyFolderName — new standard YYYY-MM-DD format", () => {
     expect(c.namingConfidence).toBe("high");
   });
 
-  it("classifies 2024-06-05_Decathlon_RunningCampaign as client with high confidence", () => {
-    const c = classifyFolderName("2024-06-05_Decathlon_RunningCampaign");
+  it("classifies 2024-06-05_Decathlon - RunningCampaign as client with high confidence", () => {
+    const c = classifyFolderName("2024-06-05_Decathlon - RunningCampaign");
     expect(c.folderType).toBe("client");
     expect(c.parsedDate).toBe("2024-06-05");
     expect(c.parsedClient).toBe("Decathlon");
@@ -32,8 +32,8 @@ describe("classifyFolderName — new standard YYYY-MM-DD format", () => {
     expect(c.namingConfidence).toBe("high");
   });
 
-  it("classifies 2023-09-11_Fuerteventura_SurfDoc as client with high confidence", () => {
-    const c = classifyFolderName("2023-09-11_Fuerteventura_SurfDoc");
+  it("classifies 2023-09-11_Fuerteventura - SurfDoc as client with high confidence", () => {
+    const c = classifyFolderName("2023-09-11_Fuerteventura - SurfDoc");
     expect(c.folderType).toBe("client");
     expect(c.parsedDate).toBe("2023-09-11");
     expect(c.parsedClient).toBe("Fuerteventura");
@@ -43,14 +43,20 @@ describe("classifyFolderName — new standard YYYY-MM-DD format", () => {
   });
 
   it("sets normalizedName to the input (already canonical)", () => {
-    const name = "2024-03-12_Richemont_EventRecap";
+    const name = "2024-03-12_Richemont - EventRecap";
     expect(classifyFolderName(name).normalizedName).toBe(name);
   });
 
   it("falls back when the date segment has the right length but wrong structure", () => {
     // 10 chars but not YYYY-MM-DD pattern
-    expect(classifyFolderName("2024/03/12_Client_Project").folderType).toBe("personal_folder");
-    expect(classifyFolderName("20240312AB_Client_Project").folderType).toBe("personal_folder");
+    expect(classifyFolderName("2024/03/12_Client - Project").folderType).toBe("personal_folder");
+    expect(classifyFolderName("20240312AB_Client - Project").folderType).toBe("personal_folder");
+  });
+
+  it("treats the old YYYY-MM-DD_Client_Project shape as invalid", () => {
+    const c = classifyFolderName("2024-03-12_Richemont_EventRecap");
+    expect(c.folderType).toBe("personal_folder");
+    expect(c.namingStatus).toBe("invalid");
   });
 });
 
@@ -78,7 +84,7 @@ describe("classifyFolderName — legacy YYMMDD client folders", () => {
   it("computes a normalizedName as the proposed YYYY-MM-DD rename target", () => {
     const c = classifyFolderName("240401_Apple_ProductShoot");
     // Century 20xx assumed: 24 → 2024, 04 → 04, 01 → 01
-    expect(c.normalizedName).toBe("2024-04-01_Apple_ProductShoot");
+    expect(c.normalizedName).toBe("2024-04-01_Apple - ProductShoot");
   });
 });
 
@@ -102,7 +108,7 @@ describe("classifyFolderName — legacy YYMMDD personal_project folders", () => 
 
 describe("classifyFolderName — naming convention and confidence metadata", () => {
   it("new standard folder gets high confidence, valid status, and normalizedName == input", () => {
-    const name = "2024-03-12_Richemont_EventRecap";
+    const name = "2024-03-12_Richemont - EventRecap";
     const c = classifyFolderName(name);
     expect(c.namingConvention).toBe("new_standard");
     expect(c.namingConfidence).toBe("high");
@@ -115,7 +121,7 @@ describe("classifyFolderName — naming convention and confidence metadata", () 
     expect(c.namingConvention).toBe("legacy");
     expect(c.namingConfidence).toBe("medium");
     expect(c.namingStatus).toBe("legacy");
-    expect(c.normalizedName).toBe("2024-04-01_Apple_ProductShoot");
+    expect(c.normalizedName).toBe("2024-04-01_Apple - ProductShoot");
   });
 
   it("legacy Internal folder gets medium confidence, legacy status, and null normalizedName", () => {

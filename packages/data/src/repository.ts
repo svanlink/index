@@ -4,6 +4,8 @@ import type {
   FolderType,
   Project,
   ProjectScanEvent,
+  RenameSuggestion,
+  RenameSuggestionStatus,
   ScanRecord,
   ScanSessionSnapshot,
   ScanSummary
@@ -110,6 +112,13 @@ export interface ImportFoldersFromVolumeResult {
   importedCount: number;
   skippedCount: number;
   importedProjectIds: string[];
+  cleanupReviewCount: number;
+  duplicateCount: number;
+  legacyNameCount: number;
+  invalidNameCount: number;
+  missingDateCount: number;
+  missingClientCount: number;
+  missingProjectCount: number;
 }
 
 /**
@@ -133,6 +142,36 @@ export interface ReclassifyLegacyFolderTypesResult {
   personalProjectReclassifiedCount: number;
   /** Rows the classifier agreed should stay `personal_folder`. */
   unchangedCount: number;
+}
+
+/**
+ * Result of the one-shot "generate rename suggestions" action (Phase 3).
+ *
+ * The action walks all projects through the smart rename engine and persists
+ * new suggestions for projects that have an actionable candidate and no
+ * existing pending suggestion. It never generates physical renames.
+ */
+export interface GenerateRenameSuggestionsResult {
+  /** Total projects examined by the engine. */
+  examinedCount: number;
+  /** New `RenameSuggestion` rows written to the DB. */
+  newSuggestionsCount: number;
+  /** Projects already having a pending suggestion — skipped to avoid duplicates. */
+  skippedAlreadySuggestedCount: number;
+}
+
+/**
+ * Result of `undoLastRenameOperation`. Carries enough context for the UI to
+ * surface a confirmation toast ("Undid approve on FOLDER_NAME") and to refresh
+ * the suggestion list to its pre-mutation state.
+ */
+export interface UndoRenameOperationResult {
+  suggestionId: string;
+  projectId: string;
+  restoredStatus: RenameSuggestionStatus;
+  previousAppliedStatus: RenameSuggestionStatus;
+  /** The suggestion as it now appears post-undo, or null if it was deleted. */
+  restoredSuggestion: RenameSuggestion | null;
 }
 
 export interface CatalogRepository {
@@ -160,6 +199,16 @@ export interface CatalogRepository {
   cancelProjectMove(projectId: string): Promise<Project>;
   ingestScanSnapshot(session: ScanSessionSnapshot): Promise<ScanRecord>;
   reclassifyLegacyFolderTypes(): Promise<ReclassifyLegacyFolderTypesResult>;
+  listRenameSuggestions(): Promise<RenameSuggestion[]>;
+  generateRenameSuggestions(): Promise<GenerateRenameSuggestionsResult>;
+  updateRenameSuggestionStatus(id: string, status: RenameSuggestionStatus): Promise<void>;
+  /**
+   * Reverts the most recent rename suggestion mutation. Returns the suggestion
+   * id that was restored, or null when there is nothing to undo. Because the
+   * rename engine is metadata-only, undo is purely a status flip on the
+   * `rename_suggestions` row plus removal of the corresponding history entry.
+   */
+  undoLastRenameOperation(): Promise<UndoRenameOperationResult | null>;
   deleteProject(projectId: string): Promise<void>;
   deleteDrive(driveId: string): Promise<void>;
   listPendingSyncOperations(): Promise<SyncOperation[]>;

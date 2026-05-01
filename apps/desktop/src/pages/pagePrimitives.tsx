@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Icon } from "@drive-project-catalog/ui";
 
 // ---------------------------------------------------------------------------
 // SearchField
@@ -198,30 +199,19 @@ export function SearchField({
 
 function SearchFieldIcon({ active }: { active: boolean }) {
   return (
-    <svg
-      width="15"
-      height="15"
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
+    <Icon
+      name="search"
+      size={15}
+      color={active ? "var(--ink-2)" : "var(--ink-3)"}
       style={{
-        flexShrink: 0,
-        color: active ? "var(--ink-2)" : "var(--ink-3)",
         transition: "color 140ms ease"
       }}
-    >
-      <circle cx="6.5" cy="6.5" r="4.75" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
+    />
   );
 }
 
 function XIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-      <path d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
+  return <Icon name="close" size={10} color="currentColor" />;
 }
 
 // ---------------------------------------------------------------------------
@@ -794,47 +784,13 @@ export function FeedbackNotice({
 
 function FeedbackIcon({ tone }: { tone: "success" | "warning" | "error" | "info" }) {
   if (tone === "success") {
-    return (
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-        <path
-          d="M5 8l2 2 4-4"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
+    return <Icon name="check" size={15} color="currentColor" />;
   }
   if (tone === "warning") {
-    return (
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M8 2L14.5 13.5H1.5L8 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M8 6.5V9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <circle cx="8" cy="11.5" r="0.75" fill="currentColor" />
-      </svg>
-    );
+    return <Icon name="warning" size={15} color="currentColor" />;
   }
   if (tone === "error") {
-    return (
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-        <path
-          d="M5.5 5.5L10.5 10.5M10.5 5.5L5.5 10.5"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
+    return <Icon name="close" size={15} color="currentColor" />;
   }
-  // info
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M8 7.5V11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <circle cx="8" cy="5" r="0.75" fill="currentColor" />
-    </svg>
-  );
+  return <Icon name="info" size={15} color="currentColor" />;
 }

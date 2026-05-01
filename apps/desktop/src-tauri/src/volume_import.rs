@@ -88,8 +88,8 @@ pub fn enumerate_volume_folders(path: String) -> Result<Vec<VolumeFolderEntry>, 
         return Err(format!("The selected path is not a directory: {path}"));
     }
 
-    let entries = fs::read_dir(root_path)
-        .map_err(|error| format!("Could not read {path}: {error}"))?;
+    let entries =
+        fs::read_dir(root_path).map_err(|error| format!("Could not read {path}: {error}"))?;
 
     let mut folders: Vec<VolumeFolderEntry> = Vec::new();
 
@@ -127,7 +127,11 @@ pub fn enumerate_volume_folders(path: String) -> Result<Vec<VolumeFolderEntry>, 
     // ASCII-case-insensitive ordering so "Archive" and "archive" sit next to
     // each other. Non-ASCII characters fall back to their byte order, which is
     // acceptable for a preview list — users can still scan the list visually.
-    folders.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+    folders.sort_by(|a, b| {
+        a.name
+            .to_ascii_lowercase()
+            .cmp(&b.name.to_ascii_lowercase())
+    });
 
     Ok(folders)
 }
@@ -163,7 +167,10 @@ mod tests {
 
         // Paths are absolute and resolvable.
         for entry in &result {
-            assert!(Path::new(&entry.path).is_dir(), "returned path should be a real directory");
+            assert!(
+                Path::new(&entry.path).is_dir(),
+                "returned path should be a real directory"
+            );
         }
     }
 

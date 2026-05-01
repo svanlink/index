@@ -8,6 +8,7 @@ import { mockCatalogSnapshot } from "./testing/mockData";
 import { SqliteLocalPersistence, type SqlDatabase } from "./sqliteLocalPersistence";
 
 const tempDirectories: string[] = [];
+const expectedMigrationVersions = Array.from({ length: 12 }, (_, index) => index + 1);
 
 afterEach(() => {
   while (tempDirectories.length > 0) {
@@ -233,7 +234,7 @@ describe("Migration chain recovery (S1)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(applied.map((row) => Number(row.version))).toEqual(expectedMigrationVersions);
     } finally {
       verify.close();
     }
@@ -287,7 +288,7 @@ describe("Migration chain recovery (S1)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(applied.map((row) => Number(row.version))).toEqual(expectedMigrationVersions);
     } finally {
       verify.close();
     }
@@ -354,7 +355,7 @@ describe("Migration chain recovery (S1)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(applied.map((row) => Number(row.version))).toEqual(expectedMigrationVersions);
     } finally {
       verify.close();
     }
@@ -533,11 +534,11 @@ describe("Sequential migration chain (M11)", () => {
     }
   }
 
-  it("boots a pristine v1 DB through migrations 2..10 sequentially and reaches the final schema", async () => {
+  it("boots a pristine v1 DB through all remaining migrations sequentially and reaches the final schema", async () => {
     const databasePath = createTempDatabasePath();
     seedCleanV1Fixture(databasePath);
 
-    // Boot the adapter — this triggers #ensureReady → #runMigrations and walks 2..10 in order.
+    // Boot the adapter — this triggers #ensureReady → #runMigrations and walks the remaining chain in order.
     const persistence = createPersistence(databasePath);
     await persistence.listDrives();
 
@@ -547,7 +548,7 @@ describe("Sequential migration chain (M11)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(applied.map((row) => Number(row.version))).toEqual(expectedMigrationVersions);
 
       // 2. Migration 2 — scans / project_scan_events / scan_sessions gained created_at+updated_at.
       const scansCols = verify.prepare("PRAGMA table_info(scans)").all() as Array<{ name: string }>;
@@ -648,7 +649,13 @@ describe("Sequential migration chain (M11)", () => {
       expect(projectsColNames).toContain("naming_status");
       expect(projectsCols.find((c) => c.name === "naming_status")?.notnull).toBe(0);
 
-      // 11. Pre-existing, non-migrated rows survive end-to-end.
+      // 11. Migration 12 — rename undo history table exists for per-suggestion undo.
+      const undoHistory = verify
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='rename_undo_history'")
+        .all();
+      expect(undoHistory).toHaveLength(1);
+
+      // 12. Pre-existing, non-migrated rows survive end-to-end.
       const driveCount = verify.prepare("SELECT COUNT(*) as count FROM drives").get() as { count: number };
       expect(Number(driveCount.count)).toBe(2);
       const scanCount = verify.prepare("SELECT COUNT(*) as count FROM scans").get() as { count: number };
@@ -681,7 +688,7 @@ describe("Sequential migration chain (M11)", () => {
       const applied = verify
         .prepare("SELECT version FROM catalog_migrations ORDER BY version ASC")
         .all() as Array<{ version: number }>;
-      expect(applied.map((row) => Number(row.version))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      expect(applied.map((row) => Number(row.version))).toEqual(expectedMigrationVersions);
 
       // Data the first boot migrated must still be present after the second boot's no-op pass.
       const projectCount = verify.prepare("SELECT COUNT(*) as count FROM projects").get() as {
