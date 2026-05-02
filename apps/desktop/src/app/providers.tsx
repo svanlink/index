@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useOptimistic,
   useState,
   type ReactNode
 } from "react";
@@ -73,6 +74,24 @@ export function AppProviders({ children }: AppProvidersProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
   const [loadError, setLoadError] = useState<StartupFailure | null>(null);
+
+  const [optimisticProjects, applyOptimisticProjectChange] = useOptimistic(
+    projects,
+    (current: Project[], change: { type: "delete"; id: string } | { type: "add"; project: Project }) => {
+      if (change.type === "delete") return current.filter((p) => p.id !== change.id);
+      if (change.type === "add") return [...current, change.project];
+      return current;
+    }
+  );
+
+  const [optimisticDrives, applyOptimisticDriveChange] = useOptimistic(
+    drives,
+    (current: Drive[], change: { type: "delete"; id: string } | { type: "add"; drive: Drive }) => {
+      if (change.type === "delete") return current.filter((d) => d.id !== change.id);
+      if (change.type === "add") return [...current, change.drive];
+      return current;
+    }
+  );
 
   const refresh = useCallback(async () => {
     const [nextProjects, nextDrives, nextScans, nextScanSessions] = await Promise.all([
@@ -151,8 +170,8 @@ export function AppProviders({ children }: AppProvidersProps) {
 
   const value = useMemo<CatalogStoreContextValue>(() => ({
     repository,
-    projects,
-    drives,
+    projects: optimisticProjects,
+    drives: optimisticDrives,
     scans,
     scanSessions,
     selectedProjectId,
@@ -168,17 +187,41 @@ export function AppProviders({ children }: AppProvidersProps) {
     getDriveDetailView,
     updateProjectMetadata: (input) => runMutation(() => repository.updateProjectMetadata(input)),
     createProject: (input) => runMutation(() => repository.createProject(input)),
-    createDrive: (input) => runMutation(() => repository.createDrive(input)),
+    createDrive: async (input) => {
+      const tempDrive: Drive = {
+        id: `temp-${Date.now()}`,
+        volumeName: input.volumeName,
+        displayName: input.displayName ?? input.volumeName,
+        totalCapacityBytes: input.totalCapacityBytes ?? null,
+        usedBytes: null,
+        freeBytes: null,
+        reservedIncomingBytes: 0,
+        lastScannedAt: null,
+        createdManually: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      applyOptimisticDriveChange({ type: "add", drive: tempDrive });
+      return runMutation(() => repository.createDrive(input));
+    },
     importFoldersFromVolume: (input) => runMutation(() => repository.importFoldersFromVolume(input)),
-    deleteProject: (projectId) => runMutation(() => repository.deleteProject(projectId)),
-    deleteDrive: (driveId) => runMutation(() => repository.deleteDrive(driveId))
+    deleteProject: async (projectId) => {
+      applyOptimisticProjectChange({ type: "delete", id: projectId });
+      return runMutation(() => repository.deleteProject(projectId));
+    },
+    deleteDrive: async (driveId) => {
+      applyOptimisticDriveChange({ type: "delete", id: driveId });
+      return runMutation(() => repository.deleteDrive(driveId));
+    },
   }), [
-    drives,
+    optimisticDrives,
+    optimisticProjects,
     getDriveDetailView,
     isLoading,
     isMutating,
     listProjectScanEvents,
-    projects,
+    applyOptimisticDriveChange,
+    applyOptimisticProjectChange,
     refresh,
     runMutation,
     scanSessions,
