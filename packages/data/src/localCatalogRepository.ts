@@ -536,7 +536,10 @@ export class LocalCatalogRepository implements CatalogRepository {
     await this.persistence.upsertProjectScanEvents(changedEvents);
     await this.persistence.upsertScan(ingestion.scan);
     await this.persistence.upsertScanSession(ingestion.session);
-    const isTerminal = session.status === "completed" || session.status === "failed";
+    const isTerminal =
+      session.status === "completed" ||
+      session.status === "failed" ||
+      session.status === "cancelled";
     if (isTerminal && session.sizeJobsPending === 0) {
       await this.persistence.deleteScanSession(session.scanId);
     }

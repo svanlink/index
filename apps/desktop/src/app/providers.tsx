@@ -1,5 +1,6 @@
 import {
   createContext,
+  startTransition,
   useCallback,
   useContext,
   useEffect,
@@ -201,16 +202,16 @@ export function AppProviders({ children }: AppProvidersProps) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      applyOptimisticDriveChange({ type: "add", drive: tempDrive });
+      startTransition(() => applyOptimisticDriveChange({ type: "add", drive: tempDrive }));
       return runMutation(() => repository.createDrive(input));
     },
     importFoldersFromVolume: (input) => runMutation(() => repository.importFoldersFromVolume(input)),
     deleteProject: async (projectId) => {
-      applyOptimisticProjectChange({ type: "delete", id: projectId });
+      startTransition(() => applyOptimisticProjectChange({ type: "delete", id: projectId }));
       return runMutation(() => repository.deleteProject(projectId));
     },
     deleteDrive: async (driveId) => {
-      applyOptimisticDriveChange({ type: "delete", id: driveId });
+      startTransition(() => applyOptimisticDriveChange({ type: "delete", id: driveId }));
       return runMutation(() => repository.deleteDrive(driveId));
     },
   }), [
