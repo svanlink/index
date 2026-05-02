@@ -251,7 +251,7 @@ export function ProjectDetailPage() {
                 {getProjectName(currentProject)}
               </h1>
               <p className="mono mt-2 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
-                {currentProject.folderPath ?? currentProject.folderName}
+                {currentProject.folderPath ?? currentProject.folderName ?? "Path unavailable"}
               </p>
               {statusBadges.length > 0 ? (
                 <div className="mt-4 flex flex-wrap gap-1.5">
@@ -319,7 +319,10 @@ export function ProjectDetailPage() {
             ) : null}
             <dl className="mb-4 grid gap-x-6 gap-y-3 sm:grid-cols-3">
               <MetaField label="Last seen" value={formatDate(currentProject.lastSeenAt)} />
-              <MetaField label="Last scanned" value={formatDate(currentProject.lastScannedAt)} />
+              <MetaField
+                label="Last scanned"
+                value={currentProject.lastScannedAt ? formatDate(currentProject.lastScannedAt) : "Not yet scanned"}
+              />
               <MetaField label="Source" value={currentProject.isManual ? "Manual entry" : "Scanned"} />
             </dl>
             {isEventsLoading ? (

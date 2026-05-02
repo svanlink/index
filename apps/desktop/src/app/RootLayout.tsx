@@ -67,7 +67,7 @@ export function RootLayout() {
     setGlobalSearch("");
   }, [location.pathname, searchParams]);
 
-  function submitGlobalSearch(value: string) {
+  function navigateSearch(value: string, opts: { replace: boolean }) {
     const nextQuery = value.trim();
     if (location.pathname === "/projects") {
       const nextParams = new URLSearchParams(searchParams);
@@ -77,10 +77,19 @@ export function RootLayout() {
         nextParams.delete("q");
       }
       const nextSearch = nextParams.toString();
-      navigate(nextSearch ? `/projects?${nextSearch}` : "/projects");
+      navigate(nextSearch ? `/projects?${nextSearch}` : "/projects", opts);
       return;
     }
-    navigate(nextQuery ? `/projects?q=${encodeURIComponent(nextQuery)}` : "/projects");
+    navigate(nextQuery ? `/projects?q=${encodeURIComponent(nextQuery)}` : "/projects", opts);
+  }
+
+  function handleSearchChange(value: string) {
+    setGlobalSearch(value);
+    navigateSearch(value, { replace: true });
+  }
+
+  function handleSearchSubmit(value: string) {
+    navigateSearch(value, { replace: false });
   }
 
   useShortcut({ key: "r", meta: true, onTrigger: () => void refresh() });
@@ -93,8 +102,8 @@ export function RootLayout() {
       brandLabel="Catalog"
       searchValue={globalSearch}
       searchPlaceholder="Search projects, drives…"
-      onSearchChange={setGlobalSearch}
-      onSearchSubmit={submitGlobalSearch}
+      onSearchChange={handleSearchChange}
+      onSearchSubmit={handleSearchSubmit}
     >
       <Outlet />
     </AppShell>
