@@ -101,7 +101,7 @@ export function RootLayout() {
       sectionDetail={sectionDetail}
       brandLabel="Catalog"
       searchValue={globalSearch}
-      searchPlaceholder="Search projects, drives…"
+      searchPlaceholder="Search projects, drives, or folders"
       onSearchChange={handleSearchChange}
       onSearchSubmit={handleSearchSubmit}
     >

@@ -46,3 +46,9 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## Health Stack
+
+- typecheck: corepack pnpm -r typecheck
+- test: corepack pnpm -r test
+- rust-test: cargo test (run from apps/desktop/src-tauri)

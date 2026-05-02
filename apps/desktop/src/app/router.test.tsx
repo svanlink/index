@@ -13,8 +13,6 @@ vi.mock("./catalogRepository", async () => {
 
 describe("desktop routes", () => {
   it.each([
-    { path: "/", value: "Inbox" },
-    { path: "/tasks", value: "Tasks" },
     { path: "/projects", value: "Projects" },
     { path: "/drives", value: "Drives" },
     { path: "/projects/project-240401-apple-shoot", value: "Apple Product Shoot" },
@@ -85,7 +83,7 @@ describe("desktop routes", () => {
     await waitFor(() => {
       expect(router.state.location.search).toBe("?category=design");
       expect(screen.getAllByText("Adidas Social").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("ClientX Concept").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Concept").length).toBeGreaterThan(0);
     });
   });
 

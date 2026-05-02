@@ -52,7 +52,9 @@ export async function startCatalogScan(repository: CatalogRepository, input: Sta
 
 async function ingestScanSession(repository: CatalogRepository, session: ScanSessionSnapshot) {
   await repository.ingestScanSnapshot(session);
-  return repository.getScanSession(session.scanId);
+  // Terminal sessions are cleaned up from the persistence layer after ingestion.
+  // Return the session data directly in that case.
+  return (await repository.getScanSession(session.scanId)) ?? session;
 }
 
 export async function syncDesktopScanSession(
