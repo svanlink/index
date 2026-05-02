@@ -46,15 +46,13 @@ export function SidebarNav({
       className="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r px-3 pb-4 pt-3 lg:flex"
       style={{
         width: "var(--sidebar-width, 220px)",
-        background: "var(--sidebar)",
-        borderColor: "var(--hairline)",
-        backdropFilter: "blur(20px) saturate(180%)",
-        WebkitBackdropFilter: "blur(20px) saturate(180%)"
+        background: "transparent",
+        borderColor: "var(--hairline)"
       }}
     >
       {/* Drag handle spacer aligned to the top-nav height so the window
           can be dragged from the whole top edge. */}
-      <div data-tauri-drag-region className="h-5" aria-hidden="true" />
+      <div data-tauri-drag-region className="h-[52px]" aria-hidden="true" />
 
       <div
         data-tauri-drag-region
