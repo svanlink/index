@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tauri dev",
-    "dev:frontend": "vite",
+    "dev": "NODE_OPTIONS=--max-old-space-size=4096 tauri dev",
+    "dev:frontend": "NODE_OPTIONS=--max-old-space-size=4096 vite",
     "build": "tauri build",
     "build:desktop": "tauri build",
     "build:frontend": "tsc --noEmit -p tsconfig.json && vite build",
