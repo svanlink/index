@@ -201,9 +201,6 @@ export function DriveDetailPage() {
         const parts = [
           `${result.importedCount} folder${result.importedCount === 1 ? "" : "s"} added to "${drive.displayName}".`
         ];
-        if (result.cleanupReviewCount > 0) {
-          parts.push(`${result.cleanupReviewCount} need cleanup and were sent to Rename Review.`);
-        }
         const issueParts = buildImportCleanupIssueParts(result);
         if (issueParts.length > 0) {
           parts.push(`Detected: ${issueParts.join(", ")}.`);
@@ -212,8 +209,8 @@ export function DriveDetailPage() {
           parts.push(`${result.skippedCount} already in catalog were skipped.`);
         }
         setFeedback({
-          tone: result.cleanupReviewCount > 0 ? "warning" : "success",
-          title: result.cleanupReviewCount > 0 ? "Folders imported with cleanup needed" : "Folders imported",
+          tone: "success",
+          title: "Folders imported",
           messages: parts
         });
       }
