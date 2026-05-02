@@ -1,3 +1,31 @@
+# Catalog
+
+## Project
+
+This is a Tauri v2 macOS desktop app for cataloging projects across external drives. Rust backend + React/TypeScript frontend. pnpm monorepo at `apps/desktop/`.
+
+**Run:** `corepack pnpm --filter @drive-project-catalog/desktop dev`
+
+## GSD Workflow
+
+This project uses Get Shit Done (GSD) for planning and execution.
+
+**Planning artifacts:** `.planning/`
+- `PROJECT.md` — project context and requirements
+- `ROADMAP.md` — 3 phases, 17 requirements
+- `REQUIREMENTS.md` — full requirement list with REQ-IDs
+- `STATE.md` — current project state
+- `config.json` — YOLO mode, coarse granularity, parallel execution
+
+**Current phase:** Phase 1 — Strip Dead Weight
+
+**GSD commands:**
+- `/gsd-plan-phase 1` — plan Phase 1 tasks
+- `/gsd-execute-phase 1` — execute Phase 1
+- `/gsd-progress` — show current status
+- `/gsd-discuss-phase N` — discuss approach before planning
+
+**Always read `.planning/STATE.md` at the start of a session.**
 
 ## Skill routing
 
