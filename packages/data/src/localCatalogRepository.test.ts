@@ -262,6 +262,71 @@ describe("LocalCatalogRepository", () => {
     expect(project?.sizeStatus).toBe("pending");
   });
 
+  it.each(["completed", "failed", "cancelled"] as const)(
+    "removes terminal scan session (%s) from persistence after ingest when sizeJobsPending is 0",
+    async (status) => {
+      const repository = new LocalCatalogRepository(
+        new InMemoryLocalPersistence(mockCatalogSnapshot),
+        new InMemorySyncAdapter()
+      );
+
+      await repository.ingestScanSnapshot({
+        scanId: "scan-terminal-test",
+        rootPath: "/Volumes/Drive A",
+        driveName: "Drive A",
+        status,
+        startedAt: "2026-04-06T10:00:00.000Z",
+        finishedAt: "2026-04-06T10:05:00.000Z",
+        foldersScanned: 5,
+        matchesFound: 0,
+        error: null,
+        sizeJobsPending: 0,
+        projects: [],
+        requestedDriveId: null,
+        requestedDriveName: "Drive A",
+        summary: null,
+        createdAt: "2026-04-06T10:00:00.000Z",
+        updatedAt: "2026-04-06T10:05:00.000Z"
+      });
+
+      // Terminal sessions with no pending size jobs must be cleaned up
+      // from local persistence after ingestion (they are enqueued for sync first).
+      const session = await repository.getScanSession("scan-terminal-test");
+      expect(session).toBeNull();
+    }
+  );
+
+  it("keeps a terminal scan session in persistence when sizeJobsPending > 0", async () => {
+    const repository = new LocalCatalogRepository(
+      new InMemoryLocalPersistence(mockCatalogSnapshot),
+      new InMemorySyncAdapter()
+    );
+
+    await repository.ingestScanSnapshot({
+      scanId: "scan-pending-sizes",
+      rootPath: "/Volumes/Drive A",
+      driveName: "Drive A",
+      status: "completed",
+      startedAt: "2026-04-06T10:00:00.000Z",
+      finishedAt: "2026-04-06T10:05:00.000Z",
+      foldersScanned: 5,
+      matchesFound: 1,
+      error: null,
+      sizeJobsPending: 2,
+      projects: [],
+      requestedDriveId: null,
+      requestedDriveName: "Drive A",
+      summary: null,
+      createdAt: "2026-04-06T10:00:00.000Z",
+      updatedAt: "2026-04-06T10:05:00.000Z"
+    });
+
+    // Size jobs still pending — session must stay in persistence for polling.
+    const session = await repository.getScanSession("scan-pending-sizes");
+    expect(session?.status).toBe("completed");
+    expect(session?.sizeJobsPending).toBe(2);
+  });
+
   it("keeps scan-ingestion queue entries deduplicated across repeated session updates", async () => {
     const repository = new LocalCatalogRepository(
       new InMemoryLocalPersistence(mockCatalogSnapshot),
