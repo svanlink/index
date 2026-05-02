@@ -632,7 +632,8 @@ export function CapacityBar({
     totalBytes && usedBytes !== null && totalBytes > 0
       ? (usedBytes / totalBytes) * 100
       : null;
-  const usedPctStr = pct !== null ? `${Math.max(1, pct)}%` : "28%";
+  const isUnknown = pct === null;
+  const usedPctStr = !isUnknown ? `${Math.max(1, pct!)}%` : "0%";
   const reservedPctStr =
     totalBytes && reservedBytes > 0 ? `${(reservedBytes / totalBytes) * 100}%` : undefined;
 
@@ -651,22 +652,24 @@ export function CapacityBar({
       aria-valuemax={100}
       aria-label={pct !== null ? `Storage ${Math.round(pct)}% used` : "Storage usage unknown"}
     >
-      <div
-        className="cap-used capacity-bar-fill"
-        data-level={dataLevel}
-        style={{ width: usedPctStr }}
-      >
-        {reservedPctStr ? (
-          <div
-            className="cap-reserved"
-            style={{
-              right: 0,
-              width: reservedPctStr,
-              background: overcommitted ? "var(--danger)" : undefined
-            }}
-          />
-        ) : null}
-      </div>
+      {!isUnknown && (
+        <div
+          className="cap-used capacity-bar-fill"
+          data-level={dataLevel}
+          style={{ width: usedPctStr }}
+        >
+          {reservedPctStr ? (
+            <div
+              className="cap-reserved"
+              style={{
+                right: 0,
+                width: reservedPctStr,
+                background: overcommitted ? "var(--danger)" : undefined
+              }}
+            />
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

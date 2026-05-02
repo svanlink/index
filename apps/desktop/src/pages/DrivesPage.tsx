@@ -351,7 +351,7 @@ export function DrivesPage() {
         <div className="grid gap-5 lg:grid-cols-2" aria-busy="true" aria-label="Loading drives">
           {[0, 1, 2, 3].map((i) => <DriveCardSkeleton key={i} />)}
         </div>
-      ) : planningRows.length === 0 && !isCreateOpen ? (
+      ) : drives.length === 0 && projects.length === 0 && !isCreateOpen ? (
         <div className="flex items-start pt-6">
           <div style={{ maxWidth: 520 }}>
             <span
@@ -555,9 +555,7 @@ function DriveCard({
       >
         {usedPercent !== null ? (
           <div className="cap-used capacity-bar-fill" style={{ width: `${usedPercent}%` }} />
-        ) : (
-          <div className="cap-used opacity-20" style={{ width: "28%" }} />
-        )}
+        ) : null}
         {reservedPercent !== null ? (
           <div
             className="cap-reserved"
