@@ -1,6 +1,28 @@
 # Catalog
 
-Catalog is a macOS desktop cataloging app for external hard drives. The current build includes a Tauri desktop shell, a React + TypeScript + Tailwind frontend, shared domain/data/UI packages, local SQLite persistence, manual scan workflow support, scan history, storage planning, and optional Supabase transport on top of a local-first sync boundary.
+Catalog is a macOS desktop app for filmmakers and photographers who manage footage across many external drives. It maintains a local index of every project across every drive — so you always know what is where, without mounting drives or opening Finder.
+
+**v1 status: complete.** See [CHANGELOG.md](CHANGELOG.md) for what shipped.
+
+## What it does
+
+- **Drive catalog**: register drives by volume name; view capacity, last scanned date, and incoming/missing project sets
+- **Project catalog**: every folder imported as a project, with scan history, file counts, and path availability status
+- **Scan sessions**: record when a drive was scanned, what was found, what changed
+- **Instant search**: filter projects by name on every keystroke, no submit required
+- **Optimistic mutations**: delete and create operations feel instant — UI updates before the Rust write completes
+- **Honest null states**: capacity bars only render when bytes are known; scan states say "Not yet scanned" rather than showing dashes
+
+## Stack
+
+| Layer | Choice |
+|-------|--------|
+| Shell | Tauri v2 (macOS only — WKWebView) |
+| Frontend | React 19 + TypeScript + Tailwind |
+| Backend | Rust (Tauri commands) |
+| Persistence | SQLite via `rusqlite`, WAL mode |
+| Monorepo | pnpm workspaces |
+| Optional sync | Supabase (disabled when env vars absent) |
 
 ## Current release strategy
 
