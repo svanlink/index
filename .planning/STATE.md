@@ -13,11 +13,11 @@
 ## Current Position
 
 - **Milestone:** v1 polish
-- **Phase:** Phase 2 — Trustworthy Mutations (complete)
-- **Plan:** 02-06 complete
-- **Status:** Phase 2 done — ready for Phase 3 (macOS-Native Catalog UX)
+- **Phase:** Phase 3 — macOS-Native Catalog UX (complete)
+- **Plan:** 03-01 complete
+- **Status:** All 3 phases complete — v1 milestone done
 
-**Progress:** [██████░░░░] 2/3 phases complete
+**Progress:** [██████████] 3/3 phases complete
 
 ## Phase Summary
 
@@ -25,20 +25,21 @@
 |---|-------|--------|--------------|
 | 1 | Strip Dead Weight | Complete | 5 |
 | 2 | Trustworthy Mutations | Complete | 7 |
-| 3 | macOS-Native Catalog UX | Not started | 5 |
+| 3 | macOS-Native Catalog UX | Complete | 5 |
 
 ## Performance Metrics
 
 - **Phases planned:** 3
-- **Phases complete:** 2
-- **Plans complete:** 7
+- **Phases complete:** 3
+- **Plans complete:** 8
 - **Requirements mapped:** 17/17 (100%)
-- **Requirements validated:** 12/17
+- **Requirements validated:** 17/17
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 01 | 01 | ~35 min | 5/5 | 8 |
 | 02 | 01-06 | ~55 min | 14/14 | 15 |
+| 03 | 01 | ~15 min | 3/3 | 8 |
 
 ## Accumulated Context
 
@@ -53,6 +54,8 @@
 - React 19 useOptimistic chosen over useOptimisticMutation.ts hook (built-in, zero deps)
 - deleteScanSession uses withTransaction, child before parent (no FK constraints in schema)
 - DriveCard + ProjectCollection extracted beyond plan spec to achieve line-count targets (pure presentational, zero behavior change)
+- Used macos-private-api Tauri feature (required when macOSPrivateApi:true set in tauri.conf.json — cargo build enforces feature parity)
+- Instant search uses replace:true navigate on every keystroke so back-button is not polluted with search history entries
 
 ### Constraints in Force
 
@@ -74,11 +77,11 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-05-02 — Phase 2 executed (Trustworthy Mutations — 6 plans, 14 tasks)
+**Last session:** 2026-05-02 — Phase 3 executed (macOS-Native Catalog UX — 1 plan, 3 tasks)
 
-**Next action:** `/gsd-plan-phase 3` to plan Phase 3 (macOS-Native Catalog UX).
+**Next action:** v1 milestone complete. Ship or gather feedback.
 
-**Resume context:** Phase 2 complete. CapacityBar no longer fabricates 28% fill when bytes unknown. DrivesPage empty-state gated on real data. Scan sessions pruned after ingestion (deleteScanSession). useOptimistic wired for delete/create mutations. DrivesPage split to 279 lines, DriveDetailPage to 312 lines. 7 new component files in apps/desktop/src/pages/drives/ and apps/desktop/src/app/. Production build clean.
+**Resume context:** Phase 3 complete. Sidebar now shows wallpaper bleed-through via NSVisualEffectView (Sidebar material). Traffic lights unobscured with h-[52px] drag spacer. Search filters instantly on every keystroke with replace:true navigate. Project detail shows "Not yet scanned" / "Path unavailable" instead of bare dashes. Open in Finder verified present. cargo check, tsc, and pnpm build all exit 0.
 
 ---
-*State updated: 2026-05-02 — Phase 2 complete*
+*State updated: 2026-05-02 — Phase 3 complete — v1 milestone done*
