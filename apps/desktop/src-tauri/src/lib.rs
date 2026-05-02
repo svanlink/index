@@ -48,6 +48,14 @@ pub fn run() {
         .manage(AppScanState::default())
         .setup(|app| {
             info!("Catalog desktop starting (v1)");
+            #[cfg(target_os = "macos")]
+            {
+                use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+                if let Some(window) = app.get_webview_window("main") {
+                    apply_vibrancy(&window, NSVisualEffectMaterial::Sidebar, None, None)
+                        .expect("Failed to apply vibrancy — requires macOS 10.14+");
+                }
+            }
             let _ = app.handle();
             Ok(())
         })
