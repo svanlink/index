@@ -137,6 +137,13 @@ export class InMemoryLocalPersistence implements LocalPersistenceAdapter {
     this.#snapshot = applyDriveDeleteToSnapshot(this.#snapshot, driveId);
   }
 
+  async deleteScanSession(scanId: string): Promise<void> {
+    this.#snapshot = {
+      ...this.#snapshot,
+      scanSessions: this.#snapshot.scanSessions.filter((s) => s.scanId !== scanId),
+    };
+  }
+
   async listRenameSuggestions(): Promise<RenameSuggestion[]> {
     return clone(this.#renameSuggestions);
   }

@@ -921,6 +921,15 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
     });
   }
 
+  async deleteScanSession(scanId: string): Promise<void> {
+    const database = await this.#ensureReady();
+    await withTransaction(database, async () => {
+      // Child rows first — no FK constraint, ordering is up to us.
+      await database.execute("DELETE FROM scan_session_projects WHERE scan_id = ?", [scanId]);
+      await database.execute("DELETE FROM scan_sessions WHERE scan_id = ?", [scanId]);
+    });
+  }
+
   async listRenameSuggestions(): Promise<RenameSuggestion[]> {
     const database = await this.#ensureReady();
     const rows = await database.select<RenameSuggestionRow>(

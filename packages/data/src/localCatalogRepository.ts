@@ -536,6 +536,7 @@ export class LocalCatalogRepository implements CatalogRepository {
     await this.persistence.upsertProjectScanEvents(changedEvents);
     await this.persistence.upsertScan(ingestion.scan);
     await this.persistence.upsertScanSession(ingestion.session);
+    await this.persistence.deleteScanSession(session.scanId);
     await this.enqueue("drive.upsert", ingestion.drive, "scan");
     for (const project of changedProjects) {
       await this.enqueue("project.upsert", project, "scan");

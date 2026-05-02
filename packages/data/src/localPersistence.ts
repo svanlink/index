@@ -29,6 +29,7 @@ export interface LocalPersistenceAdapter {
   upsertScanSession(session: ScanSessionSnapshot): Promise<void>;
   deleteProject(projectId: string): Promise<void>;
   deleteDrive(driveId: string): Promise<void>;
+  deleteScanSession(scanId: string): Promise<void>;
   listRenameSuggestions(): Promise<RenameSuggestion[]>;
   upsertRenameSuggestion(suggestion: RenameSuggestion): Promise<void>;
   updateRenameSuggestionStatus(id: string, status: RenameSuggestionStatus, updatedAt: string): Promise<void>;
