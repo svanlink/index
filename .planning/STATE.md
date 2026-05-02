@@ -13,31 +13,32 @@
 ## Current Position
 
 - **Milestone:** v1 polish
-- **Phase:** Phase 1 — Strip Dead Weight (complete)
-- **Plan:** 01-01 complete
-- **Status:** Phase 1 done — ready for Phase 2 (Trustworthy Mutations)
+- **Phase:** Phase 2 — Trustworthy Mutations (complete)
+- **Plan:** 02-06 complete
+- **Status:** Phase 2 done — ready for Phase 3 (macOS-Native Catalog UX)
 
-**Progress:** [███░░░░░░░] 1/3 phases complete
+**Progress:** [██████░░░░] 2/3 phases complete
 
 ## Phase Summary
 
 | # | Phase | Status | Requirements |
 |---|-------|--------|--------------|
 | 1 | Strip Dead Weight | Complete | 5 |
-| 2 | Trustworthy Mutations | Not started | 7 |
+| 2 | Trustworthy Mutations | Complete | 7 |
 | 3 | macOS-Native Catalog UX | Not started | 5 |
 
 ## Performance Metrics
 
 - **Phases planned:** 3
-- **Phases complete:** 1
-- **Plans complete:** 1
+- **Phases complete:** 2
+- **Plans complete:** 7
 - **Requirements mapped:** 17/17 (100%)
-- **Requirements validated:** 5/17
+- **Requirements validated:** 12/17
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 01 | 01 | ~35 min | 5/5 | 8 |
+| 02 | 01-06 | ~55 min | 14/14 | 15 |
 
 ## Accumulated Context
 
@@ -49,6 +50,9 @@
 - Search loop limited to substring filter for v1; fuzzy/⌘K palette deferred to v2
 - Drive management remains secondary; project catalog is the daily-driver flow
 - Stale Cargo build artifacts (old project path in cache) cleaned as part of Phase 1 execution — pre-existing env issue, not a code problem
+- React 19 useOptimistic chosen over useOptimisticMutation.ts hook (built-in, zero deps)
+- deleteScanSession uses withTransaction, child before parent (no FK constraints in schema)
+- DriveCard + ProjectCollection extracted beyond plan spec to achieve line-count targets (pure presentational, zero behavior change)
 
 ### Constraints in Force
 
@@ -70,11 +74,11 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-05-02 — Phase 1 Plan 01 executed (Strip Dead Weight)
+**Last session:** 2026-05-02 — Phase 2 executed (Trustworthy Mutations — 6 plans, 14 tasks)
 
-**Next action:** `/gsd-plan-phase 2` to plan Phase 2 (Trustworthy Mutations).
+**Next action:** `/gsd-plan-phase 3` to plan Phase 3 (macOS-Native Catalog UX).
 
-**Resume context:** Phase 1 complete. MUI/Emotion/Roboto stripped, materialTheme.ts deleted, notify/sha2 removed from Cargo.toml, IGNORED_SYSTEM_FOLDERS extracted to constants.rs (single source of truth), ghost-route Rename Review toast removed from DriveDetailPage. Foundation is clean. Phase 2 addresses optimistic mutations and scan state correctness.
+**Resume context:** Phase 2 complete. CapacityBar no longer fabricates 28% fill when bytes unknown. DrivesPage empty-state gated on real data. Scan sessions pruned after ingestion (deleteScanSession). useOptimistic wired for delete/create mutations. DrivesPage split to 279 lines, DriveDetailPage to 312 lines. 7 new component files in apps/desktop/src/pages/drives/ and apps/desktop/src/app/. Production build clean.
 
 ---
-*State updated: 2026-05-02 — Phase 1 complete*
+*State updated: 2026-05-02 — Phase 2 complete*
