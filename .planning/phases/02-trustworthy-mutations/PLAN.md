@@ -257,7 +257,7 @@ After completion, create `/Users/vaneickelen/Desktop/Catalog/.planning/phases/02
 phase: 02-trustworthy-mutations
 plan: 02
 type: execute
-wave: 2
+wave: 1
 depends_on: []
 files_modified:
   - packages/data/src/localPersistence.ts
@@ -522,8 +522,9 @@ After completion, create `/Users/vaneickelen/Desktop/Catalog/.planning/phases/02
 phase: 02-trustworthy-mutations
 plan: 03
 type: execute
-wave: 1
-depends_on: []
+wave: 2
+depends_on:
+  - "02-01"
 files_modified:
   - apps/desktop/src/app/providers.tsx
   - apps/desktop/src/pages/DrivesPage.tsx
