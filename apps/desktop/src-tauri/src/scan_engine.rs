@@ -43,22 +43,10 @@ use std::{
 };
 use tauri::State;
 
+use crate::constants::IGNORED_SYSTEM_FOLDERS;
+
 const MAX_SCAN_DEPTH: usize = 1;
 const CANCELLED_ERROR: &str = "scan cancelled";
-const IGNORED_SYSTEM_FOLDERS: &[&str] = &[
-    // Windows
-    "$RECYCLE.BIN",
-    "System Volume Information",
-    // macOS
-    ".Spotlight-V100",
-    ".Trashes",
-    ".fseventsd",
-    // Camera / memory card system folders
-    "DCIM",
-    "MISC",
-    // Unix filesystem recovery
-    "LOST+FOUND",
-];
 
 /// Classification result for a scanned folder name.
 /// Every folder is classified — none are silently discarded.

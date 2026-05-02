@@ -46,23 +46,7 @@
 use serde::Serialize;
 use std::{fs, path::Path};
 
-/// System / recovery folders skipped across every OS. Kept in lock-step with
-/// `scan_engine.rs::IGNORED_SYSTEM_FOLDERS` so the scan and import paths agree
-/// on what counts as "not a project folder."
-const IGNORED_SYSTEM_FOLDERS: &[&str] = &[
-    // Windows
-    "$RECYCLE.BIN",
-    "System Volume Information",
-    // macOS
-    ".Spotlight-V100",
-    ".Trashes",
-    ".fseventsd",
-    // Camera / memory card system folders
-    "DCIM",
-    "MISC",
-    // Unix filesystem recovery
-    "LOST+FOUND",
-];
+use crate::constants::IGNORED_SYSTEM_FOLDERS;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
