@@ -1,4 +1,4 @@
-import { getDisplayClient, getDisplayProject, type FolderType, type Project } from "@drive-project-catalog/domain";
+import { getDisplayProject, type FolderType, type Project } from "@drive-project-catalog/domain";
 import type { Drive } from "@drive-project-catalog/domain";
 
 export function formatBytes(bytes: number | null | undefined, decimals = 1): string {
@@ -61,8 +61,4 @@ export function getProjectStatusBadges(project: Project): string[] {
   if (project.namingStatus === "legacy") badges.push("Legacy name");
   if (project.moveStatus === "pending") badges.push("Move pending");
   return badges;
-}
-
-export function getClientName(project: Project): string {
-  return getDisplayClient(project);
 }
