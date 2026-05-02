@@ -42,7 +42,13 @@ Every piece of data shown is correct. No confusing states, no placeholders, no m
   4. After a successful scan ingestion, `scan_sessions` rows for that session are removed and `scan_session_projects` rows cascade — no orphaned scan-session debris in SQLite
   5. Every loading, empty, and error state in the catalog has a specific, accurate label that matches the underlying state (no generic spinners, no contradictory copy)
   6. `DrivesPage.tsx` and `DriveDetailPage.tsx` are each under 400 lines, with import flow and scan/import sections extracted to focused hooks/components
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 02-01-PLAN.md — Fix CapacityBar 28% fabricated fill and DrivesPage empty-state guard (ACCU-01, ACCU-02, UX-02)
+- [ ] 02-02-PLAN.md — Add deleteScanSession to persistence layer and wire in ingestScanSnapshot (ACCU-04)
+- [ ] 02-03-PLAN.md — Wire useOptimistic in providers.tsx for deleteProject, deleteDrive, createDrive (FOUND-02)
+- [ ] 02-04-PLAN.md — Extract useImportFromVolume hook and DriveCreateForm, slim DrivesPage to <400 lines (CODE-01)
+- [ ] 02-05-PLAN.md — Extract ScanSection, ImportSection, ScanStatusPanel, slim DriveDetailPage to <400 lines (CODE-02)
+- [ ] 02-06-PLAN.md — Full build verification and Phase 2 sign-off
 **UI hint**: yes
 
 ### Phase 3: macOS-Native Catalog UX
@@ -63,7 +69,7 @@ Every piece of data shown is correct. No confusing states, no placeholders, no m
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Strip Dead Weight | 0/? | Not started | - |
-| 2. Trustworthy Mutations | 0/? | Not started | - |
+| 2. Trustworthy Mutations | 0/6 | Planned | - |
 | 3. macOS-Native Catalog UX | 0/? | Not started | - |
 
 ## Coverage Validation
@@ -86,3 +92,4 @@ No orphans. No duplicates. 100% coverage.
 
 ---
 *Roadmap created: 2026-05-02*
+*Phase 2 planned: 2026-05-02*
