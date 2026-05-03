@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { categoryValues, type Category, type FolderType, type ProjectScanEvent } from "@drive-project-catalog/domain";
 import { Icon } from "@drive-project-catalog/ui";
@@ -16,6 +16,7 @@ import {
 } from "./dashboardHelpers";
 import { ConfirmModal, EmptyState, FeedbackNotice, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
 import { showPathInFinder } from "../app/nativeContextMenu";
+import { getDriveColor } from "./driveColor";
 
 interface ProjectMetadataFormState {
   correctedDate: string;
@@ -199,6 +200,36 @@ export function ProjectDetailPage() {
   const displayClient = currentProject.correctedClient ?? currentProject.parsedClient ?? "No client";
   const displayDate = formatParsedDate(currentProject.correctedDate ?? currentProject.parsedDate);
 
+  // Category-tinted avatar for the identity card
+  const avatarPalette: Record<string, { bg: string; color: string }> = {
+    photo: { bg: "var(--info-soft)", color: "var(--info)" },
+    video: { bg: "var(--accent-soft)", color: "var(--accent-ink)" },
+    design: { bg: "var(--ok-soft)", color: "var(--ok)" },
+    mixed: { bg: "var(--warn-soft)", color: "var(--warn)" },
+    personal: { bg: "var(--danger-soft)", color: "var(--danger)" }
+  };
+  const avatar = avatarPalette[currentProject.category ?? ""] ?? {
+    bg: "var(--surface-inset)",
+    color: "var(--ink-3)"
+  };
+  const avatarLetter = getProjectName(currentProject)[0]?.toUpperCase() ?? "?";
+
+  // Status accent on the identity card
+  const statusAccent =
+    currentProject.missingStatus === "missing"
+      ? "inset 3px 0 0 var(--danger)"
+      : currentProject.duplicateStatus === "duplicate"
+        ? "inset 3px 0 0 var(--warn)"
+        : undefined;
+
+  // Unsaved changes — compare form state to the persisted project values
+  const isFormDirty =
+    metadataForm.correctedDate !== (currentProject.correctedDate ?? "") ||
+    metadataForm.correctedClient !== (currentProject.correctedClient ?? "") ||
+    metadataForm.correctedProject !== (currentProject.correctedProject ?? "") ||
+    metadataForm.category !== (currentProject.category ?? "") ||
+    metadataForm.folderType !== currentProject.folderType;
+
   return (
     <div className="space-y-6">
       {showDeleteConfirm ? (
@@ -212,9 +243,10 @@ export function ProjectDetailPage() {
         />
       ) : null}
 
-      <div className="card overflow-hidden">
+      <div className="card overflow-hidden" style={statusAccent ? { boxShadow: statusAccent } : undefined}>
+        {/* C4: Action toolbar */}
         <div
-          className="flex flex-wrap items-center gap-2 border-b px-5 py-4"
+          className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5"
           style={{ borderColor: "var(--hairline)" }}
         >
           <Link to="/projects" className="btn btn-ghost btn-sm">
@@ -222,6 +254,12 @@ export function ProjectDetailPage() {
             Projects
           </Link>
           <div className="flex-1" />
+          {currentProject.currentDriveId ? (
+            <Link to={`/drives/${currentProject.currentDriveId}`} className="btn btn-sm">
+              <Icon name="hardDrive" size={11} color="currentColor" />
+              Drive
+            </Link>
+          ) : null}
           <button
             type="button"
             className="btn btn-sm"
@@ -249,8 +287,16 @@ export function ProjectDetailPage() {
           </button>
         </div>
 
+        {/* C1: Identity body */}
         <div className="px-6 py-6">
           <div className="flex flex-wrap items-start gap-5">
+            {/* C1: Category-tinted avatar letter */}
+            <div
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[14px] text-[20px] font-semibold"
+              style={{ background: avatar.bg, color: avatar.color }}
+            >
+              {avatarLetter}
+            </div>
             <div className="min-w-0 flex-1">
               <div className="eyebrow mono">
                 {displayDate} · {displayClient}
@@ -269,17 +315,31 @@ export function ProjectDetailPage() {
                 </div>
               ) : null}
             </div>
-
-            <div
-              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[14px]"
-              style={{ background: "var(--surface-inset)" }}
-            >
-              <Icon name="folder" size={24} color="var(--ink-2)" />
-            </div>
           </div>
 
           <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
-            <MetaField label="Current drive" value={currentDriveName} />
+            {/* Drive with color dot */}
+            <div className="min-w-0">
+              <dt
+                className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
+                style={{ color: "var(--ink-4)" }}
+              >
+                Current drive
+              </dt>
+              <dd className="mt-0.5 flex items-center gap-1.5 tnum truncate text-[13.5px] font-medium" style={{ margin: 0 }}>
+                {currentProject.currentDriveId ? (
+                  <>
+                    <span
+                      className="drive-dot shrink-0"
+                      style={{ "--drive-color": getDriveColor(currentProject.currentDriveId), width: 8, height: 8 } as CSSProperties}
+                    />
+                    <span className="truncate" style={{ color: "var(--ink)" }}>{currentDriveName}</span>
+                  </>
+                ) : (
+                  <span style={{ color: "var(--warn)" }}>{currentDriveName}</span>
+                )}
+              </dd>
+            </div>
             <MetaField
               label={isMovePending ? "Target drive" : "Size"}
               value={isMovePending ? targetDriveName : (currentProject.sizeBytes !== null ? formatBytes(currentProject.sizeBytes) : "Unknown")}
@@ -446,8 +506,11 @@ export function ProjectDetailPage() {
                     </p>
                   </FormField>
                 ) : null}
+                {/* C2: Unsaved indicator */}
                 <div className="flex items-center justify-end gap-2 pt-1">
-                  {metadataMutation.isConfirmed ? (
+                  {isFormDirty && !metadataMutation.isPending ? (
+                    <span className="chip chip-warn text-[11px]">Unsaved changes</span>
+                  ) : metadataMutation.isConfirmed && !isFormDirty ? (
                     <span className="text-[11.5px] tnum" style={{ color: "var(--ink-3)" }}>
                       Saved ✓
                     </span>
