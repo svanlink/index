@@ -365,6 +365,65 @@ body {
   font-size: 12px; color: rgba(0,0,0,.3); font-variant-numeric: tabular-nums; z-index: 1000;
 }
 
+/* ─── Slides 10–12 additions ────────────────────────────────────── */
+/* Looping demo variants for motion vocabulary slide */
+@keyframes demo-scale-in {
+  0%,5%    { transform: scale(0.92); opacity: 0; }
+  25%,70%  { transform: scale(1);    opacity: 1; }
+  95%,100% { transform: scale(0.92); opacity: 0; }
+}
+@keyframes demo-sheet-spring {
+  0%,5%    { transform: scale(0.88); opacity: 0; }
+  18%      { transform: scale(1.04); opacity: 1; }
+  28%,70%  { transform: scale(1);    opacity: 1; }
+  95%,100% { transform: scale(0.88); opacity: 0; }
+}
+.demo-scale-in     { animation: demo-scale-in    3.4s ease infinite; transform-origin: center top; }
+.demo-sheet-spring { animation: demo-sheet-spring 3.4s ease infinite; transform-origin: center; }
+
+/* Code annotation block */
+.code-callout {
+  background: #1a1a1e; color: #cdd9e5;
+  border-radius: var(--r-lg); padding: 11px 13px;
+  font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 10.5px; line-height: 1.7;
+}
+.code-key { color: #c792ea; }
+.code-val { color: #80cbc4; }
+.code-comment { color: #546e7a; font-style: italic; }
+
+/* Slide eyebrow label */
+.slide-eyebrow {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-4); text-align: center; padding: 8px 0;
+}
+
+/* ─── Two-column app layout (Todoist-style, no titlebar) ──────────── */
+.app-layout {
+  width: 92vw; max-width: 1100px; height: 86vh;
+  display: flex; flex-direction: row;
+  background: var(--surface); border-radius: var(--r-xl);
+  box-shadow: var(--sh-pop), 0 0 0 1px rgba(0,0,0,.08);
+  overflow: hidden; position: relative;
+}
+.app-sidebar {
+  width: 220px; min-width: 220px; flex-shrink: 0;
+  background: var(--glass-bg); backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border-right: 1px solid var(--hairline);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sb-app-header {
+  height: 52px; display: flex; align-items: center; padding: 0 16px;
+  border-bottom: 1px solid var(--hairline); flex-shrink: 0;
+  font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--ink);
+}
+.sb-nav { padding: 10px 0 8px; flex: 1; overflow-y: auto; }
+.app-content {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; background: var(--surface); min-width: 0;
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
@@ -374,22 +433,16 @@ body {
 <body>
 
 <!-- SLIDE COUNTER -->
-<div class="slide-counter" id="counter">1 / 9</div>
+<div class="slide-counter" id="counter">1 / 12</div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
      SLIDE 1 — TITLE
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide active" id="s1">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">Catalog</div>
-    <div class="tb-actions">
-      <div class="search"><span class="search-ico">⌘F</span><span class="search-in">Search projects…</span></div>
-    </div>
-  </div>
-  <div class="mac-body">
-    <div class="mac-sidebar">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
       <div class="sb-section">
         <div class="sb-head">Library</div>
         <div class="sb-item active"><span class="sb-icon">◉</span> All Projects <span class="sb-badge">1,159</span></div>
@@ -410,20 +463,20 @@ body {
         <div class="sb-item"><span class="sb-icon">⚙</span> Settings</div>
       </div>
     </div>
-    <div class="mac-main" style="align-items:center;justify-content:center;gap:0;background:var(--canvas);">
-      <div style="text-align:center;max-width:480px;padding:40px 32px;">
-        <div style="font-size:40px;font-weight:700;letter-spacing:-.03em;color:var(--ink);line-height:1;">Catalog</div>
-        <div style="width:40px;height:2px;background:var(--action);margin:14px auto 18px;border-radius:1px;"></div>
-        <div style="font-size:13px;color:var(--ink-3);margin-bottom:6px;letter-spacing:.01em;text-transform:uppercase;font-weight:500;">Design Reference · 2026</div>
-        <div style="font-size:17px;color:var(--ink-2);margin-bottom:28px;line-height:1.4;">Index your footage.<br>Know what's where.</div>
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-          <span class="chip chip-blue">Index</span>
-          <span class="chip chip-ghost">Scan</span>
-          <span class="chip chip-ghost">Import</span>
-          <span class="chip chip-ghost">Search</span>
-        </div>
-        <div style="margin-top:28px;font-size:12px;color:var(--ink-4);">macOS · Tauri v2 · React 19 · Rust · SQLite</div>
+  </div>
+  <div class="app-content" style="align-items:center;justify-content:center;background:var(--canvas);">
+    <div style="text-align:center;max-width:480px;padding:40px 32px;">
+      <div style="font-size:40px;font-weight:700;letter-spacing:-.03em;color:var(--ink);line-height:1;">Catalog</div>
+      <div style="width:40px;height:2px;background:var(--action);margin:14px auto 18px;border-radius:1px;"></div>
+      <div style="font-size:13px;color:var(--ink-3);margin-bottom:6px;letter-spacing:.01em;text-transform:uppercase;font-weight:500;">Design Reference · 2026</div>
+      <div style="font-size:17px;color:var(--ink-2);margin-bottom:28px;line-height:1.4;">Index your footage.<br>Know what's where.</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <span class="chip chip-blue">Index</span>
+        <span class="chip chip-ghost">Scan</span>
+        <span class="chip chip-ghost">Import</span>
+        <span class="chip chip-ghost">Search</span>
       </div>
+      <div style="margin-top:28px;font-size:12px;color:var(--ink-4);">macOS · Tauri v2 · React 19 · Rust · SQLite</div>
     </div>
   </div>
 </div>
@@ -433,20 +486,18 @@ body {
      SLIDE 2 — DESIGN SYSTEM
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide" id="s2">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">Design System</div>
-  </div>
-  <div class="mac-body">
-    <div class="mac-sidebar">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
       <div class="sb-section"><div class="sb-head">System</div>
         <div class="sb-item active"><span class="sb-icon">◈</span> Tokens</div>
         <div class="sb-item"><span class="sb-icon">Aa</span> Typography</div>
         <div class="sb-item"><span class="sb-icon">◻</span> Components</div>
       </div>
     </div>
-    <div class="mac-main" style="overflow:auto;">
+  </div>
+  <div class="app-content" style="overflow:auto;">
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;height:100%;">
 
         <!-- Col 1: Colors -->
@@ -537,7 +588,6 @@ body {
         </div>
       </div>
     </div>
-  </div>
 </div>
 </div>
 
@@ -545,17 +595,10 @@ body {
      SLIDE 3 — DRIVES OVERVIEW
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide" id="s3">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">Drives</div>
-    <div class="tb-actions">
-      <button class="btn btn-secondary btn-sm">Add manually</button>
-      <button class="btn btn-primary btn-lg">Scan connected</button>
-    </div>
-  </div>
-  <div class="mac-body">
-    <div class="mac-sidebar">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
       <div class="sb-section"><div class="sb-head">Library</div>
         <div class="sb-item"><span class="sb-icon">◉</span> All Projects</div>
         <div class="sb-item"><span class="sb-icon">⊕</span> Duplicates</div>
@@ -567,7 +610,15 @@ body {
         <div class="sb-item" style="opacity:.5"><span class="sb-dot" style="background:var(--drive-b)"></span> Backup SSD</div>
       </div>
     </div>
-    <div class="mac-main" style="padding:20px;">
+  </div>
+  <div class="app-content">
+    <div class="content-toolbar">
+      <span style="font-size:13px;font-weight:500;color:var(--ink);">Volumes</span>
+      <div class="ct-space"></div>
+      <button class="btn btn-secondary btn-sm">Add manually</button>
+      <button class="btn btn-primary btn-lg">Scan connected</button>
+    </div>
+    <div style="padding:20px;flex:1;overflow:auto;">
       <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-4);margin-bottom:14px;">3 Volumes · 2 Connected</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
 
@@ -627,17 +678,10 @@ body {
      SLIDE 4 — DRIVE DETAIL
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide" id="s4">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">Footage Vol. 1</div>
-    <div class="tb-actions">
-      <button class="btn btn-secondary btn-sm">Scan now</button>
-      <button class="btn btn-primary">Import folders</button>
-    </div>
-  </div>
-  <div class="mac-body">
-    <div class="mac-sidebar">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
       <div class="sb-section"><div class="sb-head">Library</div>
         <div class="sb-item"><span class="sb-icon">◉</span> All Projects <span class="sb-badge">1,159</span></div>
       </div>
@@ -648,7 +692,8 @@ body {
         <div class="sb-item" style="opacity:.5"><span class="sb-dot" style="background:var(--drive-b)"></span> Backup SSD</div>
       </div>
     </div>
-    <div class="mac-main">
+  </div>
+  <div class="app-content">
       <div class="drive-header">
         <div class="drive-name">
           <div class="sb-dot" style="background:var(--drive-a);width:12px;height:12px;"></div>
@@ -720,7 +765,6 @@ body {
         </div>
       </div>
     </div>
-  </div>
 </div>
 </div>
 
@@ -728,17 +772,10 @@ body {
      SLIDE 5 — PROJECTS LIST
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide" id="s5">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">All Projects — 1,159</div>
-    <div class="tb-actions">
-      <button class="btn btn-ghost btn-sm">Filter</button>
-      <div class="search"><span class="search-ico">🔍</span><span class="search-in">Search 1,159 projects…</span></div>
-    </div>
-  </div>
-  <div class="mac-body">
-    <div class="mac-sidebar">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
       <div class="sb-section"><div class="sb-head">Library</div>
         <div class="sb-item active"><span class="sb-icon">◉</span> All Projects <span class="sb-badge">1,159</span></div>
         <div class="sb-item"><span class="sb-icon">◷</span> Recent Scans</div>
@@ -750,17 +787,20 @@ body {
         <div class="sb-item"><span class="sb-dot" style="background:var(--drive-c)"></span> B-Roll Archive</div>
       </div>
     </div>
-    <div class="mac-main">
-      <div class="content-toolbar">
-        <div class="density-toggle">
-          <div class="dt-pill">Compact</div>
-          <div class="dt-pill active">Default</div>
-          <div class="dt-pill">Spacious</div>
-        </div>
-        <div class="ct-space"></div>
-        <span style="font-size:12px;color:var(--ink-3);">Drive: All</span>
-        <span style="font-size:12px;color:var(--ink-3);">Status: All</span>
+  </div>
+  <div class="app-content">
+    <div class="content-toolbar">
+      <div class="density-toggle">
+        <div class="dt-pill">Compact</div>
+        <div class="dt-pill active">Default</div>
+        <div class="dt-pill">Spacious</div>
       </div>
+      <div class="ct-space"></div>
+      <span style="font-size:12px;color:var(--ink-3);">Drive: All</span>
+      <span style="font-size:12px;color:var(--ink-3);">Status: All</span>
+      <button class="btn btn-ghost btn-sm">Filter</button>
+      <div class="search"><span class="search-ico">🔍</span><span class="search-in">Search…</span></div>
+    </div>
       <div class="table-wrap">
         <div class="table-head">
           <div style="width:36px;flex-shrink:0;"></div>
@@ -828,7 +868,6 @@ body {
         </div>
       </div>
     </div>
-  </div>
 </div>
 </div>
 
@@ -836,17 +875,10 @@ body {
      SLIDE 6 — PROJECT DETAIL
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide" id="s6">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">COMMERCIAL_LUXURY_WATCH</div>
-    <div class="tb-actions">
-      <button class="btn btn-ghost btn-sm">⟵ Back</button>
-      <button class="btn btn-secondary btn-sm">Inspector</button>
-    </div>
-  </div>
-  <div class="mac-body">
-    <div class="mac-sidebar">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
       <div class="sb-section"><div class="sb-head">Library</div>
         <div class="sb-item active"><span class="sb-icon">◉</span> All Projects</div>
       </div>
@@ -855,7 +887,8 @@ body {
         <div class="sb-item"><span class="sb-dot" style="background:var(--drive-c)"></span> B-Roll Archive</div>
       </div>
     </div>
-    <div class="mac-main" style="flex-direction:row;">
+  </div>
+  <div class="app-content" style="flex-direction:row;">
       <!-- Main -->
       <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;">
         <div style="padding:20px 20px 12px;border-bottom:1px solid var(--hairline);">
@@ -923,7 +956,6 @@ body {
         </div>
       </div>
     </div>
-  </div>
 </div>
 </div>
 
@@ -931,15 +963,11 @@ body {
      SLIDE 7 — IMPORT DIALOG
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide" id="s7">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">All Projects</div>
+<div class="app-layout">
+  <div class="app-sidebar" style="filter:brightness(.92);">
+    <div class="sb-app-header">Catalog</div>
   </div>
-  <div class="mac-body" style="filter:brightness(.92);">
-    <div class="mac-sidebar"></div>
-    <div class="mac-main"></div>
-  </div>
+  <div class="app-content" style="filter:brightness(.92);"></div>
   <!-- Sheet: spring from source (Liquid Glass 2025) -->
   <div class="sheet-backdrop">
     <div class="sheet">
@@ -993,18 +1021,16 @@ body {
      SLIDE 8 — EMPTY STATES
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide" id="s8">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">Empty States</div>
-  </div>
-  <div class="mac-body">
-    <div class="mac-sidebar">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
       <div class="sb-section"><div class="sb-head">Library</div>
         <div class="sb-item active"><span class="sb-icon">◉</span> All Projects</div>
       </div>
     </div>
-    <div class="mac-main" style="flex-direction:row;padding:20px;gap:16px;overflow:hidden;">
+  </div>
+  <div class="app-content" style="flex-direction:row;padding:20px;gap:16px;overflow:hidden;">
 
       <!-- 1: Cold start -->
       <div style="flex:1;background:var(--surface);border:1px solid var(--hairline);border-radius:var(--r-xl);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px 24px;text-align:center;">
@@ -1035,7 +1061,6 @@ body {
       </div>
 
     </div>
-  </div>
 </div>
 </div>
 
@@ -1043,15 +1068,11 @@ body {
      SLIDE 9 — CONFIRMATION DIALOGS
 ═══════════════════════════════════════════════════════════════════ -->
 <div class="slide" id="s9">
-<div class="mac-window">
-  <div class="mac-titlebar">
-    <div class="tl-wrap"><div class="tl tl-close"></div><div class="tl tl-min"></div><div class="tl tl-max"></div></div>
-    <div class="win-title">Confirmation Dialogs</div>
+<div class="app-layout">
+  <div class="app-sidebar" style="filter:brightness(.92);">
+    <div class="sb-app-header">Catalog</div>
   </div>
-  <div class="mac-body" style="filter:brightness(.92);">
-    <div class="mac-sidebar"></div>
-    <div class="mac-main"></div>
-  </div>
+  <div class="app-content" style="filter:brightness(.92);"></div>
   <!-- NSAlert anatomy (Liquid Glass 2025: expand from source, left-aligned text) -->
   <div class="alert-overlay">
 
@@ -1086,6 +1107,271 @@ body {
     </div>
 
   </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 10 — LIQUID GLASS LAYER
+═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s10">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
+      <div class="sb-section"><div class="sb-head">Reference</div>
+        <div class="sb-item active"><span class="sb-icon">◈</span> Glass Layer</div>
+        <div class="sb-item"><span class="sb-icon">◎</span> Motion</div>
+        <div class="sb-item"><span class="sb-icon">▦</span> Table Glass</div>
+      </div>
+    </div>
+  </div>
+  <div class="app-content" style="flex-direction:row;overflow:hidden;">
+
+    <!-- Left 50%: Command Palette -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;gap:14px;background:var(--canvas);border-right:1px solid var(--hairline);">
+      <div class="slide-eyebrow">Command Palette</div>
+      <div style="width:100%;max-width:340px;">
+        <!-- Frosted backdrop shell -->
+        <div style="background:rgba(17,17,17,0.22);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);padding:10px;border-radius:14px;">
+          <!-- Panel with scale-in loop -->
+          <div class="demo-scale-in" style="background:var(--surface);border-radius:12px;border:1px solid var(--hairline);overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.14);">
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--hairline);">
+              <span style="color:var(--ink-4);font-size:12px;">⌕</span>
+              <span style="font-size:13px;color:var(--ink-3);flex:1;">foootage</span>
+              <span style="font-size:11px;color:var(--ink-4);">✕</span>
+            </div>
+            <!-- Icon-tile empty state -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 16px;">
+              <div style="width:36px;height:36px;border-radius:10px;background:var(--surface-low);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink-4);">⌕</div>
+              <div style="text-align:center;">
+                <div style="font-size:13px;font-weight:500;color:var(--ink);">No results</div>
+                <div style="font-size:12px;color:var(--ink-3);margin-top:2px;">Nothing matched "foootage"</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Annotations -->
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;">
+          <div style="background:var(--surface-low);border:1px solid var(--hairline);border-radius:var(--r);padding:3px 8px;font-size:10px;color:var(--ink-3);font-family:ui-monospace,'SF Mono',monospace;">backdrop: blur(20px) saturate(1.6) · rgba(17,17,17,0.22)</div>
+          <div style="background:var(--accent-soft);border:1px solid rgba(0,122,255,.15);border-radius:var(--r);padding:3px 8px;font-size:10px;color:var(--action);font-family:ui-monospace,'SF Mono',monospace;">panel: .scale-in · 150ms ease · scale(0.92→1)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right 50%: Import Dialog -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;gap:14px;background:var(--canvas);">
+      <div class="slide-eyebrow">Import Dialog · .sheet</div>
+      <div style="width:100%;max-width:340px;">
+        <!-- Frosted backdrop shell -->
+        <div style="background:rgba(17,17,17,0.22);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);padding:10px;border-radius:14px;">
+          <!-- Sheet with spring-in loop -->
+          <div class="demo-sheet-spring" style="background:var(--surface);border-radius:12px;border:1px solid var(--hairline);overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.14);">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--hairline);">
+              <div style="font-size:14px;font-weight:600;">Review folders to import</div>
+              <span style="color:var(--ink-4);font-size:13px;">✕</span>
+            </div>
+            <div style="padding:10px 14px;display:flex;gap:18px;">
+              <div><div style="font-size:20px;font-weight:700;letter-spacing:-.02em;">14</div><div style="font-size:10px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin-top:1px;">To import</div></div>
+              <div style="opacity:.5"><div style="font-size:20px;font-weight:700;letter-spacing:-.02em;">3</div><div style="font-size:10px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin-top:1px;">Duplicates</div></div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:6px;padding:8px 12px;border-top:1px solid var(--hairline);background:var(--surface-low);">
+              <button class="btn btn-secondary btn-sm">Cancel</button>
+              <button class="btn btn-primary btn-sm">Import 14 folders</button>
+            </div>
+          </div>
+        </div>
+        <!-- Annotations -->
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px;">
+          <div style="background:var(--surface-low);border:1px solid var(--hairline);border-radius:var(--r);padding:3px 8px;font-size:10px;color:var(--ink-3);font-family:ui-monospace,'SF Mono',monospace;">backdrop: blur(20px) saturate(1.6) · rgba(17,17,17,0.22)</div>
+          <div style="background:var(--accent-soft);border:1px solid rgba(0,122,255,.15);border-radius:var(--r);padding:3px 8px;font-size:10px;color:var(--action);font-family:ui-monospace,'SF Mono',monospace;">.sheet: cubic-bezier(0.34,1.56,0.64,1) 200ms · scale(0.92→1)</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 11 — MOTION VOCABULARY
+═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s11">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
+      <div class="sb-section"><div class="sb-head">Reference</div>
+        <div class="sb-item"><span class="sb-icon">◈</span> Glass Layer</div>
+        <div class="sb-item active"><span class="sb-icon">◎</span> Motion</div>
+        <div class="sb-item"><span class="sb-icon">▦</span> Table Glass</div>
+      </div>
+    </div>
+  </div>
+  <div class="app-content" style="display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;">
+
+    <!-- 1: Breathe Rings -->
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:32px 24px;border-right:1px solid var(--hairline);">
+      <div class="slide-eyebrow">Breathe Rings</div>
+      <!-- Live animation -->
+      <div style="position:relative;width:80px;height:80px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <div class="pulse-ring" style="width:68px;height:68px;border:none;background:var(--action);border-radius:50%;"></div>
+        <div class="pulse-ring pulse-ring-2" style="width:68px;height:68px;border:none;background:var(--action);border-radius:50%;"></div>
+        <div style="width:14px;height:14px;border-radius:50%;background:var(--action);position:relative;z-index:1;"></div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:13px;font-weight:500;color:var(--ink);margin-bottom:4px;">Scan in progress</div>
+        <div style="font-size:11px;color:var(--ink-3);line-height:1.6;font-family:ui-monospace,'SF Mono',monospace;">2.4s ease-in-out infinite<br>ring-2: delay 0.8s</div>
+      </div>
+      <div style="background:var(--surface-low);border:1px solid var(--hairline);border-radius:var(--r);padding:5px 10px;font-size:10px;color:var(--ink-3);font-family:ui-monospace,'SF Mono',monospace;text-align:center;">.pulse-ring + .pulse-ring-2<br>ScanStatusPanel.tsx</div>
+    </div>
+
+    <!-- 2: Scale-In -->
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:32px 24px;border-right:1px solid var(--hairline);">
+      <div class="slide-eyebrow">Scale-In</div>
+      <!-- Live animation: mini palette -->
+      <div style="width:200px;flex-shrink:0;">
+        <div class="demo-scale-in" style="background:var(--surface);border:1px solid var(--hairline);border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.10);">
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--hairline);">
+            <span style="color:var(--ink-4);font-size:11px;">⌕</span>
+            <span style="font-size:12px;color:var(--ink-3);">Search…</span>
+          </div>
+          <div style="padding:5px 4px;">
+            <div style="height:26px;display:flex;align-items:center;gap:6px;padding:0 8px;border-radius:6px;background:var(--surface-low);margin:2px 0;font-size:11px;color:var(--ink-2);">📁 Register Drive</div>
+            <div style="height:26px;display:flex;align-items:center;gap:6px;padding:0 8px;border-radius:6px;margin:2px 0;font-size:11px;color:var(--ink-2);">📂 Import Folders</div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:13px;font-weight:500;color:var(--ink);margin-bottom:4px;">Palette open</div>
+        <div style="font-size:11px;color:var(--ink-3);line-height:1.6;font-family:ui-monospace,'SF Mono',monospace;">150ms ease<br>scale(0.92) → scale(1)</div>
+      </div>
+      <div style="background:var(--surface-low);border:1px solid var(--hairline);border-radius:var(--r);padding:5px 10px;font-size:10px;color:var(--ink-3);font-family:ui-monospace,'SF Mono',monospace;text-align:center;">.scale-in (globals.css)<br>CommandPalette.tsx</div>
+    </div>
+
+    <!-- 3: Sheet Spring -->
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:32px 24px;">
+      <div class="slide-eyebrow">Sheet Spring</div>
+      <!-- Live animation: mini dialog -->
+      <div style="width:200px;flex-shrink:0;">
+        <div class="demo-sheet-spring" style="background:var(--surface);border:1px solid var(--hairline);border-radius:10px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.12);">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--hairline);">
+            <span style="font-size:12px;font-weight:600;">Import folders</span>
+            <span style="color:var(--ink-4);font-size:11px;">✕</span>
+          </div>
+          <div style="padding:10px 12px;font-size:11px;color:var(--ink-3);">14 folders · 3.2 GB</div>
+          <div style="display:flex;justify-content:flex-end;gap:6px;padding:6px 10px;border-top:1px solid var(--hairline);background:var(--surface-low);">
+            <button class="btn btn-primary btn-xs">Import 14</button>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-size:13px;font-weight:500;color:var(--ink);margin-bottom:4px;">Modal open</div>
+        <div style="font-size:11px;color:var(--ink-3);line-height:1.6;font-family:ui-monospace,'SF Mono',monospace;">200ms · overshoot → settle<br>cubic-bezier spring</div>
+      </div>
+      <div style="background:var(--surface-low);border:1px solid var(--hairline);border-radius:var(--r);padding:5px 10px;font-size:10px;color:var(--ink-3);font-family:ui-monospace,'SF Mono',monospace;text-align:center;">cubic-bezier(0.34,1.56,0.64,1)<br>ImportFoldersDialog.tsx</div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SLIDE 12 — TABLE HEAD GLASS
+═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s12">
+<div class="app-layout">
+  <div class="app-sidebar">
+    <div class="sb-app-header">Catalog</div>
+    <div class="sb-nav">
+      <div class="sb-section"><div class="sb-head">Library</div>
+        <div class="sb-item active"><span class="sb-icon">◉</span> All Projects <span class="sb-badge">1,159</span></div>
+        <div class="sb-item"><span class="sb-icon">⊕</span> Duplicates</div>
+      </div>
+      <div class="sb-divider"></div>
+      <div class="sb-section"><div class="sb-head">Volumes</div>
+        <div class="sb-item"><span class="sb-dot" style="background:var(--drive-a)"></span> Footage Vol. 1</div>
+        <div class="sb-item"><span class="sb-dot" style="background:var(--drive-c)"></span> B-Roll Archive</div>
+        <div class="sb-item" style="opacity:.5"><span class="sb-dot" style="background:var(--drive-f)"></span> Backup SSD</div>
+      </div>
+    </div>
+  </div>
+  <div class="app-content" style="flex-direction:row;overflow:hidden;">
+
+      <!-- Table zone (left) -->
+      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;">
+        <!-- Glass sticky header -->
+        <div style="position:sticky;top:0;z-index:2;display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,180px) 72px 130px;align-items:center;height:32px;background:color-mix(in srgb,var(--canvas) 88%,transparent);backdrop-filter:blur(12px) saturate(1.4);-webkit-backdrop-filter:blur(12px) saturate(1.4);border-bottom:1px solid var(--hairline);flex-shrink:0;">
+          <div style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-4);padding:0 10px;">Project</div>
+          <div style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-4);padding:0 8px;">Drive</div>
+          <div style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-4);padding:0 8px;text-align:right;">Size</div>
+          <div style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-4);padding:0 8px;">Status</div>
+        </div>
+        <!-- Rows -->
+        <div style="overflow-y:auto;flex:1;">
+          <div class="table-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,180px) 72px 130px;">
+            <div style="display:flex;align-items:center;gap:7px;padding:0 10px;"><div style="width:22px;height:22px;border-radius:5px;background:var(--surface-low);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">📁</div><span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">CLIENT_SHOOT_2026</span></div>
+            <div style="display:flex;align-items:center;gap:5px;padding:0 8px;font-size:13px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--drive-a);flex-shrink:0;display:inline-block;"></span>Footage Vol. 1</div>
+            <div style="padding:0 8px;font-size:13px;text-align:right;color:var(--ink-3);font-variant-numeric:tabular-nums;">2.4 GB</div>
+            <div style="padding:0 8px;"><span class="chip chip-ok">Indexed</span></div>
+          </div>
+          <div class="table-row row-selected" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,180px) 72px 130px;">
+            <div style="display:flex;align-items:center;gap:7px;padding:0 10px;"><div style="width:22px;height:22px;border-radius:5px;background:var(--surface-low);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">📁</div><span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">BROLL_ICELAND_2025</span></div>
+            <div style="display:flex;align-items:center;gap:5px;padding:0 8px;font-size:13px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--drive-c);flex-shrink:0;display:inline-block;"></span>B-Roll Archive</div>
+            <div style="padding:0 8px;font-size:13px;text-align:right;color:var(--ink-3);font-variant-numeric:tabular-nums;">840 MB</div>
+            <div style="padding:0 8px;"><span class="chip chip-warn">Missing files</span></div>
+          </div>
+          <div class="table-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,180px) 72px 130px;">
+            <div style="display:flex;align-items:center;gap:7px;padding:0 10px;"><div style="width:22px;height:22px;border-radius:5px;background:var(--surface-low);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">📁</div><span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">WEDDING_JUNE_2025</span></div>
+            <div style="display:flex;align-items:center;gap:5px;padding:0 8px;font-size:13px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--drive-a);flex-shrink:0;display:inline-block;"></span>Footage Vol. 1</div>
+            <div style="padding:0 8px;font-size:13px;text-align:right;color:var(--ink-3);font-variant-numeric:tabular-nums;">5.1 GB</div>
+            <div style="padding:0 8px;"><span class="chip chip-danger">Duplicate</span></div>
+          </div>
+          <div class="table-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,180px) 72px 130px;">
+            <div style="display:flex;align-items:center;gap:7px;padding:0 10px;"><div style="width:22px;height:22px;border-radius:5px;background:var(--surface-low);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">📁</div><span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">CAMPAIGN_SS26</span></div>
+            <div style="display:flex;align-items:center;gap:5px;padding:0 8px;font-size:13px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--drive-e);flex-shrink:0;display:inline-block;"></span>B-Roll Archive</div>
+            <div style="padding:0 8px;font-size:13px;text-align:right;color:var(--ink-3);font-variant-numeric:tabular-nums;">1.8 GB</div>
+            <div style="padding:0 8px;"><span class="chip chip-ghost">Unscanned</span></div>
+          </div>
+          <div class="table-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,180px) 72px 130px;">
+            <div style="display:flex;align-items:center;gap:7px;padding:0 10px;"><div style="width:22px;height:22px;border-radius:5px;background:var(--surface-low);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">📁</div><span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">PORTRAIT_ZURICH_2026</span></div>
+            <div style="display:flex;align-items:center;gap:5px;padding:0 8px;font-size:13px;"><span style="width:7px;height:7px;border-radius:50%;background:var(--drive-f);flex-shrink:0;display:inline-block;"></span>Backup SSD</div>
+            <div style="padding:0 8px;font-size:13px;text-align:right;color:var(--ink-3);font-variant-numeric:tabular-nums;">3.3 GB</div>
+            <div style="padding:0 8px;"><span class="chip chip-ok">Indexed</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Annotation panel (right) -->
+      <div style="width:268px;flex-shrink:0;border-left:1px solid var(--hairline);padding:18px 16px;display:flex;flex-direction:column;gap:14px;overflow:hidden;background:var(--surface);">
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-4);margin-bottom:8px;">.table-head-glass</div>
+          <div class="code-callout">
+            <div><span class="code-key">position</span>: <span class="code-val">sticky</span>;</div>
+            <div><span class="code-key">top</span>: <span class="code-val">0</span>; <span class="code-key">z-index</span>: <span class="code-val">2</span>;</div>
+            <div><span class="code-key">backdrop-filter</span>:</div>
+            <div>&nbsp;&nbsp;<span class="code-val">blur(12px) saturate(1.4)</span>;</div>
+            <div><span class="code-key">background</span>:</div>
+            <div>&nbsp;&nbsp;<span class="code-val">color-mix(</span></div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-val">in srgb,</span></div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-val">var(--canvas) 88%,</span></div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-val">transparent</span></div>
+            <div>&nbsp;&nbsp;<span class="code-val">)</span>;</div>
+            <div><span class="code-key">border-bottom</span>:</div>
+            <div>&nbsp;&nbsp;<span class="code-val">1px solid var(--hairline)</span>;</div>
+          </div>
+        </div>
+        <div style="background:var(--accent-soft);border:1px solid rgba(0,122,255,.15);border-radius:var(--r-lg);padding:9px 11px;">
+          <div style="font-size:11px;font-weight:600;color:var(--action);margin-bottom:3px;">Why color-mix()</div>
+          <div style="font-size:12px;color:var(--ink-2);line-height:1.5;">Adapts to any surface token — light, dark, or tinted. No hardcoded rgba white.</div>
+        </div>
+        <div style="padding-top:10px;border-top:1px solid var(--hairline);font-size:12px;color:var(--ink-3);line-height:1.6;">
+          Columns align via shared<br>
+          <code style="font-size:11px;font-family:ui-monospace,'SF Mono',monospace;color:var(--ink-2);background:var(--surface-low);padding:1px 5px;border-radius:3px;">PROJECT_COL_TEMPLATE</code><br>
+          grid constant in ProjectList.tsx
+        </div>
+      </div>
+
+    </div>
 </div>
 </div>
 

@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalog — Story</title>
+<style>
+
+/* ── Tokens ─────────────────────────────────────────────────────────── */
+:root {
+  /* App — dark mode */
+  --cv:      #1c1c1e;
+  --sf:      #2a2a2c;
+  --sf-lo:   #232325;
+  --sf-in:   #333336;
+  --ink:     #f5f5f7;
+  --ink-2:   #d2d2d7;
+  --ink-3:   #a1a1a6;
+  --ink-4:   #6e6e73;
+  --hl:      rgba(255,255,255,.09);
+  --hl-s:    rgba(255,255,255,.14);
+  --act:     #0A84FF;
+  --act-s:   rgba(10,132,255,.18);
+  --ok:      #32D74B;
+  --warn:    #FF9F0A;
+  --danger:  #FF453A;
+  --glass-sb: rgba(30,30,32,.78);
+  --glass-tb: rgba(42,42,44,.88);
+  /* Drive identity */
+  --drv-a:  #8ea0b5;
+  --drv-b:  #a4aab5;
+  --drv-c:  #8aa69d;
+  --drv-d:  #b09a93;
+  --drv-e:  #9992ad;
+  /* Presentation shell */
+  --bg:     #060609;
+  --fg:     #f5f5f7;
+  --fg-dim: rgba(245,245,247,.42);
+  --ease:   cubic-bezier(.4,0,.2,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%; overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: var(--bg); color: var(--fg);
+  font-size: 13px; line-height: 1.4;
+}
+
+/* ── Slide shell ─────────────────────────────────────────────────────── */
+.slide {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 380ms var(--ease);
+}
+.slide.active { opacity: 1; pointer-events: all; }
+
+/* ── Wallpapers ──────────────────────────────────────────────────────── */
+.wp {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: 44px 44px 68px;
+}
+.wp-cover {
+  background:
+    radial-gradient(ellipse 55% 65% at 18% 28%, rgba(55,35,110,.6) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 55% at 82% 72%, rgba(0,55,130,.45) 0%, transparent 65%),
+    radial-gradient(ellipse 70% 50% at 50% 50%, rgba(20,20,40,.3) 0%, transparent 70%),
+    var(--bg);
+}
+.wp-app {
+  background:
+    radial-gradient(ellipse 70% 60% at 12% 18%, rgba(38,28,75,.55) 0%, transparent 58%),
+    radial-gradient(ellipse 55% 55% at 88% 82%, rgba(0,38,100,.4) 0%, transparent 60%),
+    #07070c;
+}
+
+/* ── macOS Window ────────────────────────────────────────────────────── */
+.window {
+  width:  min(1140px, calc(100vw - 88px));
+  height: min(700px,  calc(100vh - 112px));
+  border-radius: 12px; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--cv);
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,.07),
+    0 2px 6px  rgba(0,0,0,.45),
+    0 14px 44px rgba(0,0,0,.75),
+    0 44px 88px rgba(0,0,0,.5);
+  position: relative;
+}
+
+/* Titlebar */
+.titlebar {
+  height: 52px; flex-shrink: 0;
+  display: flex; align-items: center; padding: 0 14px 0 20px; gap: 10px;
+  background: var(--glass-tb);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-bottom: 1px solid var(--hl);
+  position: relative; z-index: 20;
+}
+.tls { display: flex; gap: 8px; }
+.tl { width: 12px; height: 12px; border-radius: 50%; }
+.tl-c { background: #EC6A5E; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.25); }
+.tl-m { background: #F5BE4F; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.2); }
+.tl-x { background: #60C354; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.2); }
+.win-title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 13px; font-weight: 590; color: var(--ink-2);
+  letter-spacing: -.012em; pointer-events: none; white-space: nowrap;
+}
+.tb-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+/* App body */
+.app-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.sidebar {
+  width: 216px; flex-shrink: 0;
+  display: flex; flex-direction: column; padding: 6px 0 12px;
+  background: var(--glass-sb);
+  backdrop-filter: blur(24px) saturate(1.5) brightness(.97);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5) brightness(.97);
+  border-right: 1px solid var(--hl);
+  overflow: hidden;
+}
+.sb-head {
+  font-size: 11px; font-weight: 600; color: var(--ink-4);
+  letter-spacing: .055em; text-transform: uppercase;
+  padding: 8px 16px 3px;
+}
+.sb-item {
+  height: 29px; display: flex; align-items: center; padding: 0 8px;
+  margin: 1px 8px; border-radius: 8px;
+  font-size: 13px; color: var(--ink-2); gap: 7px;
+  cursor: default; overflow: hidden;
+}
+.sb-item.active { color: var(--act); background: var(--act-s); font-weight: 500; }
+.sb-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.sb-badge {
+  margin-left: auto; background: rgba(255,255,255,.1); color: var(--ink-3);
+  font-size: 10px; font-weight: 600; padding: 0 5px; border-radius: 8px;
+  min-width: 18px; text-align: center;
+}
+.sb-divider { height: 1px; background: var(--hl); margin: 5px 16px; }
+
+/* ── Main content area ───────────────────────────────────────────────── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* Toolbar */
+.toolbar {
+  height: 40px; flex-shrink: 0;
+  display: flex; align-items: center; padding: 0 14px; gap: 8px;
+  background: color-mix(in srgb, var(--cv) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border-bottom: 1px solid var(--hl);
+}
+.spacer { flex: 1; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  height: 26px; padding: 0 10px; border-radius: 8px;
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  cursor: default; border: none; white-space: nowrap; flex-shrink: 0;
+  letter-spacing: -.01em;
+}
+.btn-primary   { background: var(--act); color: #fff; }
+.btn-secondary { background: rgba(255,255,255,.1); color: var(--ink-2); }
+.btn-ghost     { background: transparent; color: var(--act); }
+.btn-danger    { background: var(--danger); color: #fff; }
+.btn-sm  { height: 24px; font-size: 11px; padding: 0 9px; border-radius: 7px; }
+.btn-lg  { height: 34px; padding: 0 20px; border-radius: 999px; font-size: 13px; }
+.btn-icon { width: 28px; padding: 0; background: transparent; color: var(--ink-3); font-size: 14px; }
+
+/* ── Chips ───────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 7px;
+  border-radius: 999px; font-size: 11px; font-weight: 500;
+}
+.chip-blue  { background: var(--act-s); color: var(--act); }
+.chip-ok    { background: rgba(50,215,75,.14); color: var(--ok); }
+.chip-warn  { background: rgba(255,159,10,.14); color: var(--warn); }
+.chip-ghost { background: rgba(255,255,255,.1); color: var(--ink-3); }
+
+/* ── Search field ────────────────────────────────────────────────────── */
+.search-field {
+  display: flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 9px; border-radius: 8px;
+  background: rgba(255,255,255,.07); border: 1px solid var(--hl-s);
+  font-size: 12px; color: var(--ink-3);
+}
+
+/* ── Table ───────────────────────────────────────────────────────────── */
+.table-wrap { flex: 1; overflow-y: auto; overflow-x: hidden; }
+.table-head {
+  height: 30px; display: flex; align-items: center;
+  position: sticky; top: 0; z-index: 2;
+  background: color-mix(in srgb, var(--cv) 92%, transparent);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border-bottom: 1px solid var(--hl);
+}
+.table-head > div {
+  font-size: 11px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ink-4); padding: 0 8px;
+}
+.th-sort { color: var(--ink-2) !important; font-weight: 600 !important; }
+.row {
+  height: 42px; display: flex; align-items: center;
+  border-bottom: 1px solid rgba(255,255,255,.042);
+  position: relative;
+}
+.row:nth-child(even) { background: rgba(255,255,255,.016); }
+.row.selected { background: var(--act-s); }
+.row.selected::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 2px; background: var(--act);
+}
+.row > div { padding: 0 8px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-actions { display: flex; gap: 4px; margin-left: auto; padding-right: 8px; flex-shrink: 0; opacity: 0; }
+
+/* ── Drive cards ─────────────────────────────────────────────────────── */
+.cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; padding: 16px; flex: 1; align-content: start; }
+.drive-card {
+  background: var(--sf); border: 1px solid var(--hl);
+  border-radius: 12px; padding: 14px 14px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.drive-card.scanning { border-color: rgba(10,132,255,.28); }
+.drive-card.offline  { opacity: .48; }
+.card-top { display: flex; align-items: flex-start; gap: 10px; }
+.card-name { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -.012em; line-height: 1.2; }
+.card-sub  { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+.cap-bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+.cap-fill { height: 100%; border-radius: 999px; }
+.card-stats { display: flex; gap: 14px; font-size: 12px; color: var(--ink-3); }
+.sv { color: var(--ink-2); font-weight: 500; }
+
+/* Pulse ring — breathing "scan active" indicator */
+.pulse-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.pr {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--act); opacity: .35;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.pr2 { animation-delay: .8s; }
+.pr3 { animation-delay: 1.6s; }
+.pulse-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--act); z-index: 1; }
+@keyframes breathe {
+  0%,100% { transform: scale(1);    opacity: .35; }
+  50%      { transform: scale(1.9); opacity: 0;   }
+}
+
+/* ── Command Palette ─────────────────────────────────────────────────── */
+.palette-overlay {
+  position: absolute; inset: 0; z-index: 100;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 16%;
+  background: rgba(0,0,0,.52);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  border-radius: 12px;
+}
+.palette {
+  width: 580px; border-radius: 14px; overflow: hidden;
+  background: rgba(36,36,38,.96);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 24px 64px rgba(0,0,0,.75), 0 6px 20px rgba(0,0,0,.5);
+  animation: spring 230ms cubic-bezier(.34,1.56,.64,1);
+}
+.palette-in {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px; height: 52px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  font-size: 15px;
+}
+.palette-cursor::after { content: '|'; color: var(--act); animation: blink 1s step-end infinite; }
+@keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+.pal-sec-head {
+  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--ink-4); padding: 6px 14px 3px;
+}
+.p-res {
+  display: flex; align-items: center; gap: 10px;
+  height: 36px; padding: 0 12px;
+  border-radius: 8px; margin: 1px 6px;
+}
+.p-res.hi { background: var(--act); }
+.p-res.hi * { color: rgba(255,255,255,.95) !important; }
+.p-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+.p-pri  { font-size: 13px; color: var(--ink); font-weight: 500; }
+.p-sec  { font-size: 12px; color: var(--ink-3); margin-left: auto; flex-shrink: 0; }
+.pal-footer {
+  display: flex; align-items: center; gap: 14px;
+  padding: 7px 14px; border-top: 1px solid rgba(255,255,255,.07);
+  font-size: 11px; color: var(--ink-4);
+}
+kbd {
+  background: rgba(255,255,255,.09); border-radius: 3px;
+  padding: 1px 5px; font-family: inherit; font-size: 10px;
+}
+
+/* ── Sheet / Modal ───────────────────────────────────────────────────── */
+.sheet-backdrop {
+  position: absolute; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.52);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  border-radius: 12px;
+}
+@keyframes spring {
+  from { transform: scale(.88); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+.sheet {
+  background: var(--sf); border-radius: 12px;
+  border: 1px solid var(--hl-s);
+  box-shadow: 0 24px 56px rgba(0,0,0,.7), 0 4px 12px rgba(0,0,0,.4);
+  width: 540px; max-height: 80%;
+  display: flex; flex-direction: column;
+  animation: spring 230ms cubic-bezier(.34,1.56,.64,1);
+}
+.sheet-hdr {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--hl);
+  flex-shrink: 0;
+}
+.sheet-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+.sheet-sub   { font-size: 11px; color: var(--ink-4); font-family: ui-monospace,"SF Mono",monospace; margin-top: 3px; }
+.sheet-body  { padding: 14px 20px; overflow-y: auto; }
+.sheet-ftr   {
+  display: flex; align-items: center; padding: 12px 20px; gap: 8px;
+  border-top: 1px solid var(--hl);
+  background: rgba(0,0,0,.14); flex-shrink: 0;
+}
+.summary-row { display: flex; gap: 20px; margin-bottom: 12px; }
+.summary-row dt { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-4); }
+.summary-row dd { font-size: 20px; font-weight: 700; color: var(--ink); margin-top: 1px; }
+.folder-list { border: 1px solid var(--hl); border-radius: 8px; overflow: hidden; }
+.fl-section-head {
+  padding: 4px 12px; font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--ink-4);
+  background: rgba(0,0,0,.2); border-bottom: 1px solid var(--hl);
+}
+.fl-section-head + .fl-section-head { border-top: 1px solid var(--hl); }
+.folder-row {
+  display: flex; align-items: center; gap: 10px; height: 36px;
+  padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.folder-row:last-child { border: none; }
+.folder-row.dup { opacity: .38; }
+.f-name { flex: 1; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.f-path { font-size: 11px; color: var(--ink-4); font-family: ui-monospace,monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.f-tag  { font-size: 11px; color: var(--ink-4); flex-shrink: 0; }
+
+/* ── Drive detail header ─────────────────────────────────────────────── */
+.drive-hdr {
+  padding: 16px 18px 14px; border-bottom: 1px solid var(--hl); flex-shrink: 0;
+}
+.drive-name { font-size: 20px; font-weight: 700; letter-spacing: -.02em; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.drive-meta { font-size: 12px; color: var(--ink-3); display: flex; gap: 12px; margin-top: 6px; }
+.dm-sep     { color: var(--ink-4); }
+
+/* ── Inspector ───────────────────────────────────────────────────────── */
+.inspector {
+  width: 236px; flex-shrink: 0;
+  border-left: 1px solid var(--hl); display: flex; flex-direction: column;
+  overflow: hidden; background: var(--sf-lo);
+}
+.insp-sec { border-bottom: 1px solid var(--hl); padding: 12px 14px; }
+.insp-hd  { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-4); margin-bottom: 8px; }
+.insp-row { display: flex; align-items: center; justify-content: space-between; height: 27px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.insp-row:last-child { border: none; }
+.insp-lbl { color: var(--ink-3); }
+.insp-val { color: var(--ink-2); font-weight: 500; }
+
+/* ── Timeline ────────────────────────────────────────────────────────── */
+.scan-timeline { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.tl-item { display: flex; gap: 10px; }
+.tl-dot  { width: 7px; height: 7px; border-radius: 50%; background: var(--act); flex-shrink: 0; margin-top: 4px; }
+.tl-dot.dim { background: var(--ink-4); }
+.tl-name { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.tl-meta { font-size: 11px; color: var(--ink-4); margin-top: 2px; }
+
+/* ── Confirm alert ───────────────────────────────────────────────────── */
+.alert-overlay {
+  position: absolute; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.52);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  border-radius: 12px;
+}
+.alert {
+  background: var(--sf); border-radius: 12px;
+  border: 1px solid var(--hl-s);
+  box-shadow: 0 24px 56px rgba(0,0,0,.7);
+  width: 300px; padding: 22px 20px 16px;
+  animation: spring 230ms cubic-bezier(.34,1.56,.64,1);
+}
+.alert-icon  { font-size: 30px; margin-bottom: 12px; line-height: 1; }
+.alert-title { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.alert-body  { font-size: 13px; color: var(--ink-3); line-height: 1.5; margin-bottom: 6px; }
+.alert-consequence { font-size: 12px; color: rgba(255,100,80,.9); font-weight: 500; margin-bottom: 18px; }
+.alert-btns  { display: flex; justify-content: space-between; gap: 8px; }
+
+/* ── Scan progress banner ────────────────────────────────────────────── */
+.scan-banner {
+  background: rgba(10,132,255,.08); border-bottom: 1px solid rgba(10,132,255,.14);
+  height: 34px; display: flex; align-items: center; padding: 0 14px; gap: 8px;
+  font-size: 13px; color: var(--ink-2); flex-shrink: 0;
+}
+
+/* ── Scan status panel ───────────────────────────────────────────────── */
+.status-panel {
+  background: var(--sf-in); border-radius: 10px;
+  border: 1px solid var(--hl); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.status-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.status-meta { display: flex; gap: 14px; font-size: 12px; color: var(--ink-3); }
+.sm-val { color: var(--ink-2); font-weight: 500; }
+
+/* ── Slide nav ───────────────────────────────────────────────────────── */
+.nav-bar {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 1px;
+  background: rgba(8,8,14,.82);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px; padding: 5px 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  z-index: 9999;
+}
+.nav-bar button {
+  background: transparent; border: none; color: rgba(255,255,255,.48);
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  padding: 5px 13px; border-radius: 999px; cursor: pointer;
+  transition: all 140ms; letter-spacing: -.01em; white-space: nowrap;
+}
+.nav-bar button:hover { color: rgba(255,255,255,.82); background: rgba(255,255,255,.08); }
+.nav-bar button.cur  { background: rgba(255,255,255,.15); color: #fff; }
+.nav-sep { width: 1px; height: 14px; background: rgba(255,255,255,.1); margin: 0 1px; flex-shrink: 0; }
+
+/* ── Caption ─────────────────────────────────────────────────────────── */
+.caption {
+  position: absolute; left: 44px; bottom: 28px;
+  font-size: 11px; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; color: rgba(255,255,255,.25);
+}
+
+/* ── Cover ───────────────────────────────────────────────────────────── */
+.cover-lock {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 18px; text-align: center;
+}
+.cover-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .14em;
+  text-transform: uppercase; color: rgba(255,255,255,.28);
+}
+.cover-logo {
+  font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 80px; font-weight: 700; letter-spacing: -.04em; line-height: .9;
+  color: var(--fg);
+}
+.cover-tag {
+  font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 22px; font-weight: 300; color: var(--fg-dim);
+  letter-spacing: -.02em; max-width: 460px; line-height: 1.3;
+}
+.cover-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.11);
+  border-radius: 999px; padding: 6px 16px; margin-top: 8px;
+  font-size: 12px; color: rgba(255,255,255,.45); letter-spacing: .01em;
+}
+
+/* ── Close ───────────────────────────────────────────────────────────── */
+.close-lock { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.close-logo { font-size: 52px; font-weight: 700; letter-spacing: -.04em; color: rgba(255,255,255,.3); }
+.close-sub  { font-size: 13px; color: rgba(255,255,255,.2); }
+
+/* ── Mono ────────────────────────────────────────────────────────────── */
+.mono { font-family: ui-monospace,"SF Mono","Cascadia Code",Menlo,monospace; }
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     01 — COVER
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide active" id="s1">
+  <div class="wp wp-cover">
+    <div class="cover-lock">
+      <div class="cover-eyebrow">Drive Project Catalog</div>
+      <div class="cover-logo">Catalog</div>
+      <div class="cover-tag">Your footage. Every drive.<br>Always findable.</div>
+      <div class="cover-pill">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="6" stroke="rgba(255,255,255,.5)" stroke-width=".8"/><path d="M4.5 6.5h4M6.5 4.5v4" stroke="rgba(255,255,255,.5)" stroke-width=".9" stroke-linecap="round"/></svg>
+        macOS · 2026
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     02 — DRIVES
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div class="wp wp-app" style="flex-direction:column;gap:0;">
+    <div class="window">
+      <div class="titlebar">
+        <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+        <div class="win-title">Catalog</div>
+        <div class="tb-right">
+          <button class="btn btn-primary btn-sm">⊕  Import folders</button>
+        </div>
+      </div>
+      <div class="app-body">
+        <div class="sidebar">
+          <div class="sb-head" style="margin-top:4px;">Library</div>
+          <div class="sb-item active">📁 All projects <span class="sb-badge">247</span></div>
+          <div class="sb-item">🔧 Unmatched <span class="sb-badge">3</span></div>
+          <div class="sb-divider"></div>
+          <div class="sb-head">Drives</div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-a)"></span>RED KOMODO <span class="sb-badge">84</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-c)"></span>ARCHIVE 2024 <span class="sb-badge">63</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-d)"></span>RUSHES Q1 <span class="sb-badge">28</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-e)"></span>BACKUP LaCie <span class="sb-badge">71</span></div>
+          <div class="sb-item" style="opacity:.38;"><span class="sb-dot" style="background:var(--ink-4)"></span>ARCHIVE 2023</div>
+        </div>
+        <div class="main" style="background:var(--cv);">
+          <div class="toolbar">
+            <span style="font-size:16px;font-weight:700;letter-spacing:-.02em;color:var(--ink);">Drives</span>
+            <div class="spacer"></div>
+            <button class="btn btn-secondary btn-sm">↓ Last scanned</button>
+            <button class="btn btn-secondary btn-sm">⊞ Grid</button>
+          </div>
+          <div style="flex:1;overflow-y:auto;">
+            <div class="cards">
+
+              <!-- RED KOMODO — scanning -->
+              <div class="drive-card scanning">
+                <div class="card-top">
+                  <div class="pulse-wrap" style="margin-top:2px;">
+                    <div class="pr"></div><div class="pr pr2"></div><div class="pr pr3"></div>
+                    <div class="pulse-dot"></div>
+                  </div>
+                  <div>
+                    <div class="card-name">RED KOMODO</div>
+                    <div class="card-sub" style="color:var(--act);font-size:11px;">Scanning… 84 of 91 folders</div>
+                  </div>
+                </div>
+                <div class="cap-bar"><div class="cap-fill" style="width:72%;background:var(--drv-a);"></div></div>
+                <div class="card-stats">
+                  <span><span class="sv">5.4 TB</span> used</span>
+                  <span><span class="sv">7.6 TB</span> total</span>
+                  <span><span class="sv">84</span> projects</span>
+                </div>
+              </div>
+
+              <!-- ARCHIVE 2024 — online -->
+              <div class="drive-card">
+                <div class="card-top">
+                  <div class="sb-dot" style="background:var(--ok);margin-top:3px;flex-shrink:0;"></div>
+                  <div>
+                    <div class="card-name">ARCHIVE 2024</div>
+                    <div class="card-sub">Scanned 2 h ago</div>
+                  </div>
+                </div>
+                <div class="cap-bar"><div class="cap-fill" style="width:58%;background:var(--drv-c);"></div></div>
+                <div class="card-stats">
+                  <span><span class="sv">3.8 TB</span> used</span>
+                  <span><span class="sv">6 TB</span> total</span>
+                  <span><span class="sv">63</span> projects</span>
+                </div>
+              </div>
+
+              <!-- ARCHIVE 2023 — offline -->
+              <div class="drive-card offline">
+                <div class="card-top">
+                  <div class="sb-dot" style="background:var(--ink-4);margin-top:3px;flex-shrink:0;"></div>
+                  <div>
+                    <div class="card-name">ARCHIVE 2023</div>
+                    <div class="card-sub">Offline · Last seen 14 days ago</div>
+                  </div>
+                </div>
+                <div class="cap-bar"><div class="cap-fill" style="width:87%;background:var(--drv-b);"></div></div>
+                <div class="card-stats">
+                  <span><span class="sv">8.7 TB</span> used</span>
+                  <span><span class="sv">10 TB</span> total</span>
+                  <span><span class="sv">112</span> projects</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">01 — Drives</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     03 — IMPORT
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="wp wp-app" style="flex-direction:column;gap:0;">
+    <div class="window" style="position:relative;">
+      <div class="titlebar">
+        <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+        <div class="win-title">Catalog</div>
+      </div>
+      <div class="app-body" style="position:relative;">
+        <!-- blurred background -->
+        <div class="sidebar" style="filter:blur(2px);opacity:.3;pointer-events:none;"></div>
+        <div class="main" style="background:var(--cv);filter:blur(2px);opacity:.3;pointer-events:none;"></div>
+        <!-- import sheet -->
+        <div class="sheet-backdrop">
+          <div class="sheet">
+            <div class="sheet-hdr">
+              <div>
+                <div class="sheet-title">Review folders to import</div>
+                <div class="sheet-sub mono">/Volumes/RED KOMODO/Projects</div>
+              </div>
+              <button class="btn btn-icon" style="color:var(--ink-4);font-size:16px;">✕</button>
+            </div>
+            <div class="sheet-body">
+              <dl class="summary-row">
+                <div><dt>To import</dt><dd>12</dd></div>
+                <div><dt>Already in catalog</dt><dd style="color:var(--ink-3);">3</dd></div>
+              </dl>
+              <div class="folder-list">
+                <div class="fl-section-head">To import — 12</div>
+                <div class="folder-row">
+                  <span style="font-size:13px;">📁</span>
+                  <div style="min-width:0;">
+                    <div class="f-name">KOMODO_240315_GSTAAD</div>
+                    <div class="f-path">/Volumes/RED KOMODO/Projects/KOMODO_240315_GSTAAD</div>
+                  </div>
+                </div>
+                <div class="folder-row">
+                  <span style="font-size:13px;">📁</span>
+                  <div style="min-width:0;">
+                    <div class="f-name">KOMODO_240318_VERBIER</div>
+                    <div class="f-path">/Volumes/RED KOMODO/Projects/KOMODO_240318_VERBIER</div>
+                  </div>
+                </div>
+                <div class="folder-row">
+                  <span style="font-size:13px;">📁</span>
+                  <div style="min-width:0;">
+                    <div class="f-name">BMCC_240401_CHAMONIX</div>
+                    <div class="f-path">/Volumes/RED KOMODO/Projects/BMCC_240401_CHAMONIX</div>
+                  </div>
+                </div>
+                <div class="fl-section-head">Already in catalog — 3</div>
+                <div class="folder-row dup">
+                  <span style="font-size:13px;">📁</span>
+                  <div class="f-name">KOMODO_231210_ZERMATT</div>
+                  <span class="f-tag">In catalog</span>
+                </div>
+                <div class="folder-row dup">
+                  <span style="font-size:13px;">📁</span>
+                  <div class="f-name">KOMODO_231215_SAAS-FEE</div>
+                  <span class="f-tag">In catalog</span>
+                </div>
+              </div>
+            </div>
+            <div class="sheet-ftr">
+              <button class="btn btn-secondary btn-sm">Pick different folder</button>
+              <div class="spacer"></div>
+              <button class="btn btn-secondary btn-sm">Cancel</button>
+              <button class="btn btn-primary btn-lg">Import 12 folders</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">02 — Import</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     04 — PROJECTS (search result)
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="wp wp-app" style="flex-direction:column;gap:0;">
+    <div class="window">
+      <div class="titlebar">
+        <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+        <div class="win-title">Catalog</div>
+        <div class="tb-right">
+          <div class="search-field">
+            <span style="font-size:12px;color:var(--ink-4);">⌘K</span>
+            <span style="width:1px;height:14px;background:var(--hl);"></span>
+            <span>🔍</span>
+            <span style="color:var(--ink-2);font-weight:500;">GSTAAD</span>
+          </div>
+        </div>
+      </div>
+      <div class="app-body">
+        <div class="sidebar">
+          <div class="sb-head" style="margin-top:4px;">Library</div>
+          <div class="sb-item active">📁 All projects <span class="sb-badge">247</span></div>
+          <div class="sb-item">🔧 Unmatched <span class="sb-badge">3</span></div>
+          <div class="sb-divider"></div>
+          <div class="sb-head">Drives</div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-a)"></span>RED KOMODO <span class="sb-badge">84</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-c)"></span>ARCHIVE 2024 <span class="sb-badge">63</span></div>
+          <div class="sb-item" style="opacity:.38;"><span class="sb-dot" style="background:var(--ink-4)"></span>ARCHIVE 2023</div>
+        </div>
+        <div class="main">
+          <div class="toolbar">
+            <span style="font-size:13px;color:var(--ink-3);">
+              <span style="color:var(--ink);font-weight:600;">4</span> results for <span style="color:var(--ink);font-weight:500;">"GSTAAD"</span>
+            </span>
+            <div class="spacer"></div>
+            <div class="chip chip-blue">Camera ×</div>
+            <button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--ink-3);">Clear</button>
+          </div>
+          <div class="table-wrap">
+            <div class="table-head">
+              <div style="width:38%;" class="th-sort">Name ↑</div>
+              <div style="width:15%;">Camera</div>
+              <div style="width:18%;">Drive</div>
+              <div style="width:13%;">Size</div>
+              <div style="width:16%;">Last scan</div>
+            </div>
+            <div class="row selected">
+              <div style="width:38%;font-weight:600;color:var(--ink);">KOMODO_240315_GSTAAD</div>
+              <div style="width:15%;"><span class="chip chip-ghost" style="font-size:11px;">KOMODO</span></div>
+              <div style="width:18%;color:var(--ink-3);">RED KOMODO</div>
+              <div style="width:13%;color:var(--ink-3);">184 GB</div>
+              <div style="width:16%;color:var(--ink-3);">2 h ago</div>
+            </div>
+            <div class="row">
+              <div style="width:38%;font-weight:500;color:var(--ink);">KOMODO_231210_GSTAAD_BTS</div>
+              <div style="width:15%;"><span class="chip chip-ghost" style="font-size:11px;">KOMODO</span></div>
+              <div style="width:18%;color:var(--ink-3);">ARCHIVE 2024</div>
+              <div style="width:13%;color:var(--ink-3);">76 GB</div>
+              <div style="width:16%;color:var(--ink-3);">Yesterday</div>
+            </div>
+            <div class="row">
+              <div style="width:38%;font-weight:500;color:var(--ink);">SONY_240316_GSTAAD_VILLAGE</div>
+              <div style="width:15%;"><span class="chip chip-ghost" style="font-size:11px;">FX3</span></div>
+              <div style="width:18%;color:var(--ink-3);">ARCHIVE 2024</div>
+              <div style="width:13%;color:var(--ink-3);">52 GB</div>
+              <div style="width:16%;color:var(--ink-3);">3 days ago</div>
+            </div>
+            <div class="row">
+              <div style="width:38%;font-weight:500;color:var(--ink);">BMCC_240101_GSTAAD_WINTER</div>
+              <div style="width:15%;"><span class="chip chip-ghost" style="font-size:11px;">BMCC</span></div>
+              <div style="width:18%;color:var(--ink-3);">ARCHIVE 2023</div>
+              <div style="width:13%;"><span class="chip chip-warn" style="font-size:10px;">Offline</span></div>
+              <div style="width:16%;color:var(--ink-3);">14 days ago</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">03 — Catalog</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     05 — COMMAND PALETTE
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s5">
+  <div class="wp wp-app" style="flex-direction:column;gap:0;">
+    <div class="window" style="position:relative;">
+      <div class="titlebar">
+        <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+        <div class="win-title">Catalog</div>
+      </div>
+      <div class="app-body" style="position:relative;filter:blur(3px);opacity:.22;pointer-events:none;"></div>
+      <div class="palette-overlay">
+        <div class="palette">
+          <div class="palette-in">
+            <span style="font-size:16px;color:var(--ink-4);">⌘</span>
+            <span style="font-size:15px;font-weight:500;color:var(--ink);">VERBIER<span class="palette-cursor"></span></span>
+          </div>
+          <div style="padding:4px 0 2px;">
+            <div class="pal-sec-head">Projects</div>
+            <div class="p-res hi">
+              <span class="p-icon">📁</span>
+              <span class="p-pri">KOMODO_240318_VERBIER</span>
+              <span class="p-sec">RED KOMODO · 184 GB</span>
+            </div>
+            <div class="p-res">
+              <span class="p-icon">📁</span>
+              <span class="p-pri">KOMODO_231205_VERBIER_BTS</span>
+              <span class="p-sec">ARCHIVE 2024 · 52 GB</span>
+            </div>
+            <div class="p-res">
+              <span class="p-icon">📁</span>
+              <span class="p-pri">BMCC_240102_VERBIER_AERIAL</span>
+              <span class="p-sec" style="color:var(--warn);">Offline · ARCHIVE 2023</span>
+            </div>
+          </div>
+          <div style="border-top:1px solid rgba(255,255,255,.07);padding:4px 0 2px;">
+            <div class="pal-sec-head">Drives</div>
+            <div class="p-res">
+              <span class="p-icon">💾</span>
+              <span class="p-pri">RED KOMODO</span>
+              <span class="p-sec">Scan</span>
+            </div>
+          </div>
+          <div class="pal-footer">
+            <span><kbd>↑↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">04 — ⌘K Search</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     06 — PROJECT DETAIL
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s6">
+  <div class="wp wp-app" style="flex-direction:column;gap:0;">
+    <div class="window">
+      <div class="titlebar">
+        <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+        <div class="win-title">KOMODO_240315_GSTAAD — Catalog</div>
+        <div class="tb-right">
+          <button class="btn btn-ghost btn-sm" style="color:var(--ink-3);">← Back</button>
+        </div>
+      </div>
+      <div class="app-body">
+        <div class="main">
+          <!-- project header -->
+          <div class="drive-hdr">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+              <div>
+                <div class="drive-name">KOMODO_240315_GSTAAD</div>
+                <div class="drive-meta">
+                  <span>Camera: <span class="sm-val">KOMODO</span></span>
+                  <span class="dm-sep">·</span>
+                  <span>Drive: <span class="sm-val">RED KOMODO</span></span>
+                  <span class="dm-sep">·</span>
+                  <span>Size: <span class="sm-val">184.3 GB</span></span>
+                  <span class="dm-sep">·</span>
+                  <span>Files: <span class="sm-val">2,847</span></span>
+                </div>
+                <div class="mono" style="font-size:11px;color:var(--ink-4);margin-top:5px;">/Volumes/RED KOMODO/Projects/KOMODO_240315_GSTAAD</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0;margin-top:2px;">
+                <button class="btn btn-secondary btn-sm">Show in Finder</button>
+                <button class="btn btn-primary btn-sm">Scan now</button>
+              </div>
+            </div>
+          </div>
+          <!-- scan history -->
+          <div style="flex:1;overflow-y:auto;padding:16px;">
+            <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-4);margin-bottom:12px;">Scan History</div>
+            <div style="position:relative;padding-left:16px;">
+              <div style="position:absolute;left:3px;top:6px;bottom:4px;width:1px;background:var(--hl);"></div>
+              <div class="scan-timeline">
+                <div class="tl-item">
+                  <div class="tl-dot"></div>
+                  <div><div class="tl-name">RED KOMODO</div><div class="tl-meta">2 h ago · 184.3 GB · KOMODO</div></div>
+                </div>
+                <div class="tl-item">
+                  <div class="tl-dot"></div>
+                  <div><div class="tl-name">RED KOMODO</div><div class="tl-meta">2 days ago · 184.3 GB · KOMODO</div></div>
+                </div>
+                <div class="tl-item">
+                  <div class="tl-dot dim"></div>
+                  <div><div class="tl-name" style="color:var(--ink-3);">BACKUP LaCie</div><div class="tl-meta">8 days ago · 184.3 GB · KOMODO</div></div>
+                </div>
+                <div class="tl-item">
+                  <div class="tl-dot dim"></div>
+                  <div><div class="tl-name" style="color:var(--ink-3);">BACKUP LaCie</div><div class="tl-meta">22 days ago · 184.3 GB · KOMODO</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- inspector -->
+        <div class="inspector">
+          <div class="insp-sec">
+            <div class="insp-hd">Project</div>
+            <div class="insp-row"><span class="insp-lbl">Camera</span><span class="insp-val">KOMODO</span></div>
+            <div class="insp-row"><span class="insp-lbl">Size</span><span class="insp-val">184.3 GB</span></div>
+            <div class="insp-row"><span class="insp-lbl">Files</span><span class="insp-val">2,847</span></div>
+            <div class="insp-row"><span class="insp-lbl">Folder date</span><span class="insp-val">Mar 15, 2024</span></div>
+          </div>
+          <div class="insp-sec">
+            <div class="insp-hd">Drive</div>
+            <div class="insp-row"><span class="insp-lbl">Name</span><span class="insp-val">RED KOMODO</span></div>
+            <div class="insp-row"><span class="insp-lbl">Status</span><span class="insp-val" style="color:var(--ok);">Online</span></div>
+            <div class="insp-row"><span class="insp-lbl">Free space</span><span class="insp-val">2.2 TB</span></div>
+          </div>
+          <div class="insp-sec">
+            <div class="insp-hd">Also found on</div>
+            <div style="font-size:12px;color:var(--ink-3);padding:4px 0 6px;">2 drives have this project</div>
+            <div class="insp-row"><span class="insp-lbl">BACKUP LaCie</span><span class="insp-val" style="font-size:11px;color:var(--ink-3);">8 days ago</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">05 — Project Detail</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     07 — CONFIRM DELETE (destructive modal)
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s7">
+  <div class="wp wp-app" style="flex-direction:column;gap:0;">
+    <div class="window" style="position:relative;">
+      <div class="titlebar">
+        <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+        <div class="win-title">Catalog</div>
+      </div>
+      <div class="app-body" style="position:relative;filter:blur(3px);opacity:.25;pointer-events:none;"></div>
+      <div class="alert-overlay">
+        <div class="alert">
+          <div class="alert-icon">🗑</div>
+          <div class="alert-title">Remove KOMODO_240315_GSTAAD?</div>
+          <div class="alert-body">This project will be removed from Catalog. The original folder on your drive is not affected.</div>
+          <div class="alert-consequence">184.3 GB · RED KOMODO · 2,847 files</div>
+          <div class="alert-btns">
+            <button class="btn btn-secondary btn-sm" style="height:28px;font-size:12px;padding:0 12px;border-radius:8px;">Cancel</button>
+            <button class="btn btn-danger btn-sm" style="height:28px;font-size:12px;padding:0 12px;border-radius:8px;">Remove from Catalog</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">06 — Safe by default</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     08 — CLOSE
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="slide" id="s8">
+  <div class="wp wp-cover" style="height:100%;">
+    <div class="close-lock">
+      <div class="close-logo">Catalog</div>
+      <div class="close-sub">macOS · 2026 · v1</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Navigation ─────────────────────────────────────────────────────── -->
+<nav class="nav-bar" id="nav"></nav>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const nav    = document.getElementById('nav');
+const labels = ['Cover','Drives','Import','Catalog','⌘K','Detail','Dialogs','End'];
+let cur = 0;
+
+function go(n) {
+  if (n < 0 || n >= slides.length) return;
+  slides[cur].classList.remove('active');
+  cur = n;
+  slides[cur].classList.add('active');
+  buildNav();
+}
+
+function buildNav() {
+  nav.innerHTML = '';
+  labels.forEach((lbl, i) => {
+    if (i > 0) {
+      const s = document.createElement('div');
+      s.className = 'nav-sep';
+      nav.appendChild(s);
+    }
+    const b = document.createElement('button');
+    b.textContent = lbl;
+    if (i === cur) b.className = 'cur';
+    b.onclick = () => go(i);
+    nav.appendChild(b);
+  });
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); go(cur + 1); }
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); go(cur - 1); }
+});
+
+buildNav();
+</script>
+</body>
+</html>
