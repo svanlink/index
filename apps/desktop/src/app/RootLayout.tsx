@@ -5,6 +5,8 @@ import { getDisplayProject } from "@drive-project-catalog/domain";
 import { useCatalogStore } from "./providers";
 import { useScanWorkflow } from "./scanWorkflow";
 import { useShortcut } from "./useShortcut";
+import { CommandPalette } from "./commandPalette/CommandPalette";
+import { CommandPaletteProvider } from "./commandPalette/CommandPaletteContext";
 
 const sectionLabels: Record<string, string> = {
   "/projects": "Projects",
@@ -12,6 +14,15 @@ const sectionLabels: Record<string, string> = {
 };
 
 export function RootLayout() {
+  return (
+    <CommandPaletteProvider>
+      <RootLayoutShell />
+      <CommandPalette />
+    </CommandPaletteProvider>
+  );
+}
+
+function RootLayoutShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
