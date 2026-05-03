@@ -327,7 +327,7 @@ export function ProjectDetailPage() {
               >
                 Current drive
               </dt>
-              <dd className="mt-0.5 flex items-center gap-1.5 tnum truncate text-[13.5px] font-medium" style={{ margin: 0 }}>
+              <dd className="mt-0.5 flex items-center gap-1.5 tnum truncate text-[13px] font-medium" style={{ margin: 0 }}>
                 {currentProject.currentDriveId ? (
                   <>
                     <span
@@ -425,7 +425,7 @@ export function ProjectDetailPage() {
                       <p className="truncate text-[13px] font-medium" style={{ color: "var(--ink)" }}>
                         {getProjectName(relatedProject)}
                       </p>
-                      <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+                      <p className="mt-0.5 text-[12px]" style={{ color: "var(--ink-3)" }}>
                         {formatParsedDate(relatedProject.correctedDate ?? relatedProject.parsedDate)} · {relatedProject.sizeBytes !== null ? formatBytes(relatedProject.sizeBytes) : "Unknown"}
                       </p>
                     </div>
@@ -452,7 +452,7 @@ export function ProjectDetailPage() {
                   <input
                     value={metadataForm.correctedDate}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedDate: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
                     placeholder={currentProject.parsedDate ? formatParsedDate(currentProject.parsedDate) : "YYYY-MM-DD, e.g. 2024-03-12"}
                     maxLength={10}
                   />
@@ -461,7 +461,7 @@ export function ProjectDetailPage() {
                   <input
                     value={metadataForm.correctedClient}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedClient: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
                     placeholder={currentProject.parsedClient ?? (currentProject.folderType === "personal_folder" ? "e.g. Sony" : "Leave blank to keep empty")}
                   />
                 </FormField>
@@ -469,7 +469,7 @@ export function ProjectDetailPage() {
                   <input
                     value={metadataForm.correctedProject}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedProject: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
                     placeholder={currentProject.parsedProject ?? (currentProject.folderType === "personal_folder" ? "Leave blank to use folder name" : "Leave blank to keep empty")}
                   />
                 </FormField>
@@ -477,7 +477,7 @@ export function ProjectDetailPage() {
                   <select
                     value={metadataForm.category}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, category: event.target.value as Category | "" }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
                   >
                     <option value="">Uncategorized</option>
                     {categoryValues.map((category) => (
@@ -492,13 +492,13 @@ export function ProjectDetailPage() {
                     <select
                       value={metadataForm.folderType}
                       onChange={(event) => setMetadataForm((current) => ({ ...current, folderType: event.target.value as FolderType | "" }))}
-                      className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                      className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
                     >
                       <option value="personal_folder">Personal folder (keep as-is)</option>
                       <option value="personal_project">Personal project</option>
                       <option value="client">Client project</option>
                     </select>
-                    <p className="mt-1.5 text-[11.5px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                    <p className="mt-1.5 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
                       {metadataForm.folderType === "personal_folder" || metadataForm.folderType === ""
                         ? "The folder on disk is never renamed. Changing this is permanent and cannot be reversed through this form."
                         : metadataForm.folderType === "client"
@@ -510,9 +510,9 @@ export function ProjectDetailPage() {
                 {/* C2: Unsaved indicator */}
                 <div className="flex items-center justify-end gap-2 pt-1">
                   {isFormDirty && !metadataMutation.isPending ? (
-                    <span className="chip chip-warn text-[11px]">Unsaved changes</span>
+                    <span className="chip chip-warn text-[12px]">Unsaved changes</span>
                   ) : metadataMutation.isConfirmed && !isFormDirty ? (
-                    <span className="text-[11.5px] tnum" style={{ color: "var(--ink-3)" }}>
+                    <span className="text-[12px] tnum" style={{ color: "var(--ink-3)" }}>
                       Saved ✓
                     </span>
                   ) : null}
@@ -573,14 +573,21 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 function ActivityTimeline({ events }: { events: ProjectScanEvent[] }) {
   return (
     <div className="relative pl-4">
+      {/* Decorative vertical rule — hidden from AT */}
       <div
+        aria-hidden="true"
         className="absolute bottom-1 left-[3px] top-[6px] w-px"
         style={{ background: "var(--hairline)" }}
       />
-      <div className="space-y-4">
+      <ol
+        className="m-0 list-none space-y-4 p-0"
+        aria-label={`Scan activity, ${events.length} event${events.length === 1 ? "" : "s"}`}
+      >
         {events.map((event) => (
-          <div key={event.id} className="relative">
+          <li key={event.id} className="relative">
+            {/* Decorative timeline dot — hidden from AT */}
             <span
+              aria-hidden="true"
               className="absolute -left-4 top-[5px] h-[7px] w-[7px] rounded-full"
               style={{
                 background:
@@ -592,22 +599,27 @@ function ActivityTimeline({ events }: { events: ProjectScanEvent[] }) {
               <p className="text-[13px] font-medium" style={{ color: "var(--ink)" }}>
                 {event.observedFolderName}
               </p>
-              <span className="text-[11px] tnum" style={{ color: "var(--ink-4)" }}>
+              <time
+                dateTime={event.observedAt}
+                className="tnum text-[12px]"
+                style={{ color: "var(--ink-4)" }}
+              >
                 {formatDate(event.observedAt)}
-              </span>
+              </time>
             </div>
-            <div className="mt-1 flex flex-wrap gap-2 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+            <div className="mt-1 flex flex-wrap gap-2 text-[12px]" style={{ color: "var(--ink-3)" }}>
               <span>{event.observedDriveName}</span>
               {event.observedFolderType != null ? (
                 <>
-                  <span style={{ color: "var(--ink-4)" }}>·</span>
+                  {/* Decorative separator — hidden from AT */}
+                  <span aria-hidden="true" style={{ color: "var(--ink-4)" }}>·</span>
                   <span>{getFolderTypeLabel(event.observedFolderType)}</span>
                 </>
               ) : null}
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+      </ol>
     </div>
   );
 }

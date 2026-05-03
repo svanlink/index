@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Icon } from "@drive-project-catalog/ui";
+import { useFocusTrap } from "../app/useFocusTrap";
 
 // ---------------------------------------------------------------------------
 // SectionCard — DESIGN.md §6
@@ -250,23 +251,28 @@ export function ConfirmModal({
   isLoading = false
 }: ConfirmModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Focus containment: Tab cycles within the dialog; focus restores on unmount.
+  // useFocusTrap focuses the first focusable child on mount — which is the
+  // Cancel button because we list it first in the DOM.
+  useFocusTrap(dialogRef);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-      if (e.key === "Enter" && !isLoading) {
+      // Escape dismisses. Enter is intentionally NOT wired to onConfirm here:
+      // this is a destructive modal, so the user must explicitly click/activate
+      // the Confirm button. Native button keyboard activation (Enter/Space on
+      // the focused button) already works without interception.
+      if (e.key === "Escape") {
         e.preventDefault();
-        onConfirm();
+        onCancel();
       }
     }
     const dialog = dialogRef.current;
     dialog?.addEventListener("keydown", handleKeyDown);
     return () => dialog?.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel, onConfirm, isLoading]);
-
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
+  }, [onCancel]);
 
   return (
     <div
@@ -278,9 +284,14 @@ export function ConfirmModal({
         ref={dialogRef}
         className="w-full max-w-[480px] rounded-[12px]"
         onClick={(e) => e.stopPropagation()}
-        role="dialog"
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-modal-title"
+        aria-describedby={
+          consequence
+            ? "confirm-modal-desc confirm-modal-consequence"
+            : "confirm-modal-desc"
+        }
         tabIndex={-1}
         style={{
           background: "var(--graphite)",
@@ -303,6 +314,7 @@ export function ConfirmModal({
           {title}
         </h3>
         <p
+          id="confirm-modal-desc"
           style={{
             margin: "14px 0 0",
             fontSize: 15,
@@ -314,6 +326,7 @@ export function ConfirmModal({
         </p>
         {consequence ? (
           <p
+            id="confirm-modal-consequence"
             style={{
               margin: "10px 0 0",
               fontSize: 13,
@@ -325,7 +338,10 @@ export function ConfirmModal({
           </p>
         ) : null}
         <div className="mt-8 flex justify-end gap-2">
+          {/* Cancel listed first in DOM so useFocusTrap focuses it on open —
+              safer default for destructive confirmations. */}
           <button
+            ref={cancelButtonRef}
             type="button"
             className="btn"
             onClick={onCancel}
@@ -563,7 +579,7 @@ export function MetaField({
         {label}
       </dt>
       <dd
-        className={`tnum truncate text-[13.5px] font-medium${mono ? " mono" : ""}`}
+        className={`tnum truncate text-[13px] font-medium${mono ? " mono" : ""}`}
         style={{ color: valueColor, margin: 0 }}
       >
         {value}

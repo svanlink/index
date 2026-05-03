@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@drive-project-catalog/ui";
 import type { VolumeFolderEntry } from "../app/volumeImportCommands";
+import { useFocusTrap } from "../app/useFocusTrap";
 
 // ---------------------------------------------------------------------------
 // ImportFoldersDialog
@@ -89,13 +90,20 @@ export function ImportFoldersDialog({
   const canConfirm = !isImporting && newFolders.length > 0;
   const showSearch = folders.length >= SEARCH_THRESHOLD;
 
+  // Focus containment: Tab cycles within the dialog; focus restores on unmount.
+  useFocusTrap(dialogRef);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
         onCancel();
+        return;
       }
-      if (event.key === "Enter" && canConfirm) {
+      // Enter only auto-confirms when the dialog container itself is focused
+      // (i.e. no descendant button/input holds focus). This prevents Enter on
+      // the Cancel button from accidentally triggering the import.
+      if (event.key === "Enter" && canConfirm && event.target === dialogRef.current) {
         event.preventDefault();
         onConfirm();
       }
@@ -105,23 +113,20 @@ export function ImportFoldersDialog({
     return () => dialog?.removeEventListener("keydown", handleKeyDown);
   }, [canConfirm, onCancel, onConfirm]);
 
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(17, 17, 17, 0.32)", backdropFilter: "blur(4px)" }}
+      style={{ background: "rgba(17, 17, 17, 0.22)", backdropFilter: "blur(20px) saturate(1.6)" }}
       onClick={onCancel}
     >
       <div
         ref={dialogRef}
-        className="app-panel w-full max-w-[640px] overflow-hidden p-0"
+        className="app-panel sheet w-full max-w-[640px] overflow-hidden p-0"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-folders-dialog-title"
+        aria-describedby="import-folders-dialog-source"
         tabIndex={-1}
       >
         {/* D3: Header — title + source path + close */}
@@ -136,6 +141,7 @@ export function ImportFoldersDialog({
                 Review folders to import
               </h3>
               <p
+                id="import-folders-dialog-source"
                 className="mono mt-1.5 truncate text-[12px]"
                 style={{ color: "var(--ink-3)" }}
                 title={sourcePath}
@@ -179,7 +185,7 @@ export function ImportFoldersDialog({
 
           {folders.length === 0 ? (
             <div
-              className="mt-4 rounded-[12px] px-4 py-4 text-[12.5px] leading-[1.5]"
+              className="mt-4 rounded-[12px] px-4 py-4 text-[12px] leading-[1.5]"
               style={{ background: "var(--surface-inset)", color: "var(--ink-3)" }}
             >
               No folders were found at this location. Hidden files, system
@@ -191,6 +197,9 @@ export function ImportFoldersDialog({
             <div
               className="mt-4 max-h-[360px] overflow-y-auto rounded-[12px] border"
               style={{ borderColor: "var(--hairline)" }}
+              role="region"
+              aria-label="Folders to import"
+              tabIndex={0}
             >
               {/* New folders section */}
               {filteredNew.length > 0 ? (
@@ -210,7 +219,7 @@ export function ImportFoldersDialog({
                   </ul>
                 </>
               ) : searchTrimmed && newFolders.length > 0 ? (
-                <p className="px-4 py-3 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+                <p className="px-4 py-3 text-[12px]" style={{ color: "var(--ink-3)" }}>
                   No new folders match "{search}".
                 </p>
               ) : null}
@@ -237,7 +246,7 @@ export function ImportFoldersDialog({
 
               {/* No results from search */}
               {searchTrimmed && filteredNew.length === 0 && filteredDup.length === 0 ? (
-                <p className="px-4 py-3 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+                <p className="px-4 py-3 text-[12px]" style={{ color: "var(--ink-3)" }}>
                   No folders match "{search}".
                 </p>
               ) : null}
@@ -336,7 +345,7 @@ function FolderRow({
             {folder.name}
           </p>
           <p
-            className="mono truncate text-[11px]"
+            className="mono truncate text-[12px]"
             style={{ color: "var(--ink-4)" }}
             title={folder.path}
           >
@@ -345,7 +354,7 @@ function FolderRow({
         </div>
       </div>
       {isDuplicate ? (
-        <span className="shrink-0 text-[11px]" style={{ color: "var(--ink-3)" }}>
+        <span className="shrink-0 text-[12px]" style={{ color: "var(--ink-3)" }}>
           In catalog
         </span>
       ) : null}
