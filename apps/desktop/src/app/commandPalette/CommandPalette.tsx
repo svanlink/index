@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Icon, type IconName } from "@drive-project-catalog/ui";
 import { getDisplayProject, getDisplayDate } from "@drive-project-catalog/domain";
 import { useCatalogStore } from "../providers";
+import { showPathInFinder } from "../nativeContextMenu";
 import { useCommandPalette } from "./CommandPaletteContext";
 import { useCommandPaletteSearch, MIN_QUERY_LENGTH } from "./useCommandPaletteSearch";
 
@@ -11,7 +12,7 @@ interface PaletteAction {
   id: string;
   label: string;
   icon: IconName;
-  onSelect: () => void;
+  onSelect: (navigate: ReturnType<typeof useNavigate>) => void;
 }
 
 const PINNED_ACTIONS: ReadonlyArray<PaletteAction> = [
@@ -19,24 +20,16 @@ const PINNED_ACTIONS: ReadonlyArray<PaletteAction> = [
     id: "register-drive",
     label: "Register Drive",
     icon: "hardDrive",
-    onSelect: () => {
-      // TODO(03): wire to existing register-drive dialog opener
+    onSelect: (navigate) => {
+      navigate("/drives", { state: { openCreate: true } });
     }
   },
   {
     id: "import-folders",
     label: "Import Folders",
     icon: "folder",
-    onSelect: () => {
-      // TODO(03): wire to existing import-folders dialog opener
-    }
-  },
-  {
-    id: "open-in-finder",
-    label: "Open in Finder",
-    icon: "folderOpen",
-    onSelect: () => {
-      // TODO(03): wire to existing open-in-finder action
+    onSelect: (navigate) => {
+      navigate("/drives", { state: { openImport: true } });
     }
   }
 ];
@@ -47,7 +40,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
 
-  const { projectResults } = useCommandPaletteSearch(projects, drives, query);
+  const { projectResults, driveResults } = useCommandPaletteSearch(projects, drives, query);
 
   const recentProjects = useMemo(
     () =>
@@ -78,8 +71,9 @@ export function CommandPalette() {
   if (!isOpen) return null;
 
   const isSearching = query.length >= MIN_QUERY_LENGTH;
-  const hasResults = projectResults.length > 0;
-  const noResults = isSearching && !hasResults;
+  const hasProjectResults = projectResults.length > 0;
+  const hasDriveResults = driveResults.length > 0;
+  const noResults = isSearching && !hasProjectResults && !hasDriveResults;
 
   return createPortal(
     <div
@@ -117,7 +111,7 @@ export function CommandPalette() {
         </div>
 
         {/* Project results */}
-        {isSearching && hasResults && (
+        {isSearching && hasProjectResults && (
           <section>
             <div
               className="px-4 py-1.5 text-[11px] font-medium uppercase tracking-wider"
@@ -134,24 +128,88 @@ export function CommandPalette() {
 
                 return (
                   <li key={project.id}>
+                    <div className="flex items-center gap-1 px-4 hover:bg-white/5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate(`/projects/${project.id}`);
+                          close();
+                        }}
+                        className="flex flex-1 items-center gap-3 py-2.5 text-left min-w-0"
+                        style={{ color: "var(--color-text)" }}
+                      >
+                        <Icon name="folder" size={14} />
+                        <span className="flex-1 min-w-0">
+                          <span className="block truncate text-[13px]">{name}</span>
+                          <span
+                            className="block truncate text-[11px]"
+                            style={{ opacity: 0.55 }}
+                          >
+                            {driveName}
+                            {date ? ` · ${date}` : ""}
+                          </span>
+                        </span>
+                      </button>
+                      {project.folderPath ? (
+                        <button
+                          type="button"
+                          aria-label="Show in Finder"
+                          title="Show in Finder"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void showPathInFinder(project.folderPath);
+                            close();
+                          }}
+                          className="shrink-0 rounded p-1 opacity-0 hover:opacity-100 focus:opacity-100"
+                          style={{ color: "var(--color-text)" }}
+                        >
+                          <Icon name="folderOpen" size={13} />
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {/* Drive results */}
+        {isSearching && hasDriveResults && (
+          <section>
+            <div
+              className="px-4 py-1.5 text-[11px] font-medium uppercase tracking-wider border-t"
+              style={{
+                color: "var(--color-text-muted, var(--color-text))",
+                opacity: 0.5,
+                borderColor: "var(--color-border)"
+              }}
+            >
+              Drives
+            </div>
+            <ul aria-label="Drive results">
+              {driveResults.map((drive) => {
+                const count = projects.filter((p) => p.currentDriveId === drive.id).length;
+
+                return (
+                  <li key={drive.id}>
                     <button
                       type="button"
                       onClick={() => {
-                        navigate(`/projects/${project.id}`);
+                        navigate(`/drives/${drive.id}`);
                         close();
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5"
                       style={{ color: "var(--color-text)" }}
                     >
-                      <Icon name="folder" size={14} />
+                      <Icon name="hardDrive" size={14} />
                       <span className="flex-1 min-w-0">
-                        <span className="block truncate text-[13px]">{name}</span>
+                        <span className="block truncate text-[13px]">{drive.displayName}</span>
                         <span
                           className="block truncate text-[11px]"
                           style={{ opacity: 0.55 }}
                         >
-                          {driveName}
-                          {date ? ` · ${date}` : ""}
+                          {count} {count === 1 ? "project" : "projects"}
                         </span>
                       </span>
                     </button>
@@ -181,7 +239,7 @@ export function CommandPalette() {
                   <button
                     type="button"
                     onClick={() => {
-                      action.onSelect();
+                      action.onSelect(navigate);
                       close();
                     }}
                     className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] hover:bg-white/5"

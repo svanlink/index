@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Icon } from "@drive-project-catalog/ui";
 import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import { buildStoragePlanningRows } from "@drive-project-catalog/data";
@@ -55,6 +55,7 @@ function useDriveMetrics(projects: { currentDriveId: string | null }[]) {
 
 export function DrivesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { drives, projects, scanSessions, isLoading, isMutating, createDrive, importFoldersFromVolume } =
     useCatalogStore();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -85,6 +86,19 @@ export function DrivesPage() {
   });
 
   const planningRows = useMemo(() => buildStoragePlanningRows(drives, projects), [drives, projects]);
+
+  // Handle location state from command palette actions (Register Drive / Import Folders)
+  const handledLocationKey = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const state = location.state as { openCreate?: boolean; openImport?: boolean } | null;
+    if (!state || handledLocationKey.current === location.key) return;
+    handledLocationKey.current = location.key;
+    if (state.openCreate) {
+      setIsCreateOpen(true);
+    } else if (state.openImport && canUseImport) {
+      void runImportFromVolume();
+    }
+  }, [location, canUseImport, runImportFromVolume]);
 
   useShortcut({ key: "n", meta: true, onTrigger: () => setIsCreateOpen((c) => !c), enabled: !isMutating });
   useFeedbackDismiss(feedback, setFeedback);

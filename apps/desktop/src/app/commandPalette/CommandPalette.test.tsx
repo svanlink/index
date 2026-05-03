@@ -12,6 +12,11 @@ vi.mock("../providers", () => ({
   useCatalogStore: vi.fn()
 }));
 
+// Mock nativeContextMenu — Tauri plugin not available in jsdom
+vi.mock("../nativeContextMenu", () => ({
+  showPathInFinder: vi.fn()
+}));
+
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -78,13 +83,21 @@ describe("CommandPalette", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("shows the 3 pinned action rows when open with no query", () => {
+  it("shows the 2 pinned action rows when open with no query", () => {
     render(<PaletteHarness />);
     fireEvent.keyDown(document, { key: "k", metaKey: true });
 
     expect(screen.getByRole("button", { name: /register drive/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /import folders/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open in finder/i })).toBeInTheDocument();
+  });
+
+  it("Register Drive action navigates to /drives with openCreate state", () => {
+    render(<PaletteHarness />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+    fireEvent.click(screen.getByRole("button", { name: /register drive/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith("/drives", { state: { openCreate: true } });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("shows project results when query matches", () => {
@@ -127,6 +140,68 @@ describe("CommandPalette", () => {
     fireEvent.change(input, { target: { value: "zzzzz" } });
 
     expect(screen.getByText(/no results/i)).toBeInTheDocument();
+  });
+
+  it("shows drive results when drive name matches query", () => {
+    const drive: Drive = {
+      id: "drive-1",
+      displayName: "SanDisk Pro",
+      volumeName: "SANDISK",
+      totalCapacityBytes: null,
+      usedBytes: null,
+      freeBytes: null,
+      reservedIncomingBytes: 0,
+      lastScannedAt: null,
+      createdManually: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    };
+
+    vi.mocked(providers.useCatalogStore).mockReturnValue({
+      projects: [],
+      drives: [drive]
+    } as unknown as ReturnType<typeof providers.useCatalogStore>);
+
+    render(<PaletteHarness />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    const input = screen.getByRole("textbox", { name: /command palette search/i });
+    fireEvent.change(input, { target: { value: "sandisk" } });
+
+    expect(screen.getByText(/drives/i)).toBeInTheDocument();
+    expect(screen.getByText("SanDisk Pro")).toBeInTheDocument();
+    expect(screen.getByText("0 projects")).toBeInTheDocument();
+  });
+
+  it("clicking a drive result closes palette and navigates to /drives/[id]", () => {
+    const drive: Drive = {
+      id: "drive-99",
+      displayName: "SanDisk Pro",
+      volumeName: "SANDISK",
+      totalCapacityBytes: null,
+      usedBytes: null,
+      freeBytes: null,
+      reservedIncomingBytes: 0,
+      lastScannedAt: null,
+      createdManually: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    };
+
+    vi.mocked(providers.useCatalogStore).mockReturnValue({
+      projects: [],
+      drives: [drive]
+    } as unknown as ReturnType<typeof providers.useCatalogStore>);
+
+    render(<PaletteHarness />);
+    fireEvent.keyDown(document, { key: "k", metaKey: true });
+
+    const input = screen.getByRole("textbox", { name: /command palette search/i });
+    fireEvent.change(input, { target: { value: "sandisk" } });
+
+    fireEvent.click(screen.getByText("SanDisk Pro"));
+    expect(mockNavigate).toHaveBeenCalledWith("/drives/drive-99");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("throws when useCommandPalette is used outside the provider", () => {
