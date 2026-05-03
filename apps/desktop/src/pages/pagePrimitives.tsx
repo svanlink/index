@@ -226,6 +226,12 @@ export function ProjectRowSkeleton() {
 interface ConfirmModalProps {
   title: string;
   description: string;
+  /**
+   * Short irreversibility note shown below the description in a distinct
+   * treatment — e.g. "This cannot be undone." Keeps descriptions focused
+   * on what will change rather than the permanence caveat.
+   */
+  consequence?: string;
   confirmLabel?: string;
   onConfirm(): void;
   onCancel(): void;
@@ -236,6 +242,7 @@ interface ConfirmModalProps {
 export function ConfirmModal({
   title,
   description,
+  consequence,
   confirmLabel = "Confirm",
   onConfirm,
   onCancel,
@@ -286,9 +293,9 @@ export function ConfirmModal({
           id="confirm-modal-title"
           style={{
             margin: 0,
-            fontSize: 40,
+            fontSize: 28,
             fontWeight: 600,
-            lineHeight: 1.1,
+            lineHeight: 1.15,
             letterSpacing: "-0.015em",
             color: "#ffffff"
           }}
@@ -297,14 +304,26 @@ export function ConfirmModal({
         </h3>
         <p
           style={{
-            margin: "16px 0 0",
-            fontSize: 17,
-            lineHeight: 1.47,
+            margin: "14px 0 0",
+            fontSize: 15,
+            lineHeight: 1.5,
             color: "rgba(255, 255, 255, 0.78)"
           }}
         >
           {description}
         </p>
+        {consequence ? (
+          <p
+            style={{
+              margin: "10px 0 0",
+              fontSize: 13,
+              lineHeight: 1.4,
+              color: isDestructive ? "rgba(255, 120, 80, 0.9)" : "rgba(255, 255, 255, 0.5)"
+            }}
+          >
+            {consequence}
+          </p>
+        ) : null}
         <div className="mt-8 flex justify-end gap-2">
           <button
             type="button"

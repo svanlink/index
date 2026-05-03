@@ -196,7 +196,8 @@ export function DriveDetailPage() {
       {showDeleteConfirm ? (
         <ConfirmModal
           title="Delete drive?"
-          description={`"${drive.displayName}" will be permanently removed from the catalog. Projects assigned to this drive will become unassigned. This cannot be undone.`}
+          description={`"${drive.displayName}" will be permanently removed from the catalog. Projects assigned to this drive will become unassigned.`}
+          consequence="This cannot be undone."
           confirmLabel="Delete drive"
           onConfirm={() => void handleDeleteDrive()}
           onCancel={() => setShowDeleteConfirm(false)}

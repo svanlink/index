@@ -235,7 +235,8 @@ export function ProjectDetailPage() {
       {showDeleteConfirm ? (
         <ConfirmModal
           title="Delete project?"
-          description={`"${getProjectName(currentProject)}" will be permanently removed from the catalog. This cannot be undone.`}
+          description={`"${getProjectName(currentProject)}" will be permanently removed from the catalog.`}
+          consequence="This cannot be undone."
           confirmLabel="Delete project"
           onConfirm={() => void handleDeleteProject()}
           onCancel={() => setShowDeleteConfirm(false)}
