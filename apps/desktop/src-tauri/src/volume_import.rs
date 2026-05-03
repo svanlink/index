@@ -43,6 +43,7 @@
 
 #![cfg_attr(not(test), deny(clippy::disallowed_methods))]
 
+use log::warn;
 use serde::Serialize;
 use std::{fs, path::Path};
 
@@ -82,12 +83,21 @@ pub fn enumerate_volume_folders(path: String) -> Result<Vec<VolumeFolderEntry>, 
             Ok(entry) => entry,
             // Skip entries we cannot read rather than failing the whole listing —
             // a single bad directory entry should not blank the preview.
-            Err(_) => continue,
+            Err(err) => {
+                warn!("enumerate_volume_folders: skipped unreadable entry in {path}: {err}");
+                continue;
+            }
         };
 
         let file_type = match entry.file_type() {
             Ok(file_type) => file_type,
-            Err(_) => continue,
+            Err(err) => {
+                warn!(
+                    "enumerate_volume_folders: could not read file type for {}: {err}",
+                    entry.path().display()
+                );
+                continue;
+            }
         };
 
         // Only real directories. `file_type().is_dir()` is false for symlinks

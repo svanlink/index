@@ -1,3 +1,4 @@
+use log::{error, warn};
 use std::process::Command;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -14,12 +15,20 @@ pub struct VolumeInfo {
     pub free_bytes: u64,
 }
 
+/// Returns volume information for the given path.
+///
+/// Returns `Err` (rather than a silent `None`) so callers can distinguish
+/// between "diskutil/df failed" (infrastructure failure) and "valid volume with
+/// no UUID" (expected for FAT32). A silent null would mask drive-identity bugs
+/// that cause phantom duplicate drive records in the catalog.
 #[tauri::command]
-pub fn get_volume_info(path: String) -> Option<VolumeInfo> {
-    let diskutil = parse_diskutil_info(&path)?;
-    let (total_bytes, free_bytes) = parse_df_bytes(&path)?;
+pub fn get_volume_info(path: String) -> Result<VolumeInfo, String> {
+    let diskutil = parse_diskutil_info(&path)
+        .ok_or_else(|| format!("diskutil info failed for path: {path}"))?;
+    let (total_bytes, free_bytes) = parse_df_bytes(&path)
+        .ok_or_else(|| format!("df failed for path: {path}"))?;
 
-    Some(VolumeInfo {
+    Ok(VolumeInfo {
         filesystem_type: diskutil.filesystem_type,
         volume_name: diskutil.volume_name,
         volume_uuid: diskutil.volume_uuid,
@@ -44,9 +53,14 @@ fn parse_diskutil_info(path: &str) -> Option<DiskutilInfo> {
     let output = Command::new("diskutil")
         .args(["info", path])
         .output()
+        .map_err(|err| error!("volume_info: failed to spawn diskutil for {path}: {err}"))
         .ok()?;
 
     if !output.status.success() {
+        warn!(
+            "volume_info: diskutil info exited {:?} for {path}",
+            output.status.code()
+        );
         return None;
     }
 
@@ -80,6 +94,7 @@ fn parse_diskutil_info(path: &str) -> Option<DiskutilInfo> {
     }
 
     if filesystem_type.is_empty() {
+        warn!("volume_info: diskutil output missing 'File System Personality' for {path}");
         return None;
     }
 
@@ -92,9 +107,17 @@ fn parse_diskutil_info(path: &str) -> Option<DiskutilInfo> {
 
 /// Returns `(total_bytes, free_bytes)` from `df -Pk <path>`.
 fn parse_df_bytes(path: &str) -> Option<(u64, u64)> {
-    let output = Command::new("df").args(["-Pk", path]).output().ok()?;
+    let output = Command::new("df")
+        .args(["-Pk", path])
+        .output()
+        .map_err(|err| error!("volume_info: failed to spawn df for {path}: {err}"))
+        .ok()?;
 
     if !output.status.success() {
+        warn!(
+            "volume_info: df exited {:?} for {path}",
+            output.status.code()
+        );
         return None;
     }
 
@@ -103,9 +126,21 @@ fn parse_df_bytes(path: &str) -> Option<(u64, u64)> {
     let data_line = text.lines().nth(1)?;
     let mut cols = data_line.split_whitespace();
     let _filesystem = cols.next()?;
-    let total_1k: u64 = cols.next()?.parse().ok()?;
+    let total_1k: u64 = cols
+        .next()
+        .and_then(|s| {
+            s.parse::<u64>()
+                .map_err(|err| warn!("volume_info: df total-1k parse error for {path}: {err}"))
+                .ok()
+        })?;
     let _used_1k = cols.next()?;
-    let free_1k: u64 = cols.next()?.parse().ok()?;
+    let free_1k: u64 = cols
+        .next()
+        .and_then(|s| {
+            s.parse::<u64>()
+                .map_err(|err| warn!("volume_info: df free-1k parse error for {path}: {err}"))
+                .ok()
+        })?;
 
     Some((total_1k * 1024, free_1k * 1024))
 }

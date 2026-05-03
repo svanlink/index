@@ -209,14 +209,17 @@ impl AppScanState {
         sessions.get(scan_id).cloned()
     }
 
-    fn list_snapshots(&self) -> Vec<ScanSnapshot> {
-        let sessions = self.sessions.lock().expect("scan state poisoned");
+    fn list_snapshots(&self) -> Result<Vec<ScanSnapshot>, String> {
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|err| format!("scan state poisoned: {err}"))?;
         let mut snapshots: Vec<_> = sessions
             .values()
             .map(|session| session.snapshot())
             .collect();
         snapshots.sort_by(|left, right| right.started_at.cmp(&left.started_at));
-        snapshots
+        Ok(snapshots)
     }
 }
 
@@ -362,6 +365,10 @@ impl ScanSession {
                     project.size_error = Some(error);
                 }
             }
+        } else {
+            log::error!(
+                "finish_size_job: no project record found for id={project_id} — size result discarded; this is an internal bug"
+            );
         }
     }
 
@@ -428,9 +435,17 @@ impl ScanSession {
             std::mem::take(&mut *guard)
         };
         for handle in handles {
-            // Best-effort: a panicked worker produces Err, which we swallow
-            // intentionally to avoid panicking during Drop.
-            let _ = handle.join();
+            // Best-effort join: we must not panic during Drop. But we do log
+            // the panic payload so the failure is visible in crash logs and
+            // can be correlated with a stuck "pending" size on a project record.
+            if let Err(panic_val) = handle.join() {
+                let msg = panic_val
+                    .downcast_ref::<&str>()
+                    .copied()
+                    .or_else(|| panic_val.downcast_ref::<String>().map(|s| s.as_str()))
+                    .unwrap_or("<non-string panic payload>");
+                log::error!("size worker thread panicked: {msg}; affected project size will remain stuck at 'pending'");
+            }
         }
     }
 }
@@ -547,8 +562,12 @@ pub fn get_scan_snapshot(
 }
 
 #[tauri::command]
-pub fn list_scan_snapshots(state: State<'_, AppScanState>) -> Vec<ScanSnapshot> {
-    state.list_snapshots()
+pub fn list_scan_snapshots(
+    state: State<'_, AppScanState>,
+) -> Result<Vec<ScanSnapshot>, String> {
+    state
+        .list_snapshots()
+        .map_err(|err| format!("list_scan_snapshots: scan state lock poisoned: {err}"))
 }
 
 fn execute_scan(
@@ -612,7 +631,17 @@ fn scan_directory(
 
         let relative_path = child_path
             .strip_prefix(root_path)
-            .unwrap_or(&child_path)
+            .unwrap_or_else(|_| {
+                // Should be structurally impossible: child_path comes from read_dir
+                // of root_path, so it is always a descendant. If this fires it
+                // indicates a symlink or race condition; log so we can diagnose.
+                log::warn!(
+                    "strip_prefix failed: {} is not under {} — storing absolute path as relative_path",
+                    child_path.display(),
+                    root_path.display()
+                );
+                &child_path
+            })
             .to_string_lossy()
             .to_string();
 
@@ -684,6 +713,16 @@ fn calculate_directory_size_inner(
         if *entry_count >= MAX_SIZE_WALK_ENTRIES {
             // Return partial size rather than erroring — the ceiling is a
             // safeguard against pathological trees, not a hard failure.
+            // WARNING: the returned value is smaller than the real size.
+            // The project record will show size_status="ready" with a partial
+            // byte count. This is a known limitation; the UI does not yet
+            // distinguish partial from complete sizes.
+            // TODO: surface a "partial" SizeStatus variant so the UI can
+            // render an approximate indicator instead of a precise number.
+            log::warn!(
+                "size walk ceiling ({MAX_SIZE_WALK_ENTRIES} entries) reached at {}: returning partial size {total_size} bytes — displayed size will be an undercount",
+                path.display()
+            );
             return Ok(total_size);
         }
 
