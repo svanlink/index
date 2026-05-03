@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@drive-project-catalog/ui";
 import type { VolumeFolderEntry } from "../app/volumeImportCommands";
 
@@ -13,8 +13,7 @@ import type { VolumeFolderEntry } from "../app/volumeImportCommands";
 //
 // Stateless by design: the parent owns loading/error/empty state. This
 // component only visualises the list + drives keyboard shortcuts and button
-// clicks. That keeps the dedup preview (existingPathsOnDrive) trivially
-// testable — just pass a different set and re-render.
+// clicks.
 // ---------------------------------------------------------------------------
 
 export interface ImportFoldersDialogProps {
@@ -24,29 +23,25 @@ export interface ImportFoldersDialogProps {
   /**
    * Absolute paths that already exist on the target drive. Folders in this
    * set are greyed out and labelled "already in catalog" so the user sees
-   * upfront what the import will actually create. The repository dedups on
-   * the same key, so this preview cannot drift from the persisted outcome.
+   * upfront what the import will actually create.
    */
   existingPathsOnDrive: Set<string>;
   isImporting: boolean;
   onConfirm(): void;
   onCancel(): void;
   /**
-   * Re-open the native picker without dismissing the modal. Useful when the
-   * user realises they selected the wrong folder — saves one extra click
-   * vs. cancel → reopen.
+   * Re-open the native picker without dismissing the modal.
    */
   onPickAgain(): void;
   /**
    * Optional banner rendered between the source-path line and the import
-   * summary. The top-level "Import from mounted volume" flow uses this to
-   * tell the user which drive the folders will land on — whether it's an
-   * existing catalog entry or a new drive about to be created. Keeping this
-   * as a slot (rather than baking the drive concept into the dialog) lets
-   * the per-drive-detail flow stay context-free.
+   * summary.
    */
   contextBanner?: ReactNode;
 }
+
+// Threshold above which the inline search input appears
+const SEARCH_THRESHOLD = 7;
 
 export function ImportFoldersDialog({
   sourcePath,
@@ -59,6 +54,7 @@ export function ImportFoldersDialog({
   contextBanner
 }: ImportFoldersDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const [search, setSearch] = useState("");
 
   const { newFolders, duplicateFolders } = useMemo(() => {
     const newOnes: VolumeFolderEntry[] = [];
@@ -73,9 +69,26 @@ export function ImportFoldersDialog({
     return { newFolders: newOnes, duplicateFolders: duplicates };
   }, [folders, existingPathsOnDrive]);
 
-  const canConfirm = !isImporting && newFolders.length > 0;
+  // D2: Inline search filter
+  const searchTrimmed = search.trim().toLowerCase();
+  const filteredNew = searchTrimmed
+    ? newFolders.filter(
+        (f) =>
+          f.name.toLowerCase().includes(searchTrimmed) ||
+          f.path.toLowerCase().includes(searchTrimmed)
+      )
+    : newFolders;
+  const filteredDup = searchTrimmed
+    ? duplicateFolders.filter(
+        (f) =>
+          f.name.toLowerCase().includes(searchTrimmed) ||
+          f.path.toLowerCase().includes(searchTrimmed)
+      )
+    : duplicateFolders;
 
-  // Escape to close, Enter to confirm — matches ConfirmModal's UX.
+  const canConfirm = !isImporting && newFolders.length > 0;
+  const showSearch = folders.length >= SEARCH_THRESHOLD;
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -92,7 +105,6 @@ export function ImportFoldersDialog({
     return () => dialog?.removeEventListener("keydown", handleKeyDown);
   }, [canConfirm, onCancel, onConfirm]);
 
-  // Auto-focus so keyboard events reach the handler above.
   useEffect(() => {
     dialogRef.current?.focus();
   }, []);
@@ -112,6 +124,7 @@ export function ImportFoldersDialog({
         aria-labelledby="import-folders-dialog-title"
         tabIndex={-1}
       >
+        {/* D3: Header — title + source path + close */}
         <header className="px-6 pt-5 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
@@ -132,7 +145,7 @@ export function ImportFoldersDialog({
             </div>
             <button
               type="button"
-              aria-label="Close"
+              aria-label="Close (Escape)"
               className="btn btn-ghost btn-sm shrink-0"
               onClick={onCancel}
               disabled={isImporting}
@@ -150,72 +163,84 @@ export function ImportFoldersDialog({
             duplicateCount={duplicateFolders.length}
           />
 
+          {/* D2: Inline search — only when list is long enough to warrant it */}
+          {showSearch ? (
+            <div className="mt-3">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Filter folders…"
+                className="field-shell w-full bg-transparent px-3 py-2 text-[13px] outline-none"
+                aria-label="Filter folders"
+              />
+            </div>
+          ) : null}
+
           {folders.length === 0 ? (
             <div
               className="mt-4 rounded-[12px] px-4 py-4 text-[12.5px] leading-[1.5]"
-              style={{
-                background: "var(--surface-inset)",
-                color: "var(--ink-3)"
-              }}
+              style={{ background: "var(--surface-inset)", color: "var(--ink-3)" }}
             >
               No folders were found at this location. Hidden files, system
               folders (<code className="mono" style={{ color: "var(--ink-2)" }}>.Spotlight-V100</code>,{" "}
               <code className="mono" style={{ color: "var(--ink-2)" }}>.Trashes</code>, …) and files are filtered automatically.
             </div>
           ) : (
+            /* D1: Split sections — new vs. already-in-catalog */
             <div
               className="mt-4 max-h-[360px] overflow-y-auto rounded-[12px] border"
               style={{ borderColor: "var(--hairline)" }}
             >
-              <ul className="flex flex-col">
-                {folders.map((folder, index) => {
-                  const isDuplicate = existingPathsOnDrive.has(folder.path);
-                  const isLast = index === folders.length - 1;
-                  return (
-                    <li
-                      key={folder.path}
-                      className="flex items-center justify-between gap-3 px-4 py-2.5"
-                      style={{
-                        borderBottom: isLast ? undefined : "1px solid var(--hairline)",
-                        background: "transparent",
-                        opacity: isDuplicate ? 0.52 : 1
-                      }}
-                    >
-                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                        <Icon
-                          name="folder"
-                          size={14}
-                          color={isDuplicate ? "var(--ink-4)" : "var(--ink-3)"}
-                        />
-                        <div className="min-w-0">
-                          <p
-                            className="truncate text-[13px] font-medium"
-                            style={{ color: "var(--ink)" }}
-                            title={folder.name}
-                          >
-                            {folder.name}
-                          </p>
-                          <p
-                            className="mono truncate text-[11px]"
-                            style={{ color: "var(--ink-4)" }}
-                            title={folder.path}
-                          >
-                            {folder.path}
-                          </p>
-                        </div>
-                      </div>
-                      {isDuplicate ? (
-                        <span
-                          className="shrink-0 text-[11px]"
-                          style={{ color: "var(--ink-3)" }}
-                        >
-                          In catalog
-                        </span>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+              {/* New folders section */}
+              {filteredNew.length > 0 ? (
+                <>
+                  {duplicateFolders.length > 0 ? (
+                    <SectionHeader label={`To import — ${filteredNew.length}`} />
+                  ) : null}
+                  <ul className="flex flex-col">
+                    {filteredNew.map((folder, index) => (
+                      <FolderRow
+                        key={folder.path}
+                        folder={folder}
+                        isLast={index === filteredNew.length - 1 && filteredDup.length === 0}
+                        isDuplicate={false}
+                      />
+                    ))}
+                  </ul>
+                </>
+              ) : searchTrimmed && newFolders.length > 0 ? (
+                <p className="px-4 py-3 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+                  No new folders match "{search}".
+                </p>
+              ) : null}
+
+              {/* Already in catalog section */}
+              {filteredDup.length > 0 ? (
+                <>
+                  <SectionHeader
+                    label={`Already in catalog — ${filteredDup.length}`}
+                    faded
+                  />
+                  <ul className="flex flex-col">
+                    {filteredDup.map((folder, index) => (
+                      <FolderRow
+                        key={folder.path}
+                        folder={folder}
+                        isLast={index === filteredDup.length - 1}
+                        isDuplicate
+                      />
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+
+              {/* No results from search */}
+              {searchTrimmed && filteredNew.length === 0 && filteredDup.length === 0 ? (
+                <p className="px-4 py-3 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+                  No folders match "{search}".
+                </p>
+              ) : null}
             </div>
           )}
         </div>
@@ -259,10 +284,78 @@ export function ImportFoldersDialog({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function SectionHeader({ label, faded = false }: { label: string; faded?: boolean }) {
+  return (
+    <div
+      className="border-b px-4 py-2 text-[10.5px] font-medium uppercase tracking-[0.08em]"
+      style={{
+        borderColor: "var(--hairline)",
+        background: "var(--surface-inset)",
+        color: faded ? "var(--ink-4)" : "var(--ink-3)"
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+function FolderRow({
+  folder,
+  isLast,
+  isDuplicate
+}: {
+  folder: VolumeFolderEntry;
+  isLast: boolean;
+  isDuplicate: boolean;
+}) {
+  return (
+    <li
+      className="flex items-center justify-between gap-3 px-4 py-2.5"
+      style={{
+        borderBottom: isLast ? undefined : "1px solid var(--hairline)",
+        background: "transparent",
+        opacity: isDuplicate ? 0.5 : 1
+      }}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <Icon
+          name="folder"
+          size={14}
+          color={isDuplicate ? "var(--ink-4)" : "var(--ink-3)"}
+        />
+        <div className="min-w-0">
+          <p
+            className="truncate text-[13px] font-medium"
+            style={{ color: "var(--ink)" }}
+            title={folder.name}
+          >
+            {folder.name}
+          </p>
+          <p
+            className="mono truncate text-[11px]"
+            style={{ color: "var(--ink-4)" }}
+            title={folder.path}
+          >
+            {folder.path}
+          </p>
+        </div>
+      </div>
+      {isDuplicate ? (
+        <span className="shrink-0 text-[11px]" style={{ color: "var(--ink-3)" }}>
+          In catalog
+        </span>
+      ) : null}
+    </li>
+  );
+}
+
 /**
  * Summary line above the folder list. Splits the "new" and "skipped" counts
- * into a quiet definition-list pair so scanning the state of the import is
- * a single glance rather than a paragraph of prose.
+ * into a quiet definition-list pair.
  */
 function ImportSummary({
   newCount,
