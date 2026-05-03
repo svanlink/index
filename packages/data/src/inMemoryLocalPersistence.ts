@@ -128,6 +128,15 @@ export class InMemoryLocalPersistence implements LocalPersistenceAdapter {
     this.#snapshot = applyProjectDeleteToSnapshot(this.#snapshot, projectId);
   }
 
+  async markProjectOpened(projectId: string, openedAt: string): Promise<void> {
+    this.#snapshot = {
+      ...this.#snapshot,
+      projects: this.#snapshot.projects.map((p) =>
+        p.id === projectId ? { ...p, openedAt } : p
+      )
+    };
+  }
+
   async deleteDrive(driveId: string) {
     // Cascade spec: see `cascadeDelete.ts#applyDriveDeleteToSnapshot`.
     // The shared contract test in `localPersistenceContract.ts` locks this

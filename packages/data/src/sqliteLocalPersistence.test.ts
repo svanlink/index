@@ -8,7 +8,7 @@ import { mockCatalogSnapshot } from "./testing/mockData";
 import { SqliteLocalPersistence, type SqlDatabase } from "./sqliteLocalPersistence";
 
 const tempDirectories: string[] = [];
-const expectedMigrationVersions = Array.from({ length: 12 }, (_, index) => index + 1);
+const expectedMigrationVersions = Array.from({ length: 13 }, (_, index) => index + 1);
 
 afterEach(() => {
   while (tempDirectories.length > 0) {

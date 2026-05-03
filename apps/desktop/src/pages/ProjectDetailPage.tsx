@@ -34,6 +34,7 @@ export function ProjectDetailPage() {
     listProjectScanEvents,
     updateProjectMetadata,
     deleteProject,
+    markProjectOpened,
     isLoading,
     isMutating
   } = useCatalogStore();
@@ -58,6 +59,13 @@ export function ProjectDetailPage() {
       selectProject(null);
     };
   }, [projectId, selectProject]);
+
+  // Stamp opened_at so this project appears in the palette's Recent section.
+  useEffect(() => {
+    if (projectId) {
+      void markProjectOpened(projectId);
+    }
+  }, [projectId, markProjectOpened]);
 
   useEffect(() => {
     let isMounted = true;

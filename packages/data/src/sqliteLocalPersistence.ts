@@ -695,6 +695,26 @@ const migrations: Migration[] = [
       )`,
       `CREATE INDEX IF NOT EXISTS idx_rename_undo_history_applied_at ON rename_undo_history (applied_at DESC)`
     ]
+  },
+  {
+    version: 13,
+    // Tracks when the user last visited a project's detail page.
+    // Used to populate the "Recent" section in the ⌘K command palette.
+    // Append-only — existing rows get NULL and never appear in the recent list.
+    // Double-guard: first check the table exists (partial-fixture DBs may have migrations 1-4
+    // applied but no projects table), then check the column is not already present.
+    run: async (database: SqlDatabase) => {
+      const tables = await database.select<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='projects'"
+      );
+      if (tables.length === 0) return; // projects table absent in this DB state — skip
+      const columns = await database.select<{ name: string }>(
+        "PRAGMA table_info(projects)"
+      );
+      if (!columns.some((c) => c.name === "opened_at")) {
+        await database.execute("ALTER TABLE projects ADD COLUMN opened_at TEXT");
+      }
+    }
   }
 ];
 
@@ -858,6 +878,14 @@ export class SqliteLocalPersistence implements LocalPersistenceAdapter {
       await database.execute("DELETE FROM project_scan_events WHERE project_id = ?", [projectId]);
       await database.execute("DELETE FROM projects WHERE id = ?", [projectId]);
     });
+  }
+
+  async markProjectOpened(projectId: string, openedAt: string): Promise<void> {
+    const database = await this.#ensureReady();
+    await database.execute(
+      "UPDATE projects SET opened_at = ? WHERE id = ?",
+      [openedAt, projectId]
+    );
   }
 
   /**
@@ -1229,6 +1257,8 @@ type ProjectRow = {
   partial_hash: string | null;
   // Migration 10 columns — NULL on rows that predate the migration
   naming_status: string | null;
+  // Migration 13 columns — NULL on rows that predate the migration or were never visited
+  opened_at: string | null;
 };
 
 type RenameSuggestionRow = {
@@ -1362,7 +1392,8 @@ function mapProjectRow(row: ProjectRow): Project {
     partialHash: row.partial_hash ?? null,
     namingStatus: row.naming_status === null || row.naming_status === undefined
       ? "unknown"
-      : (row.naming_status as "valid" | "legacy" | "invalid" | "unknown")
+      : (row.naming_status as "valid" | "legacy" | "invalid" | "unknown"),
+    openedAt: row.opened_at ?? null
   };
 }
 
@@ -1558,7 +1589,8 @@ async function upsertProjectRow(database: SqlDatabase, project: Project) {
       naming_confidence = excluded.naming_confidence,
       metadata_status = excluded.metadata_status,
       partial_hash = excluded.partial_hash,
-      naming_status = excluded.naming_status`,
+      naming_status = excluded.naming_status
+      -- opened_at intentionally excluded: written only by markProjectOpened`,
     [
       project.id,
       project.folderType ?? 'client',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Icon, type IconName } from "@drive-project-catalog/ui";
@@ -48,6 +48,15 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
 
   const { projectResults } = useCommandPaletteSearch(projects, drives, query);
+
+  const recentProjects = useMemo(
+    () =>
+      [...projects]
+        .filter((p) => Boolean(p.openedAt))
+        .sort((a, b) => (b.openedAt ?? "").localeCompare(a.openedAt ?? ""))
+        .slice(0, 5),
+    [projects]
+  );
 
   // Reset query when palette closes
   useEffect(() => {
@@ -163,26 +172,77 @@ export function CommandPalette() {
           </div>
         )}
 
-        {/* Default state: pinned actions (shown when not searching) */}
+        {/* Default state: pinned actions + recent (shown when not searching) */}
         {!isSearching && (
-          <ul aria-label="Pinned actions" className="py-1">
-            {PINNED_ACTIONS.map((action) => (
-              <li key={action.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    action.onSelect();
-                    close();
+          <>
+            <ul aria-label="Pinned actions" className="py-1">
+              {PINNED_ACTIONS.map((action) => (
+                <li key={action.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      action.onSelect();
+                      close();
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] hover:bg-white/5"
+                    style={{ color: "var(--color-text)" }}
+                  >
+                    <Icon name={action.icon} size={16} />
+                    <span>{action.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {recentProjects.length > 0 && (
+              <section>
+                <div
+                  className="px-4 py-1.5 text-[11px] font-medium uppercase tracking-wider border-t"
+                  style={{
+                    color: "var(--color-text-muted, var(--color-text))",
+                    opacity: 0.5,
+                    borderColor: "var(--color-border)"
                   }}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] hover:bg-white/5"
-                  style={{ color: "var(--color-text)" }}
                 >
-                  <Icon name={action.icon} size={16} />
-                  <span>{action.label}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+                  Recent
+                </div>
+                <ul aria-label="Recent projects">
+                  {recentProjects.map((project) => {
+                    const drive = drives.find((d) => d.id === project.currentDriveId);
+                    const name = getDisplayProject(project);
+                    const date = getDisplayDate(project);
+                    const driveName = drive?.displayName ?? "Unassigned";
+
+                    return (
+                      <li key={project.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigate(`/projects/${project.id}`);
+                            close();
+                          }}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5"
+                          style={{ color: "var(--color-text)" }}
+                        >
+                          <Icon name="clock" size={14} />
+                          <span className="flex-1 min-w-0">
+                            <span className="block truncate text-[13px]">{name}</span>
+                            <span
+                              className="block truncate text-[11px]"
+                              style={{ opacity: 0.55 }}
+                            >
+                              {driveName}
+                              {date ? ` · ${date}` : ""}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+          </>
         )}
       </div>
     </div>,

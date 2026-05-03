@@ -84,4 +84,10 @@ export interface Project {
    * Added in schema migration 10.
    */
   namingStatus?: "valid" | "legacy" | "invalid" | "unknown" | null;
+  /**
+   * ISO-8601 timestamp of the last time the user visited the project detail page.
+   * NULL on rows that predate migration 13 or were never visited.
+   * Added in schema migration 13.
+   */
+  openedAt?: string | null;
 }

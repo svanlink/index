@@ -210,6 +210,8 @@ export interface CatalogRepository {
    */
   undoLastRenameOperation(): Promise<UndoRenameOperationResult | null>;
   deleteProject(projectId: string): Promise<void>;
+  /** Stamp opened_at timestamp on a project — called when user visits its detail page. */
+  markProjectOpened(projectId: string): Promise<void>;
   deleteDrive(driveId: string): Promise<void>;
   listPendingSyncOperations(): Promise<SyncOperation[]>;
   flushSync(): Promise<SyncResult>;

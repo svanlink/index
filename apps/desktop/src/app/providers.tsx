@@ -57,6 +57,7 @@ interface CatalogStoreContextValue {
   importFoldersFromVolume(input: ImportFoldersFromVolumeInput): Promise<ImportFoldersFromVolumeResult>;
   deleteProject(projectId: string): Promise<void>;
   deleteDrive(driveId: string): Promise<void>;
+  markProjectOpened(projectId: string): Promise<void>;
 }
 
 const CatalogStoreContext = createContext<CatalogStoreContextValue | null>(null);
@@ -214,6 +215,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       startTransition(() => applyOptimisticDriveChange({ type: "delete", id: driveId }));
       return runMutation(() => repository.deleteDrive(driveId));
     },
+    markProjectOpened: (projectId) => runMutation(() => repository.markProjectOpened(projectId)),
   }), [
     optimisticDrives,
     optimisticProjects,

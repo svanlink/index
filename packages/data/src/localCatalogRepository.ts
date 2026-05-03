@@ -800,6 +800,11 @@ export class LocalCatalogRepository implements CatalogRepository {
     await this.enqueueDelete("drive.delete", driveId);
   }
 
+  async markProjectOpened(projectId: string): Promise<void> {
+    const openedAt = new Date().toISOString();
+    await this.persistence.markProjectOpened(projectId, openedAt);
+  }
+
   /**
    * F7 — cancel pending (non-in-flight) outbound upsert entries for the
    * child ids a parent delete just cascaded locally.
