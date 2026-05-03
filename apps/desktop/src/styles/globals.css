@@ -1293,6 +1293,15 @@ kbd {
 .text-center      { text-align: center; }
 .leading-snug     { line-height: 1.35; }
 
+/* Positioning / z-index */
+.sticky               { position: sticky; }
+.z-20                 { z-index: 20; }
+
+/* Shape */
+.rounded-full         { border-radius: 9999px; }
+.text-left            { text-align: left; }
+.rotate-180           { transform: rotate(180deg); }
+
 /* Misc */
 .outline-none         { outline: none; }
 .bg-transparent       { background: transparent; }
