@@ -5,7 +5,8 @@ import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import { getDriveHealthLabel, type DriveHealthState } from "@drive-project-catalog/data";
 import { useVolumeInfo } from "../../app/scanCommands";
 import { formatBytes, formatDate } from "../dashboardHelpers";
-import { CapacityLegend, StatusBadge } from "../pagePrimitives";
+import { CapacityLegend } from "../capacity";
+import { StatusBadge } from "../feedback";
 import { getDriveColor } from "../driveColor";
 
 export function DriveCard({

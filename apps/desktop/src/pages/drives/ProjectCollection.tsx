@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import type { Project } from "@drive-project-catalog/domain";
 import { formatBytes, formatParsedDate, getProjectName, getProjectStatusBadges } from "../dashboardHelpers";
-import { SectionCard, StatusBadge } from "../pagePrimitives";
+import { SectionCard } from "../pagePrimitives";
+import { StatusBadge } from "../feedback";
 
 interface ProjectCollectionProps {
   title: string;

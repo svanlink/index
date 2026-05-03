@@ -14,7 +14,9 @@ import {
   getProjectName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { ConfirmModal, EmptyState, FeedbackNotice, LoadingState, MetaField, SectionCard, StatusBadge } from "./pagePrimitives";
+import { ConfirmModal, MetaField, SectionCard } from "./pagePrimitives";
+import { EmptyState, LoadingState } from "./search";
+import { FeedbackNotice, StatusBadge } from "./feedback";
 import { showPathInFinder } from "../app/nativeContextMenu";
 import { getDriveColor } from "./driveColor";
 

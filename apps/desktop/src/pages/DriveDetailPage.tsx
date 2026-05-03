@@ -14,17 +14,10 @@ import { useScanWorkflow } from "../app/scanWorkflow";
 import { formatBytes, formatDate } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { ImportFoldersDialog } from "./ImportFoldersDialog";
-import {
-  CapacityBar,
-  CapacityLegend,
-  ConfirmModal,
-  EmptyState,
-  FeedbackNotice,
-  LoadingState,
-  MetaField,
-  SectionCard,
-  StatusBadge
-} from "./pagePrimitives";
+import { CapacityBar, CapacityLegend } from "./capacity";
+import { ConfirmModal, MetaField, SectionCard } from "./pagePrimitives";
+import { EmptyState, LoadingState } from "./search";
+import { FeedbackNotice, StatusBadge } from "./feedback";
 import { ProjectCollection } from "./drives/ProjectCollection";
 import { ScanStatusPanel } from "./drives/ScanStatusPanel";
 import { getDriveColor } from "./driveColor";

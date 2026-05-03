@@ -12,8 +12,10 @@ import {
 } from "@drive-project-catalog/domain";
 import { validateManualProjectForm } from "../app/catalogValidation";
 import { useCatalogStore } from "../app/providers";
-import { FeedbackNotice, ProjectRowSkeleton, SectionCard } from "./pagePrimitives";
-import { ProjectRow, ProjectTableHeader } from "./ProjectList";
+import { ProjectRowSkeleton } from "./search";
+import { FeedbackNotice } from "./feedback";
+import { SectionCard } from "./pagePrimitives";
+import { ProjectRow, ProjectTableHeader, useKeyboardListNav } from "./ProjectList";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -117,6 +119,8 @@ export function ProjectsPage() {
     () => validateManualProjectForm(projectForm),
     [projectForm]
   );
+
+  const selectedIndex = useKeyboardListNav(filteredProjects, navigate);
 
   // Auto-dismiss feedback
   useEffect(() => {
@@ -433,11 +437,12 @@ export function ProjectsPage() {
             <ProjectTableHeader />
             {/* Things-3 flat list — each row is a click target, checkbox reveals on hover */}
             <div role="list">
-              {filteredProjects.map((project) => (
+              {filteredProjects.map((project, i) => (
                 <ProjectRow
                   key={project.id}
                   project={project}
                   drives={drives}
+                  isSelected={i === selectedIndex}
                 />
               ))}
             </div>

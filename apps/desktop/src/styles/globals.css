@@ -1,6 +1,6 @@
 /* ──────────────────────────────────────────────────────────────
    Catalog — DESIGN.md source of truth
-   Cold-neutral canvas, Apple-blue action, Inter, dense transaction UI.
+   Cold-neutral canvas, Apple-blue action, system-ui, dense transaction UI.
    See /DESIGN.md at repo root. Do not tune values here without
    updating DESIGN.md in the same commit.
 
@@ -10,13 +10,9 @@
    ────────────────────────────────────────────────────────────── */
 
 :root {
-  /* ── Typography — SF Pro via WKWebView on macOS ── */
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
-    "Helvetica Neue", system-ui, sans-serif;
-  --font-display:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Helvetica Neue", system-ui, sans-serif;
+  /* ── Typography — system-ui resolves to SF Pro on macOS/WKWebView ── */
+  --font-sans:  system-ui, -apple-system, sans-serif;
+  --font-display: system-ui, -apple-system, sans-serif;
   --font-mono:
     ui-monospace, "SF Mono", Menlo, "Cascadia Code", monospace;
 

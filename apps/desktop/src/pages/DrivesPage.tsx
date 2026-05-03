@@ -9,7 +9,8 @@ import { useImportFromVolume } from "../app/useImportFromVolume";
 import { formatBytes } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { ImportFoldersDialog } from "./ImportFoldersDialog";
-import { DriveCardSkeleton, FeedbackNotice } from "./pagePrimitives";
+import { DriveCardSkeleton } from "./search";
+import { FeedbackNotice } from "./feedback";
 import { DriveCreateForm, type DriveFormState, initialDriveForm } from "./drives/DriveCreateForm";
 import { DriveCard } from "./drives/DriveCard";
 

@@ -7,8 +7,8 @@
  * only handles rendering, not filtering.
  */
 
-import { type CSSProperties } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "@drive-project-catalog/ui";
 import type { Drive, Project } from "@drive-project-catalog/domain";
 import { getDisplayClient, getDisplayProject } from "@drive-project-catalog/domain";
@@ -18,8 +18,62 @@ import {
   getDriveName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { StatusBadge } from "./pagePrimitives";
+import { StatusBadge } from "./feedback";
 import { getDriveColor } from "./driveColor";
+
+// ---------------------------------------------------------------------------
+// useKeyboardListNav — j/k navigation for project rows (FEAT-V2-03)
+// ---------------------------------------------------------------------------
+// Listens globally for j/k when no text input is focused. Enter navigates to
+// the selected project. Escape clears the selection.
+// ---------------------------------------------------------------------------
+
+export function useKeyboardListNav(
+  projects: Project[],
+  navigate: ReturnType<typeof useNavigate>
+): number {
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+
+  // Stable refs so the keydown listener never needs to be re-registered.
+  const idxRef = useRef(selectedIndex);
+  idxRef.current = selectedIndex;
+  const listRef = useRef(projects);
+  listRef.current = projects;
+  const navRef = useRef(navigate);
+  navRef.current = navigate;
+
+  // Reset when the filtered list changes.
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [projects]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      if (target.matches('input, textarea, select, [contenteditable]')) return;
+
+      const list = listRef.current;
+      const idx = idxRef.current;
+
+      if (e.key === 'j') {
+        e.preventDefault();
+        setSelectedIndex(Math.min(idx + 1, list.length - 1));
+      } else if (e.key === 'k') {
+        e.preventDefault();
+        setSelectedIndex(Math.max(idx - 1, 0));
+      } else if (e.key === 'Enter' && idx >= 0 && list[idx]) {
+        e.preventDefault();
+        navRef.current(`/projects/${list[idx].id}`);
+      } else if (e.key === 'Escape') {
+        setSelectedIndex(-1);
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  return selectedIndex;
+}
 
 // ---------------------------------------------------------------------------
 // ProjectRow — shared by ProjectsPage and ProjectList
@@ -27,11 +81,18 @@ import { getDriveColor } from "./driveColor";
 
 export function ProjectRow({
   project,
-  drives
+  drives,
+  isSelected = false
 }: {
   project: Project;
   drives: Drive[];
+  isSelected?: boolean;
 }) {
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isSelected) rowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [isSelected]);
   const displayName = getDisplayProject(project);
   const displayClient = getDisplayClient(project);
   const displayDate = formatParsedDate(project.correctedDate ?? project.parsedDate);
@@ -79,13 +140,16 @@ export function ProjectRow({
 
   return (
     <div
+      ref={rowRef}
       role="listitem"
+      aria-selected={isSelected || undefined}
       className="proj-row grid items-center"
       style={{
         gap: 12,
         gridTemplateColumns: "minmax(0,1fr) minmax(170px,220px) 88px minmax(140px,180px) 16px",
         borderBottom: "1px solid var(--hairline)",
         padding: "12px 16px",
+        background: isSelected ? "var(--accent-soft)" : undefined,
         boxShadow: statusAccent
       }}
     >
@@ -222,6 +286,9 @@ export function ProjectList({
   isLoading?: boolean;
   emptyMessage?: string;
 }) {
+  const navigate = useNavigate();
+  const selectedIndex = useKeyboardListNav(projects, navigate);
+
   if (isLoading) {
     return (
       <div className="card text-center" style={{ overflow: "hidden", padding: "48px 0" }}>
@@ -251,8 +318,8 @@ export function ProjectList({
     <div className="card" style={{ overflow: "hidden" }}>
       <ProjectTableHeader />
       <div role="list">
-        {projects.map((project) => (
-          <ProjectRow key={project.id} project={project} drives={drives} />
+        {projects.map((project, i) => (
+          <ProjectRow key={project.id} project={project} drives={drives} isSelected={i === selectedIndex} />
         ))}
       </div>
     </div>

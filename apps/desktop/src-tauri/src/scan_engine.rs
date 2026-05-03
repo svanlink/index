@@ -40,6 +40,7 @@ use std::{
         Arc, Mutex,
     },
     thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
 use tauri::State;
 
@@ -187,6 +188,9 @@ pub struct AppScanState {
 struct ScanSession {
     cancel_requested: AtomicBool,
     finalized: AtomicBool,
+    /// Set once when any terminal state is entered (completed/cancelled/failed).
+    /// Used by TTL eviction in AppScanState::prune_stale_sessions.
+    finalized_at: Mutex<Option<Instant>>,
     /// Immutable after construction — read without a lock.
     scan_mode: String,
     snapshot: Mutex<ScanSnapshot>,
@@ -200,8 +204,22 @@ impl AppScanState {
     }
 
     fn insert_session(&self, scan_id: String, session: Arc<ScanSession>) {
+        self.prune_stale_sessions(Duration::from_secs(5 * 60));
         let mut sessions = self.sessions.lock().expect("scan state poisoned");
         sessions.insert(scan_id, session);
+    }
+
+    /// Remove finalized sessions older than `ttl`. Called opportunistically on
+    /// each new scan start to bound map growth without a background thread.
+    fn prune_stale_sessions(&self, ttl: Duration) {
+        let mut sessions = self.sessions.lock().expect("scan state poisoned");
+        sessions.retain(|_, session| {
+            let guard = session.finalized_at.lock().expect("finalized_at poisoned");
+            match *guard {
+                Some(t) => t.elapsed() < ttl,
+                None => true, // still running — keep
+            }
+        });
     }
 
     fn get_session(&self, scan_id: &str) -> Option<Arc<ScanSession>> {
@@ -228,6 +246,7 @@ impl ScanSession {
         Self {
             cancel_requested: AtomicBool::new(false),
             finalized: AtomicBool::new(false),
+            finalized_at: Mutex::new(None),
             scan_mode: scan_mode.clone(),
             snapshot: Mutex::new(ScanSnapshot {
                 scan_id,
@@ -390,6 +409,7 @@ impl ScanSession {
         }
         snapshot.status = "completed".to_string();
         snapshot.finished_at = Some(timestamp_now());
+        *self.finalized_at.lock().expect("finalized_at poisoned") = Some(Instant::now());
     }
 
     fn mark_cancelled(&self) {
@@ -404,6 +424,7 @@ impl ScanSession {
         if snapshot.error.is_none() {
             snapshot.error = Some(CANCELLED_ERROR.to_string());
         }
+        *self.finalized_at.lock().expect("finalized_at poisoned") = Some(Instant::now());
     }
 
     fn mark_failed(&self, error: String) {
@@ -414,6 +435,7 @@ impl ScanSession {
         snapshot.status = "failed".to_string();
         snapshot.error = Some(error);
         snapshot.finished_at = Some(timestamp_now());
+        *self.finalized_at.lock().expect("finalized_at poisoned") = Some(Instant::now());
     }
 
     /// Register a spawned size worker so it can be joined on Drop (H8).
