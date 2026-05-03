@@ -1,7 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { Icon, type IconName } from "@drive-project-catalog/ui";
+import { getDisplayProject, getDisplayDate } from "@drive-project-catalog/domain";
+import { useCatalogStore } from "../providers";
 import { useCommandPalette } from "./CommandPaletteContext";
+import { useCommandPaletteSearch, MIN_QUERY_LENGTH } from "./useCommandPaletteSearch";
 
 interface PaletteAction {
   id: string;
@@ -16,7 +20,7 @@ const PINNED_ACTIONS: ReadonlyArray<PaletteAction> = [
     label: "Register Drive",
     icon: "hardDrive",
     onSelect: () => {
-      // TODO(02): wire to existing register-drive dialog opener
+      // TODO(03): wire to existing register-drive dialog opener
     }
   },
   {
@@ -24,7 +28,7 @@ const PINNED_ACTIONS: ReadonlyArray<PaletteAction> = [
     label: "Import Folders",
     icon: "folder",
     onSelect: () => {
-      // TODO(02): wire to existing import-folders dialog opener
+      // TODO(03): wire to existing import-folders dialog opener
     }
   },
   {
@@ -32,14 +36,25 @@ const PINNED_ACTIONS: ReadonlyArray<PaletteAction> = [
     label: "Open in Finder",
     icon: "folderOpen",
     onSelect: () => {
-      // TODO(02): wire to existing open-in-finder action
+      // TODO(03): wire to existing open-in-finder action
     }
   }
 ];
 
 export function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
+  const { projects, drives } = useCatalogStore();
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
 
+  const { projectResults } = useCommandPaletteSearch(projects, drives, query);
+
+  // Reset query when palette closes
+  useEffect(() => {
+    if (!isOpen) setQuery("");
+  }, [isOpen]);
+
+  // Escape to close
   useEffect(() => {
     if (!isOpen) return;
     function handleKeyDown(event: KeyboardEvent) {
@@ -52,6 +67,10 @@ export function CommandPalette() {
   }, [isOpen, close]);
 
   if (!isOpen) return null;
+
+  const isSearching = query.length >= MIN_QUERY_LENGTH;
+  const hasResults = projectResults.length > 0;
+  const noResults = isSearching && !hasResults;
 
   return createPortal(
     <div
@@ -70,6 +89,7 @@ export function CommandPalette() {
         }}
         onClick={(event) => event.stopPropagation()}
       >
+        {/* Search input */}
         <div
           className="flex items-center gap-2 px-4 py-3 border-b"
           style={{ borderColor: "var(--color-border)" }}
@@ -77,6 +97,8 @@ export function CommandPalette() {
           <Icon name="search" size={16} />
           <input
             type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search projects, drives, or actions"
             autoFocus
             aria-label="Command palette search"
@@ -84,24 +106,84 @@ export function CommandPalette() {
             style={{ color: "var(--color-text)" }}
           />
         </div>
-        <ul aria-label="Pinned actions" className="py-1">
-          {PINNED_ACTIONS.map((action) => (
-            <li key={action.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  action.onSelect();
-                  close();
-                }}
-                className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] hover:bg-white/5"
-                style={{ color: "var(--color-text)" }}
-              >
-                <Icon name={action.icon} size={16} />
-                <span>{action.label}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+
+        {/* Project results */}
+        {isSearching && hasResults && (
+          <section>
+            <div
+              className="px-4 py-1.5 text-[11px] font-medium uppercase tracking-wider"
+              style={{ color: "var(--color-text-muted, var(--color-text))", opacity: 0.5 }}
+            >
+              Projects
+            </div>
+            <ul aria-label="Project results">
+              {projectResults.map((project) => {
+                const drive = drives.find((d) => d.id === project.currentDriveId);
+                const name = getDisplayProject(project);
+                const date = getDisplayDate(project);
+                const driveName = drive?.displayName ?? "Unassigned";
+
+                return (
+                  <li key={project.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate(`/projects/${project.id}`);
+                        close();
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5"
+                      style={{ color: "var(--color-text)" }}
+                    >
+                      <Icon name="folder" size={14} />
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate text-[13px]">{name}</span>
+                        <span
+                          className="block truncate text-[11px]"
+                          style={{ opacity: 0.55 }}
+                        >
+                          {driveName}
+                          {date ? ` · ${date}` : ""}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        {/* No results state */}
+        {noResults && (
+          <div
+            className="px-4 py-6 text-center text-[13px]"
+            style={{ opacity: 0.5, color: "var(--color-text)" }}
+          >
+            No results for &ldquo;{query}&rdquo;
+          </div>
+        )}
+
+        {/* Default state: pinned actions (shown when not searching) */}
+        {!isSearching && (
+          <ul aria-label="Pinned actions" className="py-1">
+            {PINNED_ACTIONS.map((action) => (
+              <li key={action.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    action.onSelect();
+                    close();
+                  }}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] hover:bg-white/5"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  <Icon name={action.icon} size={16} />
+                  <span>{action.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>,
     document.body
