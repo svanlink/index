@@ -366,26 +366,38 @@ export function ProjectsPage() {
             {[0, 1, 2, 3, 4, 5].map((i) => <ProjectRowSkeleton key={i} />)}
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div
-            className="flex flex-col items-center gap-1 px-4 py-16 text-center"
-          >
-            <p
-              className="text-[13.5px] font-semibold"
-              style={{ color: "var(--ink)" }}
+          <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
+            <span
+              className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-[10px]"
+              style={{ background: "var(--surface-inset)" }}
+              aria-hidden="true"
             >
-              No results
+              <Icon
+                name={hasActiveFilters || search.trim() ? "search" : "folder"}
+                size={17}
+                color="var(--ink-3)"
+              />
+            </span>
+            <p className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>
+              {hasActiveFilters || search.trim() ? "No projects match" : "No projects yet"}
             </p>
             <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-              Try a broader search or{" "}
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                className="font-medium underline-offset-2 hover:underline"
-                style={{ color: "var(--ink-2)" }}
-              >
-                clear filters
-              </button>
-              .
+              {hasActiveFilters || search.trim() ? (
+                <>
+                  Try a broader search or{" "}
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="font-medium underline-offset-2 hover:underline"
+                    style={{ color: "var(--ink-2)" }}
+                  >
+                    clear filters
+                  </button>
+                  .
+                </>
+              ) : (
+                "Scan a connected drive to import projects, or add one manually."
+              )}
             </p>
           </div>
         ) : (

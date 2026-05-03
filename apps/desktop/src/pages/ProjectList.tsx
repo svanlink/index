@@ -207,7 +207,14 @@ export function ProjectList({
   if (projects.length === 0) {
     return (
       <div className="card overflow-hidden">
-        <div className="flex flex-col items-center gap-1 px-4 py-12 text-center">
+        <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+          <span
+            className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-[10px]"
+            style={{ background: "var(--surface-inset)" }}
+            aria-hidden="true"
+          >
+            <Icon name="folder" size={17} color="var(--ink-3)" />
+          </span>
           <p className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>
             {emptyMessage}
           </p>

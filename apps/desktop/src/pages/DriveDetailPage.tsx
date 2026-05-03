@@ -438,13 +438,40 @@ export function DriveDetailPage() {
         <section className="space-y-2">
           <h2 className="h-section" style={{ margin: 0 }}>Projects on this drive</h2>
           <div className="card overflow-hidden">
-            <div className="flex flex-col items-center gap-1 px-4 py-12 text-center">
+            <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+              <span
+                className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-[10px]"
+                style={{ background: "var(--surface-inset)" }}
+                aria-hidden="true"
+              >
+                <Icon name="folderOpen" size={17} color="var(--ink-3)" />
+              </span>
               <p className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>
                 No projects yet
               </p>
               <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
                 Scan the drive or import folders to populate the catalog.
               </p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={() => void runImportPicker()}
+                  disabled={!canImportFromVolume || isPickingImport || isImporting}
+                >
+                  <Icon name="download" size={11} color="currentColor" />
+                  Import folders
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => void startScan()}
+                  disabled={!canStartScan}
+                >
+                  <Icon name="scan" size={11} color="currentColor" />
+                  Start scan
+                </button>
+              </div>
             </div>
           </div>
         </section>
