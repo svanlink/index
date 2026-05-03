@@ -77,11 +77,15 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-05-02 — Phase 3 executed (macOS-Native Catalog UX — 1 plan, 3 tasks)
+**Last session:** 2026-05-03 — UI redesign polish (A–F) + command palette token alignment
 
-**Next action:** v1 milestone complete. Ship or gather feedback.
+**Next action:** All planned work complete. Ready to ship or plan v2 features.
 
-**Resume context:** Phase 3 complete. Sidebar now shows wallpaper bleed-through via NSVisualEffectView (Sidebar material). Traffic lights unobscured with h-[52px] drag spacer. Search filters instantly on every keystroke with replace:true navigate. Project detail shows "Not yet scanned" / "Path unavailable" instead of bare dashes. Open in Finder verified present. cargo check, tsc, and pnpm build all exit 0.
+**Resume context:**
+- Completed 6-surface UI redesign (A–F): drive cards, drive detail, project detail, import dialog, empty states, ConfirmModal.
+- Command palette (⌘K): all 4 issues shipped. Token alignment pass done (stale `--color-*` aliases → canonical tokens, hover states fixed, `ResultRow`/`SectionLabel` extracted).
+- `FullScreenErrorPanel.tsx` token cleanup.
+- All 70 tests pass. Typecheck clean.
 
 ---
-*State updated: 2026-05-02 — Phase 3 complete — v1 milestone done*
+*State updated: 2026-05-03 — UI redesign A–F + palette polish complete*
