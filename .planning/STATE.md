@@ -77,15 +77,23 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-05-03 — UI redesign polish (A–F) + command palette token alignment
+**Last session:** 2026-05-03 — Liquid Glass redesign + Tailwind removal complete
 
 **Next action:** All planned work complete. Ready to ship or plan v2 features.
 
 **Resume context:**
-- Completed 6-surface UI redesign (A–F): drive cards, drive detail, project detail, import dialog, empty states, ConfirmModal.
-- Command palette (⌘K): all 4 issues shipped. Token alignment pass done (stale `--color-*` aliases → canonical tokens, hover states fixed, `ResultRow`/`SectionLabel` extracted).
-- `FullScreenErrorPanel.tsx` token cleanup.
-- All 70 tests pass. Typecheck clean.
+- Full Liquid Glass redesign shipped (fcd6b36): Tailwind removed, vanilla CSS design system.
+  - `--glass-*` token variables for sidebar, toolbar, sheet, palette (light + dark).
+  - Button heights 30/26/34px, radius system corrected, Apple blue active nav state.
+  - SidebarNav: 52px glass header with drag region (Things 3 pattern).
+  - TopUtilityBar: 48px, glass tokens.
+  - AppShell: 24px horizontal content padding.
+  - CommandPalette: `--glass-palette` material.
+  - Empty state icons: 44×44px, 20px.
+  - ImportFoldersDialog: "Change folder" inline link in header.
+- Missing utility classes fixed (a176773): `sticky`, `z-20`, `rounded-full`, `rotate-180`, `text-left`.
+- CSS-001 DoD complete: zero Tailwind, build passes, 70/70 tests.
+- All 4 command palette issues done: fuzzy search, drive results, pinned actions, recent projects.
 
 ---
-*State updated: 2026-05-03 — UI redesign A–F + palette polish complete*
+*State updated: 2026-05-03 — Liquid Glass redesign + CSS-001 complete*

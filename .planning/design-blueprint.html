@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalog — Design Blueprint</title>
+<style>
+
+/* ─────────────────────────────────────────────────
+   TOKENS
+───────────────────────────────────────────────── */
+:root {
+  --canvas: #f2f2f7;
+  --surface: #ffffff;
+  --surface-low: #f3f3f3;
+  --surface-container: #eeeeee;
+  --surface-high: #e8e8e8;
+  --ink: #1d1d1f;
+  --ink-2: #424245;
+  --ink-3: #6e6e73;
+  --ink-4: #86868b;
+  --hairline: rgba(0,0,0,0.09);
+  --hairline-strong: rgba(0,0,0,0.14);
+  --action: #007AFF;
+  --action-hover: #0062cc;
+  --action-soft: #e8f3ff;
+  --ok: #1d7a4a;
+  --ok-soft: #e6f4ec;
+  --warn: #8a5a00;
+  --danger: #ba1a1a;
+  --danger-soft: #ffdad6;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  /* Drive identity palette */
+  --drive-a: #5b6b80;
+  --drive-b: #6b7380;
+  --drive-c: #5f7a72;
+  --drive-d: #7a6b68;
+  --drive-e: #6a6880;
+  --drive-f: #4f7282;
+  /* Glass materials */
+  --glass-sidebar: rgba(235,235,240,0.72);
+  --glass-toolbar: rgba(255,255,255,0.82);
+  --glass-sheet: rgba(255,255,255,0.88);
+  --glass-palette: rgba(252,252,254,0.88);
+}
+
+[data-theme="dark"] {
+  --canvas: #1c1c1e;
+  --surface: #2a2a2c;
+  --surface-low: #272729;
+  --surface-container: #333336;
+  --surface-high: #3a3a3d;
+  --ink: #f5f5f7;
+  --ink-2: #d2d2d7;
+  --ink-3: #a1a1a6;
+  --ink-4: #6e6e73;
+  --hairline: rgba(255,255,255,0.09);
+  --hairline-strong: rgba(255,255,255,0.13);
+  --action-soft: rgba(0,122,255,0.18);
+  --drive-a: #8ea0b5;
+  --drive-b: #a4aab5;
+  --drive-c: #8aa69d;
+  --drive-d: #b09a93;
+  --drive-e: #9992ad;
+  --drive-f: #7a9cae;
+  --glass-sidebar: rgba(30,30,32,0.78);
+  --glass-toolbar: rgba(42,42,44,0.85);
+  --glass-sheet: rgba(44,44,46,0.92);
+  --glass-palette: rgba(38,38,40,0.92);
+}
+
+/* ─────────────────────────────────────────────────
+   RESET
+───────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11","ss01","calt","kern";
+  user-select: none;
+  overflow: hidden;
+  height: 100vh;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+button { font-family: var(--font); cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+
+/* ─────────────────────────────────────────────────
+   DEMO SHELL (floating nav outside app window)
+───────────────────────────────────────────────── */
+.demo-nav {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  background: rgba(10,10,12,0.72);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 9999;
+  white-space: nowrap;
+}
+.demo-nav button {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.55);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  transition: all 150ms;
+  letter-spacing: -0.01em;
+}
+.demo-nav button:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.08); }
+.demo-nav button.active { background: rgba(255,255,255,0.15); color: white; }
+.demo-nav .sep { width: 1px; height: 16px; background: rgba(255,255,255,0.12); margin: 0 4px; flex-shrink: 0; }
+.demo-nav button.theme-btn { color: rgba(255,255,255,0.5); font-size: 13px; padding: 5px 10px; }
+.demo-nav button.theme-btn:hover { color: rgba(255,255,255,0.85); }
+
+/* ─────────────────────────────────────────────────
+   DESKTOP WALLPAPER
+───────────────────────────────────────────────── */
+.desktop {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 70% 60% at 15% 25%, rgba(100,80,180,0.18) 0%, transparent 100%),
+    radial-gradient(ellipse 60% 50% at 85% 75%, rgba(0,100,200,0.14) 0%, transparent 100%),
+    radial-gradient(ellipse 80% 70% at 50% 50%, rgba(40,130,90,0.08) 0%, transparent 100%),
+    linear-gradient(145deg, #dcdaf0 0%, #d8e8f4 35%, #d8ecdf 70%, #dfe6f2 100%);
+  padding: 60px 40px 80px;
+}
+[data-theme="dark"] .desktop {
+  background:
+    radial-gradient(ellipse 70% 60% at 15% 25%, rgba(60,40,120,0.25) 0%, transparent 100%),
+    radial-gradient(ellipse 60% 50% at 85% 75%, rgba(0,60,140,0.2) 0%, transparent 100%),
+    radial-gradient(ellipse 80% 70% at 50% 50%, rgba(20,80,50,0.15) 0%, transparent 100%),
+    linear-gradient(145deg, #18181e 0%, #181e24 40%, #18221c 70%, #1c1e26 100%);
+}
+
+/* ─────────────────────────────────────────────────
+   WINDOW
+───────────────────────────────────────────────── */
+.window {
+  width: 1180px;
+  height: 740px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+  box-shadow:
+    0 0 0 0.5px rgba(0,0,0,0.22),
+    0 2px 4px rgba(0,0,0,0.08),
+    0 12px 40px rgba(0,0,0,0.2),
+    0 40px 80px rgba(0,0,0,0.14);
+  position: relative;
+  flex-shrink: 0;
+}
+[data-theme="dark"] .window {
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.06),
+    0 2px 4px rgba(0,0,0,0.3),
+    0 12px 40px rgba(0,0,0,0.6),
+    0 40px 80px rgba(0,0,0,0.4);
+}
+
+/* ─────────────────────────────────────────────────
+   TITLEBAR (macOS window chrome)
+───────────────────────────────────────────────── */
+.titlebar {
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 16px 0 20px;
+  gap: 10px;
+  background: var(--glass-toolbar);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border-bottom: 1px solid var(--hairline);
+  position: relative;
+  z-index: 20;
+}
+.traffic-lights {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.tl {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tl-close  { background: #EC6A5E; border: 0.5px solid rgba(180,60,50,0.35); }
+.tl-min    { background: #F5BE4F; border: 0.5px solid rgba(160,120,30,0.35); }
+.tl-max    { background: #60C354; border: 0.5px solid rgba(50,140,40,0.35); }
+
+.window-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 590;
+  color: var(--ink-2);
+  letter-spacing: -0.012em;
+  pointer-events: none;
+}
+.titlebar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ─────────────────────────────────────────────────
+   APP BODY
+───────────────────────────────────────────────── */
+.app-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────
+   SIDEBAR
+───────────────────────────────────────────────── */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 8px 12px;
+  background: var(--glass-sidebar);
+  backdrop-filter: blur(24px) saturate(1.8) brightness(1.02);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8) brightness(1.02);
+  border-right: 1px solid var(--hairline);
+  overflow-y: auto;
+}
+[data-theme="dark"] .sidebar {
+  backdrop-filter: blur(24px) saturate(1.5) brightness(0.98);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5) brightness(0.98);
+}
+
+.sidebar-section {
+  padding: 2px 10px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 8px;
+}
+.sidebar-section:first-child { margin-top: 2px; }
+
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 90ms, color 90ms;
+  position: relative;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+.side-item:hover { background: rgba(128,128,128,0.1); color: var(--ink); }
+.side-item.active { color: var(--action); }
+.side-item svg { width: 15px; height: 15px; flex-shrink: 0; }
+.side-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.side-item.active .side-count { color: var(--action); }
+
+.sidebar-spacer { flex: 1; }
+.sidebar-footer {
+  border-top: 1px solid var(--hairline);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+/* ─────────────────────────────────────────────────
+   MAIN CONTENT
+───────────────────────────────────────────────── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ─────────────────────────────────────────────────
+   SCREENS
+───────────────────────────────────────────────── */
+.screen { display: none; flex: 1; flex-direction: column; overflow: hidden; position: relative; }
+.screen.active { display: flex; }
+
+/* ─────────────────────────────────────────────────
+   CONTENT TOOLBAR (inside main)
+───────────────────────────────────────────────── */
+.content-bar {
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 8px;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--glass-toolbar);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+}
+
+/* ─────────────────────────────────────────────────
+   SEARCH FIELD
+───────────────────────────────────────────────── */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px;
+  background: rgba(128,128,128,0.1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  flex: 1;
+  max-width: 300px;
+  font-size: 13px;
+  color: var(--ink-4);
+  transition: background 120ms, border-color 120ms;
+}
+.search-field:hover { background: rgba(128,128,128,0.13); }
+.search-field svg { flex-shrink: 0; }
+.search-field-kbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-4);
+  opacity: 0.7;
+}
+
+/* ─────────────────────────────────────────────────
+   FILTER CHIPS
+───────────────────────────────────────────────── */
+.chips { display: flex; gap: 5px; align-items: center; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 100ms;
+  background: transparent;
+}
+.chip:hover { color: var(--ink-2); border-color: var(--ink-4); }
+.chip.on { background: var(--action-soft); border-color: rgba(0,122,255,0.35); color: var(--action); }
+
+/* ─────────────────────────────────────────────────
+   ICON BUTTONS & TOOLBAR PILLS
+───────────────────────────────────────────────── */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--action);
+  transition: background 100ms;
+}
+.icon-btn:hover { background: rgba(128,128,128,0.1); }
+.icon-btn svg { width: 15px; height: 15px; }
+
+.cmd-k-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 9px;
+  background: rgba(128,128,128,0.1);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  transition: all 100ms;
+}
+.cmd-k-pill:hover { background: rgba(128,128,128,0.15); }
+.cmd-k-pill kbd { font-family: var(--font-mono); font-size: 11px; }
+
+/* ─────────────────────────────────────────────────
+   BUTTONS
+───────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--ink);
+  transition: background 110ms, border-color 110ms;
+}
+.btn:hover { background: var(--surface-low); border-color: var(--ink-4); }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--action); border-color: var(--action); color: white; }
+.btn-primary:hover { background: var(--action-hover); border-color: var(--action-hover); }
+.btn-sm { height: 26px; padding: 0 11px; font-size: 12px; }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: white; }
+
+/* ─────────────────────────────────────────────────
+   STATUS CHIPS
+───────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.badge-active { background: var(--action-soft); color: var(--action); }
+.badge-archived { background: transparent; border: 1px solid var(--hairline-strong); color: var(--ink-4); }
+.badge-connected { background: var(--ok-soft); color: var(--ok); }
+.badge-ejected { background: transparent; border: 1px solid var(--hairline-strong); color: var(--ink-4); }
+.badge-full { background: var(--danger-soft); color: var(--danger); }
+.badge-new { background: var(--action-soft); color: var(--action); }
+
+/* ─────────────────────────────────────────────────
+   DRIVE DOT
+───────────────────────────────────────────────── */
+.drive-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.drive-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+/* ─────────────────────────────────────────────────
+   PROJECT TABLE
+───────────────────────────────────────────────── */
+.table-scroll { flex: 1; overflow-y: auto; }
+.table-scroll::-webkit-scrollbar { width: 8px; }
+.table-scroll::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.table-head {
+  display: grid;
+  grid-template-columns: 20px 92px 148px 1fr 96px 180px 80px;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  gap: 10px;
+  position: sticky; top: 0; z-index: 5;
+  background: color-mix(in srgb, var(--canvas) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--hairline);
+}
+.th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.proj-row {
+  display: grid;
+  grid-template-columns: 20px 92px 148px 1fr 96px 180px 80px;
+  align-items: center;
+  height: 44px;
+  padding: 0 14px;
+  gap: 10px;
+  border-bottom: 1px solid var(--hairline);
+  cursor: default;
+  transition: background 80ms;
+}
+.proj-row:hover { background: var(--surface); }
+.proj-row:last-child { border-bottom: none; }
+
+.cell { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-dim { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-mono { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-strong { font-size: 13px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─────────────────────────────────────────────────
+   CAPACITY BAR
+───────────────────────────────────────────────── */
+.cap-bar {
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--surface-high);
+  overflow: hidden;
+  width: 100%;
+}
+.cap-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 500ms cubic-bezier(0.16,1,0.3,1);
+}
+
+/* ─────────────────────────────────────────────────
+   DRIVES GRID
+───────────────────────────────────────────────── */
+.drives-scroll { flex: 1; overflow-y: auto; padding: 18px; }
+.drives-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.drive-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xl);
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 130ms, box-shadow 130ms;
+}
+.drive-card:hover {
+  border-color: var(--hairline-strong);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+}
+.drive-card-head { display: flex; align-items: flex-start; gap: 11px; }
+.drive-icon-box {
+  width: 34px; height: 34px;
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.drive-icon-box svg { width: 18px; height: 18px; color: white; }
+.drive-card-meta { flex: 1; min-width: 0; }
+.drive-card-name { font-size: 14px; font-weight: 600; color: var(--ink); font-family: var(--font-mono); letter-spacing: 0; }
+.drive-card-sub { font-size: 12px; color: var(--ink-3); margin-top: 1px; }
+.drive-cap-stats { display: flex; justify-content: space-between; margin-top: 5px; }
+.drive-cap-stat { font-size: 11px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.drive-proj-count { font-size: 12px; color: var(--ink-3); font-weight: 500; }
+
+/* ─────────────────────────────────────────────────
+   PROJECT DETAIL
+───────────────────────────────────────────────── */
+.detail-scroll { flex: 1; overflow-y: auto; }
+.detail-scroll::-webkit-scrollbar { width: 8px; }
+.detail-scroll::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.detail-body { padding: 28px 40px 48px; max-width: 720px; }
+.detail-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-bottom: 6px;
+}
+.detail-title {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.2;
+  margin-bottom: 26px;
+}
+.detail-section {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.detail-section-head {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.detail-row {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  gap: 14px;
+  border-bottom: 1px solid var(--hairline);
+  min-height: 40px;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-lbl { font-size: 13px; color: var(--ink-3); width: 96px; flex-shrink: 0; }
+.detail-val { font-size: 13px; color: var(--ink); flex: 1; }
+.detail-val-mono { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+
+.scan-row { display: flex; align-items: flex-start; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--hairline); }
+.scan-row:last-child { border-bottom: none; }
+.scan-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+.scan-dot-blue { background: var(--action); }
+.scan-dot-grey { background: var(--ink-4); }
+.scan-content { flex: 1; }
+.scan-primary { font-size: 13px; color: var(--ink); }
+.scan-secondary { font-size: 12px; color: var(--ink-3); margin-top: 1px; }
+.scan-time { font-size: 12px; color: var(--ink-4); font-variant-numeric: tabular-nums; flex-shrink: 0; margin-top: 1px; }
+
+/* ─────────────────────────────────────────────────
+   SHEET OVERLAY (import dialog)
+───────────────────────────────────────────────── */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+[data-theme="dark"] .overlay { background: rgba(0,0,0,0.5); }
+
+.sheet {
+  width: 500px;
+  background: var(--glass-sheet);
+  backdrop-filter: blur(40px) saturate(1.8);
+  -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  box-shadow: 0 20px 64px rgba(0,0,0,0.18), 0 0 0 0.5px rgba(0,0,0,0.08);
+  animation: sheetSpring 220ms cubic-bezier(0.34,1.56,0.64,1) both;
+}
+[data-theme="dark"] .sheet {
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 20px 64px rgba(0,0,0,0.6), 0 0 0 0.5px rgba(255,255,255,0.06);
+}
+@keyframes sheetSpring {
+  from { transform: scale(0.93) translateY(10px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.sheet-head { padding: 20px 20px 14px; border-bottom: 1px solid var(--hairline); }
+.sheet-title { font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.sheet-sub { font-size: 13px; color: var(--ink-3); margin-top: 3px; }
+.sheet-body { padding: 18px; display: flex; flex-direction: column; gap: 13px; }
+.sheet-foot { padding: 14px 18px; border-top: 1px solid var(--hairline); display: flex; justify-content: flex-end; gap: 7px; }
+
+.field-wrap { display: flex; flex-direction: column; gap: 5px; }
+.field-wrap-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field-lbl { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.field-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 34px;
+  padding: 0 11px;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--ink-3);
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.field-box.focused { border-color: var(--action); box-shadow: 0 0 0 3px var(--action-soft); }
+.field-box.filled { color: var(--ink); }
+.field-box.filled.mono { font-family: var(--font-mono); font-size: 12px; }
+
+/* ─────────────────────────────────────────────────
+   COMMAND PALETTE
+───────────────────────────────────────────────── */
+.palette-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.18);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 72px;
+  z-index: 100;
+}
+
+.palette {
+  width: 540px;
+  background: var(--glass-palette);
+  backdrop-filter: blur(48px) saturate(1.9) brightness(1.03);
+  -webkit-backdrop-filter: blur(48px) saturate(1.9) brightness(1.03);
+  border: 1px solid rgba(255,255,255,0.65);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 16px 56px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08), 0 0 0 0.5px rgba(0,0,0,0.06);
+  animation: sheetSpring 200ms cubic-bezier(0.34,1.56,0.64,1) both;
+}
+[data-theme="dark"] .palette {
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 16px 56px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3), 0 0 0 0.5px rgba(255,255,255,0.05);
+}
+
+.palette-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  height: 50px;
+  border-bottom: 1px solid var(--hairline);
+}
+.palette-search-row svg { flex-shrink: 0; opacity: 0.35; }
+.palette-query { font-size: 16px; color: var(--ink); flex: 1; letter-spacing: -0.01em; }
+.palette-esc {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-4);
+  background: var(--surface-low);
+  border: 1px solid var(--hairline-strong);
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.palette-section { padding: 8px 12px 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-4); }
+
+.p-result {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  margin: 1px 4px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 70ms;
+}
+.p-result.on, .p-result:hover { background: var(--action); }
+.p-result.on .p-title, .p-result:hover .p-title { color: white; }
+.p-result.on .p-sub, .p-result:hover .p-sub { color: rgba(255,255,255,0.65); }
+.p-result.on .p-icon, .p-result:hover .p-icon { background: rgba(255,255,255,0.18); color: white; }
+.p-result.on .p-kbd, .p-result:hover .p-kbd { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.7); }
+
+.p-icon {
+  width: 26px; height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-low);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--ink-3);
+  transition: all 70ms;
+}
+.p-icon svg { width: 13px; height: 13px; }
+.p-body { flex: 1; min-width: 0; }
+.p-title { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color 70ms; }
+.p-sub { font-size: 12px; color: var(--ink-3); transition: color 70ms; }
+.p-kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-4);
+  background: var(--surface-low);
+  border: 1px solid var(--hairline-strong);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+  transition: all 70ms;
+}
+
+.palette-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--hairline);
+}
+.p-hint { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--ink-4); }
+.p-hint kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--surface-low);
+  border: 1px solid var(--hairline-strong);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.palette-pb { padding-bottom: 6px; }
+
+/* ─────────────────────────────────────────────────
+   BACK BUTTON (detail)
+───────────────────────────────────────────────── */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--action);
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+.back-btn svg { width: 14px; height: 14px; }
+
+/* ─────────────────────────────────────────────────
+   EMPTY STATE
+───────────────────────────────────────────────── */
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--ink-4);
+  padding: 40px;
+}
+.empty-state svg { opacity: 0.3; margin-bottom: 4px; }
+.empty-state-title { font-size: 15px; font-weight: 500; color: var(--ink-3); }
+.empty-state-sub { font-size: 13px; color: var(--ink-4); text-align: center; max-width: 280px; }
+
+/* ─────────────────────────────────────────────────
+   SCROLLBAR (table)
+───────────────────────────────────────────────── */
+.drives-scroll::-webkit-scrollbar { width: 8px; }
+.drives-scroll::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+
+</style>
+</head>
+<body>
+
+<!-- ── Demo navigation ────────────────────────── -->
+<div class="demo-nav">
+  <button class="active" onclick="go('projects')">Projects</button>
+  <button onclick="go('drives')">Drives</button>
+  <button onclick="go('detail')">Project Detail</button>
+  <button onclick="go('import')">Import Dialog</button>
+  <button onclick="go('palette')">⌘K Palette</button>
+  <div class="sep"></div>
+  <button class="theme-btn" onclick="toggleTheme()" title="Toggle dark mode">☾</button>
+</div>
+
+<!-- ── Desktop ──────────────────────────────── -->
+<div class="desktop">
+<div class="window">
+
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="traffic-lights">
+      <div class="tl tl-close"></div>
+      <div class="tl tl-min"></div>
+      <div class="tl tl-max"></div>
+    </div>
+    <span class="window-title">Catalog</span>
+    <div class="titlebar-right">
+      <button class="cmd-k-pill" onclick="go('palette')">
+        <kbd>⌘K</kbd>&nbsp;Search
+      </button>
+      <button class="icon-btn" onclick="go('import')" title="New project (⌘N)">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- App body -->
+  <div class="app-body">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-section">Library</div>
+
+      <button class="side-item active" id="nav-projects" onclick="go('projects')">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v7.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7.5A1.75 1.75 0 0 0 14.25 3H7.06l-.678-1.017A.75.75 0 0 0 5.75 1.5H1.75Z"/></svg>
+        Projects
+        <span class="side-count">24</span>
+      </button>
+
+      <button class="side-item" id="nav-drives" onclick="go('drives')">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-6ZM3.5 5.5v6h9v-6h-9Z"/><circle cx="11.5" cy="9" r="1" fill="currentColor"/></svg>
+        Drives
+        <span class="side-count">6</span>
+      </button>
+
+      <div class="sidebar-section" style="margin-top:10px">Filters</div>
+
+      <button class="side-item">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3.25a.75.75 0 0 1 .75.75v3.25l2 1a.75.75 0 0 1-.75 1.3l-2.25-1.13A.75.75 0 0 1 7.25 9V5.5A.75.75 0 0 1 8 4.75Z"/></svg>
+        Recent
+      </button>
+
+      <button class="side-item">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.22 1.754a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm-1.763-.707c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-.25-5.25a.75.75 0 0 0-1.5 0v2.5a.75.75 0 0 0 1.5 0Z"/></svg>
+        Unassigned
+        <span class="side-count" style="color:var(--warn)">2</span>
+      </button>
+
+      <button class="side-item">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+        Search results
+      </button>
+
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-footer">
+        <button class="side-item">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.039.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.217c-.428.61-1.176.807-1.82.63l-1.103-.303c-.066-.019-.176-.011-.299.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.212.224l-.288 1.107c-.17.645-.715 1.195-1.458 1.259a8.232 8.232 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.259l-.288-1.107c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.364-1.891l.814-.806c.049-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.039-.246-.088-.294l-.814-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.217c.428-.61 1.176-.807 1.82-.63l1.103.303c.066.019.176.011.299-.071.214-.143.437-.272.668-.386.133-.066.194-.158.212-.224l.288-1.107c.17-.645.715-1.195 1.458-1.259A8.232 8.232 0 0 1 8 0Zm0 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+          Settings
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+
+      <!-- ══ SCREEN: PROJECTS ══════════════════════ -->
+      <div class="screen active" id="s-projects">
+        <div class="content-bar">
+          <div class="search-field">
+            <svg viewBox="0 0 16 16" fill="currentColor" style="width:13px;height:13px"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+            Search projects…
+            <span class="search-field-kbd">⌘F</span>
+          </div>
+          <div class="chips">
+            <div class="chip on">All <span style="opacity:.6">24</span></div>
+            <div class="chip">Active <span style="opacity:.6">2</span></div>
+            <div class="chip">Archived</div>
+          </div>
+          <div style="flex:1"></div>
+          <button class="btn btn-sm btn-primary" onclick="go('import')">
+            <svg viewBox="0 0 16 16" fill="currentColor" style="width:12px;height:12px"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
+            New Project
+          </button>
+        </div>
+        <div class="table-scroll">
+          <div class="table-head">
+            <div></div>
+            <div class="th">Date</div>
+            <div class="th">Client</div>
+            <div class="th">Project</div>
+            <div class="th">Drive</div>
+            <div class="th">Path</div>
+            <div class="th">Status</div>
+          </div>
+
+          <!-- Row 1 -->
+          <div class="proj-row" onclick="go('detail')" style="cursor:pointer">
+            <div class="drive-dot" style="background:var(--drive-d)"></div>
+            <div class="cell-dim">May 1, 2026</div>
+            <div class="cell">Decathlon</div>
+            <div class="cell-strong">Store Activations Lyon</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-d);width:6px;height:6px"></div>BMPCC_04</div>
+            <div class="cell-mono">/Decathlon/2026/StoreAct</div>
+            <div><span class="badge badge-active">Active</span></div>
+          </div>
+          <!-- Row 2 -->
+          <div class="proj-row" onclick="go('detail')" style="cursor:pointer">
+            <div class="drive-dot" style="background:var(--drive-d)"></div>
+            <div class="cell-dim">Apr 24, 2026</div>
+            <div class="cell">Decathlon</div>
+            <div class="cell-strong">Podcast Geneva</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-d);width:6px;height:6px"></div>BMPCC_04</div>
+            <div class="cell-mono">/Decathlon/2026/Podcast</div>
+            <div><span class="badge badge-active">Active</span></div>
+          </div>
+          <!-- Row 3 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-b)"></div>
+            <div class="cell-dim">Mar 15, 2026</div>
+            <div class="cell">IWC Schaffhausen</div>
+            <div class="cell-strong">Product Launch Film</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-b);width:6px;height:6px"></div>BMPCC_02</div>
+            <div class="cell-mono">/IWC/2026/ProductLaunch</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 4 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-b)"></div>
+            <div class="cell-dim">Mar 8, 2026</div>
+            <div class="cell">Vacheron Constantin</div>
+            <div class="cell-strong">Visual Identity Film</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-b);width:6px;height:6px"></div>BMPCC_02</div>
+            <div class="cell-mono">/Vacheron/2026/Identity</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 5 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-c)"></div>
+            <div class="cell-dim">Feb 20, 2026</div>
+            <div class="cell">Insomnia</div>
+            <div class="cell-strong">Panerai Backstage</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-c);width:6px;height:6px"></div>BMPCC_03</div>
+            <div class="cell-mono">/Insomnia/2026/Panerai</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 6 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-a)"></div>
+            <div class="cell-dim">Dec 20, 2025</div>
+            <div class="cell">Decathlon</div>
+            <div class="cell-strong">Winter Campaign</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-a);width:6px;height:6px"></div>BMPCC_01</div>
+            <div class="cell-mono">/Decathlon/2025/Winter</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 7 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-c)"></div>
+            <div class="cell-dim">Nov 10, 2025</div>
+            <div class="cell">Piaget</div>
+            <div class="cell-strong">Timepiece Capsule Film</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-c);width:6px;height:6px"></div>BMPCC_03</div>
+            <div class="cell-mono">/Piaget/2025/Timepiece</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 8 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-e)"></div>
+            <div class="cell-dim">Oct 4, 2025</div>
+            <div class="cell">Decathlon</div>
+            <div class="cell-strong">Autumn Trail Series</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-e);width:6px;height:6px"></div>BMPCC_05</div>
+            <div class="cell-mono">/Decathlon/2025/Trail</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 9 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-a)"></div>
+            <div class="cell-dim">Sep 5, 2025</div>
+            <div class="cell">Personal</div>
+            <div class="cell-strong">Nature Reel 2025</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-a);width:6px;height:6px"></div>BMPCC_01</div>
+            <div class="cell-mono">/Personal/2025/Nature</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 10 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-b)"></div>
+            <div class="cell-dim">Jul 18, 2025</div>
+            <div class="cell">Insomnia</div>
+            <div class="cell-strong">Rolex Testimonee Portrait</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-b);width:6px;height:6px"></div>BMPCC_02</div>
+            <div class="cell-mono">/Insomnia/2025/Rolex</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 11 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-e)"></div>
+            <div class="cell-dim">Jun 3, 2025</div>
+            <div class="cell">Decathlon</div>
+            <div class="cell-strong">Summer Swim Campaign</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-e);width:6px;height:6px"></div>BMPCC_05</div>
+            <div class="cell-mono">/Decathlon/2025/Swim</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+          <!-- Row 12 -->
+          <div class="proj-row">
+            <div class="drive-dot" style="background:var(--drive-c)"></div>
+            <div class="cell-dim">Apr 22, 2025</div>
+            <div class="cell">Insomnia</div>
+            <div class="cell-strong">Audemars Piguet Event</div>
+            <div class="drive-chip"><div class="drive-dot" style="background:var(--drive-c);width:6px;height:6px"></div>BMPCC_03</div>
+            <div class="cell-mono">/Insomnia/2025/AP</div>
+            <div><span class="badge badge-archived">Archived</span></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ══ SCREEN: DRIVES ════════════════════════ -->
+      <div class="screen" id="s-drives">
+        <div class="content-bar">
+          <span style="font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--ink)">Drives</span>
+          <div style="flex:1"></div>
+          <button class="btn btn-sm btn-primary">
+            <svg viewBox="0 0 16 16" fill="currentColor" style="width:12px;height:12px"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
+            Add Drive
+          </button>
+        </div>
+        <div class="drives-scroll">
+          <div class="drives-grid">
+
+            <!-- BMPCC_04 — connected -->
+            <div class="drive-card">
+              <div class="drive-card-head">
+                <div class="drive-icon-box" style="background:var(--drive-d)">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-6ZM3.5 5.5v6h9v-6h-9Z"/><circle cx="11.5" cy="9" r="1"/></svg>
+                </div>
+                <div class="drive-card-meta">
+                  <div class="drive-card-name">BMPCC_04</div>
+                  <div class="drive-card-sub">WD My Passport · 4 TB</div>
+                </div>
+                <span class="badge badge-connected" style="align-self:flex-start">
+                  <svg viewBox="0 0 8 8" fill="currentColor" style="width:5px;height:5px"><circle cx="4" cy="4" r="4"/></svg>
+                  Connected
+                </span>
+              </div>
+              <div>
+                <div class="cap-bar"><div class="cap-fill" style="width:22%;background:var(--drive-d)"></div></div>
+                <div class="drive-cap-stats"><span class="drive-cap-stat">0.9 TB used</span><span class="drive-cap-stat">3.1 TB free</span></div>
+              </div>
+              <div class="drive-proj-count">2 active · 3 archived projects</div>
+            </div>
+
+            <!-- BMPCC_02 -->
+            <div class="drive-card">
+              <div class="drive-card-head">
+                <div class="drive-icon-box" style="background:var(--drive-b)">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-6ZM3.5 5.5v6h9v-6h-9Z"/><circle cx="11.5" cy="9" r="1"/></svg>
+                </div>
+                <div class="drive-card-meta">
+                  <div class="drive-card-name">BMPCC_02</div>
+                  <div class="drive-card-sub">WD My Passport · 4 TB</div>
+                </div>
+                <span class="badge badge-ejected" style="align-self:flex-start">Ejected</span>
+              </div>
+              <div>
+                <div class="cap-bar"><div class="cap-fill" style="width:80%;background:var(--drive-b)"></div></div>
+                <div class="drive-cap-stats"><span class="drive-cap-stat">3.2 TB used</span><span class="drive-cap-stat">0.8 TB free</span></div>
+              </div>
+              <div class="drive-proj-count">7 archived projects</div>
+            </div>
+
+            <!-- BMPCC_01 -->
+            <div class="drive-card">
+              <div class="drive-card-head">
+                <div class="drive-icon-box" style="background:var(--drive-a)">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-6ZM3.5 5.5v6h9v-6h-9Z"/><circle cx="11.5" cy="9" r="1"/></svg>
+                </div>
+                <div class="drive-card-meta">
+                  <div class="drive-card-name">BMPCC_01</div>
+                  <div class="drive-card-sub">WD My Passport · 4 TB</div>
+                </div>
+                <span class="badge badge-ejected" style="align-self:flex-start">Ejected</span>
+              </div>
+              <div>
+                <div class="cap-bar"><div class="cap-fill" style="width:52%;background:var(--drive-a)"></div></div>
+                <div class="drive-cap-stats"><span class="drive-cap-stat">2.1 TB used</span><span class="drive-cap-stat">1.9 TB free</span></div>
+              </div>
+              <div class="drive-proj-count">5 archived projects</div>
+            </div>
+
+            <!-- BMPCC_03 -->
+            <div class="drive-card">
+              <div class="drive-card-head">
+                <div class="drive-icon-box" style="background:var(--drive-c)">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-6ZM3.5 5.5v6h9v-6h-9Z"/><circle cx="11.5" cy="9" r="1"/></svg>
+                </div>
+                <div class="drive-card-meta">
+                  <div class="drive-card-name">BMPCC_03</div>
+                  <div class="drive-card-sub">WD My Passport · 4 TB</div>
+                </div>
+                <span class="badge badge-ejected" style="align-self:flex-start">Ejected</span>
+              </div>
+              <div>
+                <div class="cap-bar"><div class="cap-fill" style="width:45%;background:var(--drive-c)"></div></div>
+                <div class="drive-cap-stats"><span class="drive-cap-stat">1.8 TB used</span><span class="drive-cap-stat">2.2 TB free</span></div>
+              </div>
+              <div class="drive-proj-count">4 archived projects</div>
+            </div>
+
+            <!-- BMPCC_05 — near full -->
+            <div class="drive-card">
+              <div class="drive-card-head">
+                <div class="drive-icon-box" style="background:var(--drive-e)">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-6ZM3.5 5.5v6h9v-6h-9Z"/><circle cx="11.5" cy="9" r="1"/></svg>
+                </div>
+                <div class="drive-card-meta">
+                  <div class="drive-card-name">BMPCC_05</div>
+                  <div class="drive-card-sub">WD My Passport · 4 TB</div>
+                </div>
+                <span class="badge badge-full" style="align-self:flex-start">93% full</span>
+              </div>
+              <div>
+                <div class="cap-bar"><div class="cap-fill" style="width:93%;background:var(--danger)"></div></div>
+                <div class="drive-cap-stats"><span class="drive-cap-stat">3.7 TB used</span><span class="drive-cap-stat" style="color:var(--danger)">0.3 TB free</span></div>
+              </div>
+              <div class="drive-proj-count">6 archived projects</div>
+            </div>
+
+            <!-- BMPCC_06 — new -->
+            <div class="drive-card">
+              <div class="drive-card-head">
+                <div class="drive-icon-box" style="background:var(--drive-f)">
+                  <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-6ZM3.5 5.5v6h9v-6h-9Z"/><circle cx="11.5" cy="9" r="1"/></svg>
+                </div>
+                <div class="drive-card-meta">
+                  <div class="drive-card-name">BMPCC_06</div>
+                  <div class="drive-card-sub">WD My Passport · 4 TB</div>
+                </div>
+                <span class="badge badge-new" style="align-self:flex-start">New</span>
+              </div>
+              <div>
+                <div class="cap-bar"><div class="cap-fill" style="width:1%;background:var(--drive-f)"></div></div>
+                <div class="drive-cap-stats"><span class="drive-cap-stat">Empty</span><span class="drive-cap-stat">4.0 TB free</span></div>
+              </div>
+              <div class="drive-proj-count" style="color:var(--ink-4)">No projects yet</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SCREEN: PROJECT DETAIL ════════════════ -->
+      <div class="screen" id="s-detail">
+        <div class="content-bar">
+          <button class="back-btn" onclick="go('projects')">
+            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M9.78 12.78a.75.75 0 0 1-1.06 0L4.47 8.53a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 1.06L6.06 8l3.72 3.72a.75.75 0 0 1 0 1.06Z"/></svg>
+            Projects
+          </button>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm">Edit</button>
+            <button class="btn btn-sm btn-primary">Scan Drive</button>
+          </div>
+        </div>
+        <div class="detail-scroll">
+          <div class="detail-body">
+            <div class="detail-eyebrow">Decathlon Switzerland</div>
+            <div class="detail-title">Store Activations Lyon</div>
+
+            <div class="detail-section">
+              <div class="detail-section-head">Metadata</div>
+              <div class="detail-row">
+                <div class="detail-lbl">Date</div>
+                <div class="detail-val">May 1, 2026</div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-lbl">Category</div>
+                <div class="detail-val">Client — Commercial</div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-lbl">Size</div>
+                <div class="detail-val">87.4 GB</div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-lbl">Files</div>
+                <div class="detail-val">847 files</div>
+              </div>
+            </div>
+
+            <div class="detail-section">
+              <div class="detail-section-head">Storage Location</div>
+              <div class="detail-row">
+                <div class="detail-lbl">Drive</div>
+                <div class="detail-val">
+                  <span style="display:inline-flex;align-items:center;gap:6px">
+                    <div class="drive-dot" style="background:var(--drive-d)"></div>
+                    BMPCC_04
+                    &nbsp;·&nbsp;
+                    <span style="color:var(--ok);font-size:13px">Connected</span>
+                  </span>
+                </div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-lbl">Path</div>
+                <div class="detail-val detail-val-mono">/Decathlon/2026/StoreActivations</div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-lbl">Status</div>
+                <div class="detail-val"><span class="badge badge-active">Active</span></div>
+              </div>
+            </div>
+
+            <div class="detail-section">
+              <div class="detail-section-head">Scan History</div>
+              <div class="scan-row">
+                <div class="scan-dot scan-dot-blue"></div>
+                <div class="scan-content">
+                  <div class="scan-primary">Scan completed · 847 files indexed</div>
+                  <div class="scan-secondary">Path confirmed · 87.4 GB · BMPCC_04</div>
+                </div>
+                <div class="scan-time">May 1 · 14:32</div>
+              </div>
+              <div class="scan-row">
+                <div class="scan-dot scan-dot-grey"></div>
+                <div class="scan-content">
+                  <div class="scan-primary">Drive connected</div>
+                  <div class="scan-secondary">BMPCC_04 mounted at /Volumes/BMPCC_04</div>
+                </div>
+                <div class="scan-time">May 1 · 14:30</div>
+              </div>
+              <div class="scan-row">
+                <div class="scan-dot scan-dot-grey"></div>
+                <div class="scan-content">
+                  <div class="scan-primary">Project registered</div>
+                  <div class="scan-secondary">Added manually via Import dialog</div>
+                </div>
+                <div class="scan-time">May 1 · 09:15</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SCREEN: IMPORT DIALOG ═════════════════ -->
+      <div class="screen" id="s-import">
+        <!-- dimmed bg -->
+        <div style="flex:1;opacity:0.3;pointer-events:none;display:flex;flex-direction:column">
+          <div class="content-bar" style="pointer-events:none">
+            <div class="search-field"><span style="color:var(--ink-4);font-size:13px">Search projects…</span></div>
+          </div>
+          <div style="padding:16px 14px;color:var(--ink-3);font-size:13px">
+            <div style="height:44px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px"><div style="width:8px;height:8px;border-radius:50%;background:var(--drive-d)"></div>Store Activations Lyon</div>
+            <div style="height:44px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px"><div style="width:8px;height:8px;border-radius:50%;background:var(--drive-d)"></div>Podcast Geneva</div>
+            <div style="height:44px;display:flex;align-items:center;gap:10px"><div style="width:8px;height:8px;border-radius:50%;background:var(--drive-b)"></div>Product Launch Film</div>
+          </div>
+        </div>
+        <div class="overlay">
+          <div class="sheet">
+            <div class="sheet-head">
+              <div class="sheet-title">Register Project</div>
+              <div class="sheet-sub">Add a footage folder from an external drive to Catalog.</div>
+            </div>
+            <div class="sheet-body">
+              <div class="field-wrap">
+                <div class="field-lbl">Drive</div>
+                <div class="field-box filled" style="justify-content:space-between">
+                  <span style="display:inline-flex;align-items:center;gap:7px">
+                    <div class="drive-dot" style="background:var(--drive-d)"></div>
+                    BMPCC_04
+                  </span>
+                  <span style="color:var(--ink-4);font-size:11px">▾</span>
+                </div>
+              </div>
+              <div class="field-wrap">
+                <div class="field-lbl">Folder path</div>
+                <div class="field-box filled mono focused">/Decathlon/2026/StoreActivations</div>
+              </div>
+              <div class="field-wrap-row">
+                <div class="field-wrap">
+                  <div class="field-lbl">Client</div>
+                  <div class="field-box filled">Decathlon Switzerland</div>
+                </div>
+                <div class="field-wrap">
+                  <div class="field-lbl">Date</div>
+                  <div class="field-box filled">2026-05-01</div>
+                </div>
+              </div>
+              <div class="field-wrap">
+                <div class="field-lbl">Project name</div>
+                <div class="field-box filled">Store Activations Lyon</div>
+              </div>
+            </div>
+            <div class="sheet-foot">
+              <button class="btn" onclick="go('projects')">Cancel</button>
+              <button class="btn btn-primary">Register Project</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SCREEN: COMMAND PALETTE ═══════════════ -->
+      <div class="screen" id="s-palette">
+        <!-- dimmed bg -->
+        <div style="flex:1;opacity:0.25;pointer-events:none;display:flex;flex-direction:column">
+          <div class="content-bar" style="pointer-events:none">
+            <div class="search-field"><span style="color:var(--ink-4);font-size:13px">Search projects…</span></div>
+          </div>
+          <div style="padding:16px 14px;color:var(--ink-3);font-size:13px">
+            <div style="height:44px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px"><div style="width:8px;height:8px;border-radius:50%;background:var(--drive-d)"></div>Store Activations Lyon</div>
+            <div style="height:44px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px"><div style="width:8px;height:8px;border-radius:50%;background:var(--drive-d)"></div>Podcast Geneva</div>
+          </div>
+        </div>
+        <div class="palette-overlay">
+          <div class="palette">
+            <div class="palette-search-row">
+              <svg viewBox="0 0 16 16" fill="currentColor" style="width:16px;height:16px"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+              <div class="palette-query">decathlon</div>
+              <span class="palette-esc">Esc</span>
+            </div>
+
+            <div class="palette-section">Projects</div>
+            <div class="p-result on">
+              <div class="p-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v7.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7.5A1.75 1.75 0 0 0 14.25 3H7.06l-.678-1.017A.75.75 0 0 0 5.75 1.5H1.75Z"/></svg></div>
+              <div class="p-body">
+                <div class="p-title">Store Activations Lyon</div>
+                <div class="p-sub">Decathlon · May 2026 · BMPCC_04</div>
+              </div>
+              <span class="p-kbd">↵</span>
+            </div>
+            <div class="p-result">
+              <div class="p-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v7.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7.5A1.75 1.75 0 0 0 14.25 3H7.06l-.678-1.017A.75.75 0 0 0 5.75 1.5H1.75Z"/></svg></div>
+              <div class="p-body">
+                <div class="p-title">Podcast Geneva</div>
+                <div class="p-sub">Decathlon · Apr 2026 · BMPCC_04</div>
+              </div>
+            </div>
+            <div class="p-result">
+              <div class="p-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v7.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7.5A1.75 1.75 0 0 0 14.25 3H7.06l-.678-1.017A.75.75 0 0 0 5.75 1.5H1.75Z"/></svg></div>
+              <div class="p-body">
+                <div class="p-title">Winter Campaign</div>
+                <div class="p-sub">Decathlon · Dec 2025 · BMPCC_01</div>
+              </div>
+            </div>
+            <div class="p-result">
+              <div class="p-icon"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v7.5C0 13.216.784 14 1.75 14h12.5A1.75 1.75 0 0 0 16 12.25v-7.5A1.75 1.75 0 0 0 14.25 3H7.06l-.678-1.017A.75.75 0 0 0 5.75 1.5H1.75Z"/></svg></div>
+              <div class="p-body">
+                <div class="p-title">Autumn Trail Series</div>
+                <div class="p-sub">Decathlon · Oct 2025 · BMPCC_05</div>
+              </div>
+            </div>
+
+            <div class="palette-section" style="margin-top:4px">Actions</div>
+            <div class="p-result">
+              <div class="p-icon">
+                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/></svg>
+              </div>
+              <div class="p-body">
+                <div class="p-title">New Project</div>
+                <div class="p-sub">Register a folder from a drive</div>
+              </div>
+              <span class="p-kbd">⌘N</span>
+            </div>
+            <div class="p-result palette-pb">
+              <div class="p-icon">
+                <svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h9A1.5 1.5 0 0 1 14 5.5v6A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5v-6ZM3.5 5.5v6h9v-6h-9Z"/><circle cx="11.5" cy="9" r="1"/></svg>
+              </div>
+              <div class="p-body">
+                <div class="p-title">Scan Connected Drive</div>
+                <div class="p-sub">BMPCC_04 — 1 drive connected</div>
+              </div>
+              <span class="p-kbd">⌘S</span>
+            </div>
+
+            <div class="palette-footer">
+              <div class="p-hint"><kbd>↑↓</kbd> navigate</div>
+              <div class="p-hint"><kbd>↵</kbd> open</div>
+              <div class="p-hint"><kbd>Esc</kbd> dismiss</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div><!-- app-body -->
+
+</div><!-- window -->
+</div><!-- desktop -->
+
+<script>
+const screens = ['projects','drives','detail','import','palette'];
+
+function go(name) {
+  screens.forEach(id => {
+    document.getElementById('s-' + id).classList.remove('active');
+  });
+  document.getElementById('s-' + name).classList.add('active');
+
+  // Sidebar active state
+  document.getElementById('nav-projects').classList.remove('active');
+  document.getElementById('nav-drives').classList.remove('active');
+  if (name === 'projects' || name === 'detail' || name === 'import' || name === 'palette') {
+    document.getElementById('nav-projects').classList.add('active');
+  } else if (name === 'drives') {
+    document.getElementById('nav-drives').classList.add('active');
+  }
+
+  // Demo nav buttons
+  const btnLabels = {projects:0, drives:1, detail:2, import:3, palette:4};
+  document.querySelectorAll('.demo-nav button:not(.theme-btn)').forEach((b, i) => {
+    b.classList.toggle('active', i === btnLabels[name]);
+  });
+}
+
+let dark = false;
+function toggleTheme() {
+  dark = !dark;
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  document.querySelector('.theme-btn').textContent = dark ? '☀' : '☾';
+}
+
+// Keyboard: click project row → detail, Esc from palette/import → projects
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') go('projects');
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); go('palette'); }
+});
+</script>
+</body>
+</html>
