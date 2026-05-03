@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Icon } from "@drive-project-catalog/ui";
 
@@ -14,15 +14,30 @@ import { useScanWorkflow } from "../app/scanWorkflow";
 import { formatBytes, formatDate } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { ImportFoldersDialog } from "./ImportFoldersDialog";
-import { CapacityBar, CapacityLegend, ConfirmModal, EmptyState, FeedbackNotice, LoadingState, SectionCard } from "./pagePrimitives";
-import { ScanSection } from "./drives/ScanSection";
-import { ImportSection } from "./drives/ImportSection";
+import {
+  CapacityBar,
+  CapacityLegend,
+  ConfirmModal,
+  EmptyState,
+  FeedbackNotice,
+  LoadingState,
+  SectionCard,
+  StatusBadge
+} from "./pagePrimitives";
 import { ProjectCollection } from "./drives/ProjectCollection";
+import { ScanStatusPanel } from "./drives/ScanStatusPanel";
+import { getDriveColor } from "./driveColor";
+import { ProjectList } from "./ProjectList";
 
 export function DriveDetailPage() {
   const { driveId = "" } = useParams();
   const navigate = useNavigate();
-  const { isLoading, isMutating, getDriveDetailView, selectDrive, deleteDrive, importFoldersFromVolume, scanSessions } = useCatalogStore();
+  const {
+    isLoading, isMutating,
+    getDriveDetailView, selectDrive, deleteDrive,
+    importFoldersFromVolume, scanSessions,
+    drives
+  } = useCatalogStore();
   const {
     isDesktopScanAvailable: isScanAvailable,
     draftRootPath,
@@ -37,9 +52,9 @@ export function DriveDetailPage() {
   } = useScanWorkflow();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
 
-  // Import-from-volume state machine:
-  //   idle → enumerating (isPickingImport) → preview (importSourcePath set) → importing
+  // Import-from-volume state machine
   const [importSourcePath, setImportSourcePath] = useState<string | null>(null);
   const [importFolders, setImportFolders] = useState<VolumeFolderEntry[] | null>(null);
   const [isPickingImport, setIsPickingImport] = useState(false);
@@ -88,6 +103,27 @@ export function DriveDetailPage() {
   if (!detail) return <EmptyState title="Drive not found" description="The requested drive is not available in the current local catalog." />;
 
   const { drive, projects, incomingProjects, missingProjects } = detail;
+
+  // Derived state
+  const isScanning = Boolean(activeSession);
+  const connectionLabel = isScanning ? "Mounting" : volumeInfo ? "Online" : "Offline";
+  const driveColor = getDriveColor(drive.id);
+
+  // Capacity legend values
+  const driveUsedPct =
+    drive.usedBytes !== null && drive.totalCapacityBytes && drive.totalCapacityBytes > 0
+      ? Math.round((drive.usedBytes / drive.totalCapacityBytes) * 100)
+      : null;
+  const usedLegendLabel =
+    driveUsedPct !== null
+      ? `${driveUsedPct}% used · ${formatBytes(drive.usedBytes)}`
+      : "Used";
+  const freeLegendLabel =
+    drive.freeBytes !== null ? `${formatBytes(drive.freeBytes)} free` : "Unknown free";
+  const reservedLegendLabel =
+    drive.reservedIncomingBytes > 0
+      ? `${formatBytes(drive.reservedIncomingBytes)} reserved`
+      : undefined;
 
   async function handleDeleteDrive() {
     try {
@@ -180,80 +216,201 @@ export function DriveDetailPage() {
         />
       ) : null}
 
-      {/* Identity card */}
-      <section className="card overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 px-5 py-3" style={{ borderBottom: "1px solid var(--hairline)" }}>
+      {/* ── B1/B2: Identity + action card ──────────────────────────────────── */}
+      <section
+        className="card overflow-hidden"
+        style={{ "--drive-color": driveColor } as CSSProperties}
+      >
+        {/* B2: Action toolbar — breadcrumb | spacer | secondary actions | primary */}
+        <div
+          className="flex flex-wrap items-center gap-2 px-4 py-2.5"
+          style={{ borderBottom: "1px solid var(--hairline)" }}
+        >
           <Link to="/drives" className="btn btn-ghost btn-sm">
             <Icon name="chevron" size={11} color="currentColor" className="rotate-180" />
             Drives
           </Link>
           <div className="flex-1" />
-          <button type="button" className="btn btn-sm" onClick={() => void showPathInFinder(finderPath)} disabled={!finderPath}>
-            <Icon name="folder" size={11} color="currentColor" />Show in Finder
-          </button>
-          <button type="button" className="btn btn-sm" onClick={() => void runImportPicker()} disabled={!canImportFromVolume || isPickingImport || isImporting}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => void showPathInFinder(finderPath)}
+            disabled={!finderPath}
+          >
             <Icon name="folder" size={11} color="currentColor" />
+            Show in Finder
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => void runImportPicker()}
+            disabled={!canImportFromVolume || isPickingImport || isImporting}
+          >
+            <Icon name="download" size={11} color="currentColor" />
             {isPickingImport ? "Opening…" : "Import folders"}
           </button>
           {activeSession ? (
-            <button type="button" className="btn btn-sm btn-danger" onClick={() => void cancelScan()}>Cancel scan</button>
+            <button type="button" className="btn btn-sm btn-danger" onClick={() => void cancelScan()}>
+              Cancel scan
+            </button>
           ) : null}
-          <button type="button" className="btn btn-sm btn-primary" onClick={() => void startScan()} disabled={!canStartScan}>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            onClick={() => void startScan()}
+            disabled={!canStartScan}
+          >
             <Icon name="scan" size={11} color="currentColor" />
-            {activeSession ? "Scan running" : "Start scan"}
+            {isScanning ? "Scan running" : "Start scan"}
           </button>
         </div>
 
-        <div className="px-6 pt-6 pb-5">
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="relative flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[12px]" style={{ background: "var(--surface-inset)" }}>
-              <Icon name="hardDrive" size={24} color="var(--ink-2)" />
-              <span className="absolute bottom-2 right-2 h-2 w-2 rounded-full" style={{ background: "var(--accent)", border: "2px solid var(--surface)" }} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="eyebrow">
-                {drive.createdManually ? "Manual drive" : "Connected volume"}
-                {volumeInfo?.filesystemType ? ` · ${volumeInfo.filesystemType}` : ""}
-              </div>
-              <h1 className="h-title mt-1" style={{ margin: "4px 0 0" }}>{drive.displayName}</h1>
-              {drive.volumeName ? (
-                <p className="mono mt-1 text-[12px] break-all" style={{ color: "var(--ink-3)", margin: "4px 0 0" }}>
-                  /Volumes/{drive.volumeName}
-                </p>
-              ) : null}
-            </div>
-          </div>
-          <div className="mt-5">
-            <CapacityBar usedBytes={drive.usedBytes} totalBytes={drive.totalCapacityBytes} reservedBytes={drive.reservedIncomingBytes} />
-            <CapacityLegend usedLabel="Used" reservedLabel="Reserved" freeLabel="Free" />
-          </div>
-          <dl className="mt-4 grid grid-cols-2 gap-x-8 gap-y-3 md:grid-cols-5" style={{ color: "var(--ink-3)" }}>
-            <MetaField label="Capacity" value={formatBytes(drive.totalCapacityBytes)} />
-            <MetaField label="Used" value={formatBytes(drive.usedBytes)} />
-            <MetaField label="Reserved" value={formatBytes(drive.reservedIncomingBytes)} tone={drive.reservedIncomingBytes > 0 ? "warn" : undefined} />
-            <MetaField label="Free" value={formatBytes(drive.freeBytes)} />
-            <MetaField label="Projects" value={String(projects.length)} />
-          </dl>
+        {/* Scan path row — compact, below toolbar */}
+        <div
+          className="flex gap-2 px-4 py-2"
+          style={{ borderBottom: "1px solid var(--hairline)" }}
+        >
+          <input
+            value={draftRootPath}
+            onChange={(e) => setDraftRootPath(e.target.value)}
+            className="field-shell min-w-0 flex-1 bg-transparent px-3 py-1.5 text-[12.5px] outline-none"
+            placeholder={scanPlaceholder}
+            disabled={isScanning}
+            aria-label="Scan target path"
+          />
+          <button
+            type="button"
+            className="btn btn-sm shrink-0"
+            onClick={() => void chooseDirectory()}
+            disabled={!isScanAvailable || isPickingDirectory || isScanning}
+          >
+            {isPickingDirectory ? "Opening…" : "Browse"}
+          </button>
         </div>
+
+        {/* B1: Two-column identity — left: icon + name + badges; right: capacity */}
+        <div className="grid gap-6 px-6 pt-6 pb-5 md:grid-cols-[1fr_280px]">
+          {/* Left — drive identity */}
+          <div className="min-w-0">
+            <div className="flex items-center gap-4">
+              {/* Icon tile — inset left shadow carries drive color accent */}
+              <div
+                className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[12px]"
+                style={{
+                  background: "var(--surface-inset)",
+                  boxShadow: "inset 3px 0 0 var(--drive-color)"
+                }}
+              >
+                <Icon name="hardDrive" size={24} color="var(--ink-2)" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="h-title" style={{ margin: 0 }}>
+                    {drive.displayName}
+                  </h1>
+                  <StatusBadge label={connectionLabel} />
+                </div>
+                {drive.volumeName ? (
+                  <p
+                    className="mono mt-1 break-all text-[12px]"
+                    style={{ color: "var(--ink-3)", margin: "4px 0 0" }}
+                  >
+                    /Volumes/{drive.volumeName}
+                  </p>
+                ) : null}
+                <p className="mt-1 text-[12px]" style={{ color: "var(--ink-4)", margin: "4px 0 0" }}>
+                  {drive.createdManually ? "Manual drive" : "Connected volume"}
+                  {volumeInfo?.filesystemType ? ` · ${volumeInfo.filesystemType}` : ""}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Right — capacity bar + legend + 2×2 stats */}
+          <div>
+            <CapacityBar
+              usedBytes={drive.usedBytes}
+              totalBytes={drive.totalCapacityBytes}
+              reservedBytes={drive.reservedIncomingBytes}
+            />
+            <CapacityLegend
+              usedLabel={usedLegendLabel}
+              reservedLabel={reservedLegendLabel}
+              freeLabel={freeLegendLabel}
+            />
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3" style={{ color: "var(--ink-3)" }}>
+              <MetaField label="Capacity" value={formatBytes(drive.totalCapacityBytes)} />
+              <MetaField label="Projects" value={String(projects.length)} />
+              <MetaField
+                label="Reserved"
+                value={formatBytes(drive.reservedIncomingBytes)}
+                tone={drive.reservedIncomingBytes > 0 ? "warn" : undefined}
+              />
+              <MetaField label="Last scan" value={formatDate(drive.lastScannedAt)} />
+            </dl>
+          </div>
+        </div>
+
+        {/* B4: Connection banner — mount path + Reveal in Finder, dismissible */}
+        {volumeInfo && !bannerDismissed && driveRootPath ? (
+          <div
+            className="flex items-center gap-3 border-t px-5 py-2.5"
+            style={{ borderColor: "var(--hairline)", background: "var(--surface-inset)" }}
+          >
+            <Icon name="hardDrive" size={12} color="var(--ink-3)" />
+            <span
+              className="mono min-w-0 flex-1 truncate text-[11.5px]"
+              style={{ color: "var(--ink-3)" }}
+            >
+              {driveRootPath}
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm shrink-0"
+              onClick={() => void showPathInFinder(driveRootPath)}
+            >
+              Reveal in Finder
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm shrink-0"
+              onClick={() => setBannerDismissed(true)}
+              aria-label="Dismiss"
+            >
+              <Icon name="close" size={10} color="currentColor" />
+            </button>
+          </div>
+        ) : null}
+
+        {/* Scan status panel */}
+        {scanSummary ? (
+          <div className="border-t px-5 py-4" style={{ borderColor: "var(--hairline)" }}>
+            <ScanStatusPanel scanSummary={scanSummary} isRunning={isScanning} />
+          </div>
+        ) : null}
+
+        {/* Scan availability / error feedback */}
+        {!isScanAvailable ? (
+          <div className="border-t px-5 py-4" style={{ borderColor: "var(--hairline)" }}>
+            <FeedbackNotice
+              tone="warning"
+              title="Desktop scan only"
+              messages={["Scans require the native desktop app. Persisted state is visible here, but starting a scan needs the Tauri shell."]}
+            />
+          </div>
+        ) : null}
+        {scanError ? (
+          <div className="px-5 pb-4">
+            <FeedbackNotice tone="error" title="Scan error" messages={[scanError]} />
+          </div>
+        ) : null}
       </section>
 
-      {feedback ? <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} /> : null}
+      {feedback ? (
+        <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
+      ) : null}
 
-      <ScanSection
-        scanSummary={scanSummary}
-        activeSession={activeSession}
-        draftRootPath={draftRootPath}
-        setDraftRootPath={setDraftRootPath}
-        isScanAvailable={isScanAvailable}
-        isPickingDirectory={isPickingDirectory}
-        canStartScan={canStartScan}
-        scanPlaceholder={scanPlaceholder}
-        scanError={scanError}
-        chooseDirectory={chooseDirectory}
-        startScan={startScan}
-        cancelScan={cancelScan}
-      />
-
+      {/* Storage detail */}
       <SectionCard title="Storage detail" description="Reservation and volume data stays local-first and updates as move plans change.">
         <dl className="grid gap-x-8 gap-y-3 md:grid-cols-3" style={{ color: "var(--ink-3)" }}>
           <MetaField label="Reserved incoming" value={formatBytes(drive.reservedIncomingBytes)} />
@@ -271,27 +428,81 @@ export function DriveDetailPage() {
         </dl>
       </SectionCard>
 
-      <ImportSection canImportFromVolume={canImportFromVolume} isPickingImport={isPickingImport} isImporting={isImporting} runImportPicker={runImportPicker} />
+      {/* B3: Main project list — full shared row format */}
+      {projects.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="h-section" style={{ margin: 0 }}>Projects on this drive</h2>
+          <ProjectList projects={projects} drives={drives} />
+        </section>
+      ) : (
+        <section className="space-y-2">
+          <h2 className="h-section" style={{ margin: 0 }}>Projects on this drive</h2>
+          <div className="card overflow-hidden">
+            <div className="flex flex-col items-center gap-1 px-4 py-12 text-center">
+              <p className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>
+                No projects yet
+              </p>
+              <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+                Scan the drive or import folders to populate the catalog.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
-      <section className="grid gap-6 xl:grid-cols-3">
-        <ProjectCollection title="Projects on this drive" description="Current project assignments." projects={projects} />
-        <ProjectCollection title="Incoming move plans" description="Projects reserving incoming space on this drive." projects={incomingProjects} accentLabel="Incoming" />
-        <ProjectCollection title="Missing projects" description="Projects last associated with this drive but absent from later scans." projects={missingProjects} accentLabel="Missing" />
-      </section>
+      {/* Incoming & missing — compact 2-col grid */}
+      {(incomingProjects.length > 0 || missingProjects.length > 0) ? (
+        <div className="grid gap-6 xl:grid-cols-2">
+          {incomingProjects.length > 0 ? (
+            <ProjectCollection
+              title="Incoming move plans"
+              description="Projects reserving incoming space on this drive."
+              projects={incomingProjects}
+              accentLabel="Incoming"
+            />
+          ) : null}
+          {missingProjects.length > 0 ? (
+            <ProjectCollection
+              title="Missing projects"
+              description="Projects last associated with this drive but absent from later scans."
+              projects={missingProjects}
+              accentLabel="Missing"
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Danger zone */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4" style={{ borderTop: "1px solid var(--hairline)" }}>
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+        style={{ borderTop: "1px solid var(--hairline)" }}
+      >
         <div className="min-w-0">
           <p className="text-[13px] font-medium" style={{ color: "var(--ink)", margin: 0 }}>Delete drive</p>
-          <p className="text-[12.5px]" style={{ color: "var(--ink-3)", margin: "2px 0 0" }}>Permanently removes this drive. Projects assigned to it will become unassigned.</p>
+          <p className="text-[12.5px]" style={{ color: "var(--ink-3)", margin: "2px 0 0" }}>
+            Permanently removes this drive. Projects assigned to it will become unassigned.
+          </p>
         </div>
-        <button type="button" className="btn btn-sm btn-danger shrink-0" onClick={() => setShowDeleteConfirm(true)}>Delete</button>
+        <button
+          type="button"
+          className="btn btn-sm btn-danger shrink-0"
+          onClick={() => setShowDeleteConfirm(true)}
+        >
+          Delete
+        </button>
       </div>
     </div>
   );
 }
 
-function buildImportIssueParts(result: { duplicateCount: number; legacyNameCount: number; invalidNameCount: number; missingDateCount: number; missingClientCount: number; missingProjectCount: number }) {
+function buildImportIssueParts(result: {
+  duplicateCount: number;
+  legacyNameCount: number;
+  invalidNameCount: number;
+  missingDateCount: number;
+  missingClientCount: number;
+  missingProjectCount: number;
+}) {
   const parts: string[] = [];
   if (result.legacyNameCount > 0) parts.push(`${result.legacyNameCount} legacy name${result.legacyNameCount === 1 ? "" : "s"}`);
   if (result.invalidNameCount > 0) parts.push(`${result.invalidNameCount} invalid name${result.invalidNameCount === 1 ? "" : "s"}`);
@@ -305,8 +516,18 @@ function buildImportIssueParts(result: { duplicateCount: number; legacyNameCount
 function MetaField({ label, value, tone }: { label: string; value: string; tone?: "warn" }): ReactNode {
   return (
     <div className="flex flex-col gap-0.5 min-w-0">
-      <dt className="text-[10.5px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--ink-4)" }}>{label}</dt>
-      <dd className="tnum truncate text-[13.5px] font-medium" style={{ color: tone === "warn" ? "var(--warn)" : "var(--ink)", margin: 0 }}>{value}</dd>
+      <dt
+        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
+        style={{ color: "var(--ink-4)" }}
+      >
+        {label}
+      </dt>
+      <dd
+        className="tnum truncate text-[13.5px] font-medium"
+        style={{ color: tone === "warn" ? "var(--warn)" : "var(--ink)", margin: 0 }}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
