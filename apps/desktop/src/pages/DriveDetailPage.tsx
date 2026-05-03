@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Icon } from "@drive-project-catalog/ui";
 
@@ -21,6 +21,7 @@ import {
   EmptyState,
   FeedbackNotice,
   LoadingState,
+  MetaField,
   SectionCard,
   StatusBadge
 } from "./pagePrimitives";
@@ -541,21 +542,3 @@ function buildImportIssueParts(result: {
   return parts;
 }
 
-function MetaField({ label, value, tone }: { label: string; value: string; tone?: "warn" }): ReactNode {
-  return (
-    <div className="flex flex-col gap-0.5 min-w-0">
-      <dt
-        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
-        style={{ color: "var(--ink-4)" }}
-      >
-        {label}
-      </dt>
-      <dd
-        className="tnum truncate text-[13.5px] font-medium"
-        style={{ color: tone === "warn" ? "var(--warn)" : "var(--ink)", margin: 0 }}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}

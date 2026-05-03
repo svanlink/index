@@ -14,7 +14,7 @@ import {
   getProjectName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { ConfirmModal, EmptyState, FeedbackNotice, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
+import { ConfirmModal, EmptyState, FeedbackNotice, LoadingState, MetaField, SectionCard, StatusBadge } from "./pagePrimitives";
 import { showPathInFinder } from "../app/nativeContextMenu";
 import { getDriveColor } from "./driveColor";
 
@@ -558,37 +558,6 @@ export function ProjectDetailPage() {
  * Matches the MetaField pattern in DriveDetailPage and DrivesPage so every detail
  * surface reads with the same visual rhythm.
  */
-function MetaField({
-  label,
-  value,
-  tone,
-  mono
-}: {
-  label: string;
-  value: string;
-  tone?: "accent" | "warn";
-  mono?: boolean;
-}) {
-  const valueColor =
-    tone === "accent" ? "var(--accent-ink)" : tone === "warn" ? "var(--warn)" : "var(--ink)";
-
-  return (
-    <div className="min-w-0">
-      <dt
-        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
-        style={{ color: "var(--ink-4)" }}
-      >
-        {label}
-      </dt>
-      <dd
-        className={`tnum truncate text-[13.5px] font-medium ${mono ? "mono" : ""}`}
-        style={{ color: valueColor, marginTop: 2 }}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (

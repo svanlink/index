@@ -9,6 +9,10 @@ cd "$(dirname "$0")" || exit 1
 ISSUES_DIR=".planning/issues"
 TARGET_ISSUE="${1:-}"  # Optional: pass issue ID to target a specific one
 
+# Strip YAML frontmatter from ralph.md so the prompt doesn't start with ---
+# (claude CLI interprets leading --- as a flag)
+RALPH_COMMAND=$(awk 'BEGIN{in_fm=0; done=0} done{print; next} /^---$/{if(in_fm){done=1}else{in_fm=1}; next} !in_fm{print}' .claude/commands/ralph.md)
+
 # Gather all open issue files
 OPEN_ISSUES=""
 if [ -d "$ISSUES_DIR" ]; then
@@ -16,7 +20,7 @@ if [ -d "$ISSUES_DIR" ]; then
     if grep -q "status: open" "$file" 2>/dev/null; then
       OPEN_ISSUES="$OPEN_ISSUES
 
---- $(basename "$file") ---
+=== $(basename "$file") ===
 $(cat "$file")"
     fi
   done < <(find "$ISSUES_DIR" -name "*.md" -not -name "TEMPLATE.md" -print0 | sort -z)
@@ -31,10 +35,10 @@ fi
 # Get recent commits for context
 RECENT_COMMITS=$(git log --oneline -5 2>/dev/null || echo "no git history")
 
-# Build the prompt
-RALPH_COMMAND=$(cat .claude/commands/ralph.md)
+# Build the prompt — prefix with a header so it never starts with ---
+PROMPT="# Ralph — AFK Implementer
 
-PROMPT="$RALPH_COMMAND
+$RALPH_COMMAND
 
 ## Open issues from $ISSUES_DIR
 $OPEN_ISSUES
@@ -46,11 +50,11 @@ $RECENT_COMMITS"
 if [ -n "$TARGET_ISSUE" ]; then
   PROMPT="$PROMPT
 
-## Override: work on issue $TARGET_ISSUE specifically"
+## Target: work on issue $TARGET_ISSUE specifically"
 fi
 
 echo "=== Ralph single pass ==="
-echo "Open issues found: $(echo "$OPEN_ISSUES" | grep -c "status: open" || echo "?")"
+echo "Target issue: ${TARGET_ISSUE:-auto-select}"
 echo "Starting implementation..."
 echo ""
 

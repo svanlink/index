@@ -537,6 +537,41 @@ export function FeedbackNotice({
   );
 }
 
+// ---------------------------------------------------------------------------
+// MetaField — label / value pair used in drive and project identity cards
+// ---------------------------------------------------------------------------
+
+export function MetaField({
+  label,
+  value,
+  tone,
+  mono = false
+}: {
+  label: string;
+  value: string;
+  tone?: "accent" | "warn";
+  mono?: boolean;
+}) {
+  const valueColor =
+    tone === "accent" ? "var(--accent-ink)" : tone === "warn" ? "var(--warn)" : "var(--ink)";
+  return (
+    <div className="flex flex-col gap-0.5 min-w-0">
+      <dt
+        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
+        style={{ color: "var(--ink-4)" }}
+      >
+        {label}
+      </dt>
+      <dd
+        className={`tnum truncate text-[13.5px] font-medium${mono ? " mono" : ""}`}
+        style={{ color: valueColor, margin: 0 }}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
 function FeedbackIcon({ tone }: { tone: "success" | "warning" | "error" | "info" }) {
   if (tone === "success") {
     return <Icon name="check" size={15} color="currentColor" />;
