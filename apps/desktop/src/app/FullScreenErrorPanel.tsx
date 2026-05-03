@@ -49,14 +49,14 @@ export function FullScreenErrorPanel({
   detail,
   actions
 }: FullScreenErrorPanelProps) {
-  const eyebrowColor = eyebrowTone === "warning" ? "var(--color-warning)" : "var(--color-danger)";
+  const eyebrowColor = eyebrowTone === "warning" ? "var(--warn)" : "var(--danger)";
 
   return (
     <div
       role="alert"
       aria-live="assertive"
       className="flex min-h-screen items-center justify-center p-6"
-      style={{ background: "var(--color-surface)" }}
+      style={{ background: "var(--canvas)" }}
     >
       <div className="app-panel w-full max-w-md space-y-4 px-6 py-6">
         <div className="space-y-1">
@@ -66,29 +66,29 @@ export function FullScreenErrorPanel({
           >
             {eyebrow}
           </p>
-          <h1 className="text-[16px] font-semibold" style={{ color: "var(--color-text)" }}>
+          <h1 className="text-[16px] font-semibold" style={{ color: "var(--ink)" }}>
             {title}
           </h1>
         </div>
 
-        <p className="text-[13px]" style={{ color: "var(--color-text-soft)" }}>
+        <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
           {description}
         </p>
 
         {detail ? (
           <details
             className="rounded-md border px-3 py-2"
-            style={{ borderColor: "var(--color-border)", background: "var(--color-surface-subtle)" }}
+            style={{ borderColor: "var(--hairline)", background: "var(--surface-inset)" }}
           >
             <summary
               className="cursor-pointer select-none text-[12px] font-medium"
-              style={{ color: "var(--color-text-muted)" }}
+              style={{ color: "var(--ink-2)" }}
             >
               Technical detail
             </summary>
             <pre
               className="mt-2 whitespace-pre-wrap break-all font-mono text-[11px] leading-snug"
-              style={{ color: "var(--color-text-soft)" }}
+              style={{ color: "var(--ink-3)" }}
             >
               {detail}
             </pre>
