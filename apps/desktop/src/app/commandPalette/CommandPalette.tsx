@@ -76,7 +76,7 @@ function ResultRow({
         <span className="flex-1 min-w-0">
           <span className="block truncate text-[13px]" style={{ color: "var(--ink)" }}>{primary}</span>
           {secondary ? (
-            <span className="block truncate text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+            <span className="block truncate text-[12px]" style={{ color: "var(--ink-3)" }}>
               {secondary}
             </span>
           ) : null}
@@ -143,14 +143,14 @@ export function CommandPalette() {
       aria-label="Command palette"
       className="fixed inset-0 z-50 flex items-start justify-center"
       style={{
-        background: "rgba(17, 17, 17, 0.28)",
-        backdropFilter: "blur(4px)",
+        background: "rgba(17, 17, 17, 0.22)",
+        backdropFilter: "blur(20px) saturate(1.6)",
         paddingTop: "20vh"
       }}
       onClick={close}
     >
       <div
-        className="w-[600px] max-w-[90vw] overflow-hidden rounded-[14px] border"
+        className="scale-in w-[600px] max-w-[90vw] overflow-hidden rounded-[14px] border"
         style={{
           background: "var(--surface)",
           borderColor: "var(--hairline)",
@@ -171,7 +171,7 @@ export function CommandPalette() {
             placeholder="Search projects, drives, or actions…"
             autoFocus
             aria-label="Command palette search"
-            className="flex-1 bg-transparent text-[13.5px] outline-none"
+            className="flex-1 bg-transparent text-[13px] outline-none"
             style={{ color: "var(--ink)" }}
           />
           {query ? (
@@ -262,10 +262,19 @@ export function CommandPalette() {
 
           {/* No results state */}
           {noResults ? (
-            <div className="px-4 py-8 text-center">
-              <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
-                No results for &ldquo;{query}&rdquo;
-              </p>
+            <div className="flex flex-col items-center gap-3 px-4 py-10">
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-[10px]"
+                style={{ background: "var(--surface-inset)" }}
+              >
+                <Icon name="search" size={18} color="var(--ink-4)" />
+              </div>
+              <div className="text-center">
+                <p className="text-[13px] font-medium" style={{ color: "var(--ink)" }}>No results</p>
+                <p className="mt-0.5 text-[12px]" style={{ color: "var(--ink-3)" }}>
+                  Nothing matched &ldquo;{query}&rdquo;
+                </p>
+              </div>
             </div>
           ) : null}
 

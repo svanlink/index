@@ -13,7 +13,7 @@ import {
 import { validateManualProjectForm } from "../app/catalogValidation";
 import { useCatalogStore } from "../app/providers";
 import { FeedbackNotice, ProjectRowSkeleton, SectionCard } from "./pagePrimitives";
-import { ProjectRow } from "./ProjectList";
+import { ProjectRow, ProjectTableHeader } from "./ProjectList";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -378,10 +378,10 @@ export function ProjectsPage() {
                 color="var(--ink-3)"
               />
             </span>
-            <p className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>
+            <p className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
               {hasActiveFilters || search.trim() ? "No projects match" : "No projects yet"}
             </p>
-            <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+            <p className="text-[12px]" style={{ color: "var(--ink-3)" }}>
               {hasActiveFilters || search.trim() ? (
                 <>
                   Try a broader search or{" "}
@@ -407,7 +407,7 @@ export function ProjectsPage() {
               className="flex items-center justify-end gap-4 border-b px-4 py-3"
               style={{ borderColor: "var(--hairline)" }}
             >
-              <p className="tnum text-[11px]" style={{ color: "var(--ink-3)" }}>
+              <p className="tnum text-[12px]" style={{ color: "var(--ink-3)" }}>
                 {hasActiveFilters || search.trim() ? (
                   <>
                     <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{filteredProjects.length}</span>
@@ -426,6 +426,7 @@ export function ProjectsPage() {
               </p>
             </div>
 
+            <ProjectTableHeader />
             {/* Things-3 flat list — each row is a click target, checkbox reveals on hover */}
             <div role="list">
               {filteredProjects.map((project) => (
@@ -542,7 +543,7 @@ function CompactSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`field-shell cursor-pointer bg-transparent px-3 py-1.5 text-[12.5px] outline-none${isActive ? " field-shell--active" : ""}`}
+      className={`field-shell cursor-pointer bg-transparent px-3 py-1.5 text-[12px] outline-none${isActive ? " field-shell--active" : ""}`}
       style={{
         color: isActive ? "var(--ink)" : "var(--ink-3)"
       }}

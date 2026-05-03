@@ -21,7 +21,7 @@ function MetaField({
         {label}
       </dt>
       <dd
-        className="tnum truncate text-[13.5px] font-medium"
+        className="tnum truncate text-[13px] font-medium"
         style={{
           color: tone === "warn" ? "var(--warn)" : "var(--ink)",
           margin: 0
@@ -59,29 +59,37 @@ export function ScanStatusPanel({ scanSummary, isRunning }: ScanStatusPanelProps
       style={{ background: "var(--surface-inset)" }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span
-          className="inline-block h-2 w-2 rounded-full"
-          style={{
-            background:
-              statusTone === "danger"
-                ? "var(--danger)"
-                : statusTone === "warn"
-                  ? "var(--warn)"
-                  : statusTone === "accent"
-                    ? "var(--accent)"
-                    : "var(--ok)"
-          }}
-          aria-hidden="true"
-        />
+        {isRunning ? (
+          <span className="relative flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden="true">
+            <span className="pulse-ring absolute inline-flex h-4 w-4 rounded-full" style={{ background: "var(--action)", opacity: 0.4 }} />
+            <span className="pulse-ring pulse-ring-2 absolute inline-flex h-4 w-4 rounded-full" style={{ background: "var(--action)", opacity: 0.4 }} />
+            <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: "var(--action)" }} />
+          </span>
+        ) : (
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{
+              background:
+                statusTone === "danger"
+                  ? "var(--danger)"
+                  : statusTone === "warn"
+                    ? "var(--warn)"
+                    : statusTone === "neutral"
+                      ? "var(--ink-3)"
+                      : "var(--ok)"
+            }}
+            aria-hidden="true"
+          />
+        )}
         <span className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
           {isRunning ? "Running" : "Last scan"}
         </span>
-        <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+        <span className="text-[12px]" style={{ color: "var(--ink-3)" }}>
           {getScanStatusLabel(scanSummary)}
         </span>
       </div>
       <p
-        className="mono mt-1.5 text-[11.5px] break-all"
+        className="mono mt-1.5 text-[12px] break-all"
         style={{ color: "var(--ink-3)", margin: "6px 0 0" }}
       >
         {scanSummary.rootPath}
@@ -109,7 +117,7 @@ export function ScanStatusPanel({ scanSummary, isRunning }: ScanStatusPanelProps
         scanSummary.status === "interrupted" ||
         scanSummary.status === "cancelled") ? (
         <p
-          className="mt-3 text-[12.5px]"
+          className="mt-3 text-[12px]"
           style={{
             color: scanSummary.status === "cancelled" ? "var(--warn)" : "var(--danger)",
             margin: "12px 0 0"

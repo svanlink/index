@@ -275,7 +275,7 @@ export function DriveDetailPage() {
           <input
             value={draftRootPath}
             onChange={(e) => setDraftRootPath(e.target.value)}
-            className="field-shell min-w-0 flex-1 bg-transparent px-3 py-1.5 text-[12.5px] outline-none"
+            className="field-shell min-w-0 flex-1 bg-transparent px-3 py-1.5 text-[12px] outline-none"
             placeholder={scanPlaceholder}
             disabled={isScanning}
             aria-label="Scan target path"
@@ -361,7 +361,7 @@ export function DriveDetailPage() {
           >
             <Icon name="hardDrive" size={12} color="var(--ink-3)" />
             <span
-              className="mono min-w-0 flex-1 truncate text-[11.5px]"
+              className="mono min-w-0 flex-1 truncate text-[12px]"
               style={{ color: "var(--ink-3)" }}
             >
               {driveRootPath}
@@ -448,10 +448,10 @@ export function DriveDetailPage() {
               >
                 <Icon name="folderOpen" size={17} color="var(--ink-3)" />
               </span>
-              <p className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>
+              <p className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
                 No projects yet
               </p>
-              <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+              <p className="text-[12px]" style={{ color: "var(--ink-3)" }}>
                 Scan the drive or import folders to populate the catalog.
               </p>
               <div className="mt-2 flex items-center gap-2">
@@ -508,7 +508,7 @@ export function DriveDetailPage() {
       >
         <div className="min-w-0">
           <p className="text-[13px] font-medium" style={{ color: "var(--ink)", margin: 0 }}>Delete drive</p>
-          <p className="text-[12.5px]" style={{ color: "var(--ink-3)", margin: "2px 0 0" }}>
+          <p className="text-[12px]" style={{ color: "var(--ink-3)", margin: "2px 0 0" }}>
             Permanently removes this drive. Projects assigned to it will become unassigned.
           </p>
         </div>

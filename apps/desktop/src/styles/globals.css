@@ -501,7 +501,7 @@ a {
     height: 40px;
     padding: 0 20px;
     font-size: 14px;
-    border-radius: var(--radius-lg);
+    border-radius: 999px; /* Liquid Glass: Large/XL = capsule */
   }
 
   .btn-primary {
@@ -1071,6 +1071,54 @@ a {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ── Sheet spring (Liquid Glass 2025 — expand from source) ── */
+.sheet {
+  animation: sheet-spring 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes sheet-spring {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ── SF Symbols 7 Breathe — ongoing activity indicator ── */
+.pulse-ring {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.pulse-ring-2 {
+  animation-delay: 0.8s;
+}
+.pulse-ring-3 {
+  animation-delay: 1.6s;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+/* ── Sticky glass table header (macOS Hard scroll edge) ── */
+.table-head-glass {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  background: color-mix(in srgb, var(--canvas) 88%, transparent);
+  border-bottom: 1px solid var(--hairline);
 }
 
 /* ── Reduced motion ── */

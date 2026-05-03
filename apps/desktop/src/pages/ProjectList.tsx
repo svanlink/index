@@ -94,7 +94,7 @@ export function ProjectRow({
         aria-label={`Open ${project.folderName}`}
       >
         <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[11.5px] font-semibold"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[12px] font-semibold"
           style={{ background: avatar.bg, color: avatar.color }}
         >
           {avatarLetter}
@@ -112,7 +112,7 @@ export function ProjectRow({
             ) : null}
           </div>
           {secondaryLine || displayDate !== "—" ? (
-            <div className="mt-0.5 flex gap-2 text-[11px]" style={{ color: "var(--ink-3)" }}>
+            <div className="mt-0.5 flex gap-2 text-[12px]" style={{ color: "var(--ink-3)" }}>
               {displayDate !== "—" ? (
                 <span className="tnum shrink-0">{displayDate}</span>
               ) : null}
@@ -128,7 +128,7 @@ export function ProjectRow({
       </Link>
 
       {/* Drive — drive-dot + name, with optional "→ target" for pending moves */}
-      <div className="min-w-0 text-[12.5px]">
+      <div className="min-w-0 text-[12px]">
         {project.currentDriveId ? (
           <div className="flex items-center gap-2">
             <span
@@ -157,7 +157,7 @@ export function ProjectRow({
       </div>
 
       {/* Size */}
-      <div className="tnum text-right text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+      <div className="tnum text-right text-[12px]" style={{ color: "var(--ink-2)" }}>
         {project.sizeBytes != null ? formatBytes(project.sizeBytes) : "—"}
       </div>
 
@@ -178,6 +178,29 @@ export function ProjectRow({
       >
         <Icon name="chevron" size={12} />
       </Link>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+export const PROJECT_COL_TEMPLATE = "minmax(0,1fr) minmax(170px,220px) 88px minmax(140px,180px) 16px";
+
+export function ProjectTableHeader() {
+  return (
+    <div
+      className="table-head-glass grid items-center gap-3 px-4 py-2"
+      style={{ gridTemplateColumns: PROJECT_COL_TEMPLATE }}
+      aria-hidden="true"
+    >
+      {(["Project", "Drive", "Size", "Status", ""] as const).map((col) => (
+        <span
+          key={col}
+          className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
+          style={{ color: "var(--ink-4)", textAlign: col === "Size" ? "right" : "left" }}
+        >
+          {col}
+        </span>
+      ))}
     </div>
   );
 }
@@ -215,7 +238,7 @@ export function ProjectList({
           >
             <Icon name="folder" size={17} color="var(--ink-3)" />
           </span>
-          <p className="text-[13.5px] font-semibold" style={{ color: "var(--ink)" }}>
+          <p className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
             {emptyMessage}
           </p>
         </div>
@@ -224,6 +247,7 @@ export function ProjectList({
   }
   return (
     <div className="card overflow-hidden">
+      <ProjectTableHeader />
       <div role="list">
         {projects.map((project) => (
           <ProjectRow key={project.id} project={project} drives={drives} />

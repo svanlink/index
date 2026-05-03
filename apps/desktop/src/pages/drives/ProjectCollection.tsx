@@ -14,7 +14,7 @@ export function ProjectCollection({ title, description, projects, accentLabel }:
   return (
     <SectionCard title={title} description={description}>
       {projects.length === 0 ? (
-        <p className="text-[12.5px]" style={{ color: "var(--ink-3)", margin: 0 }}>Nothing here yet.</p>
+        <p className="text-[12px]" style={{ color: "var(--ink-3)", margin: 0 }}>Nothing here yet.</p>
       ) : (
         <div className="flex flex-col gap-px">
           {projects.map((project) => (
@@ -27,7 +27,7 @@ export function ProjectCollection({ title, description, projects, accentLabel }:
                 <p className="truncate text-[13px] font-medium" style={{ color: "var(--ink)", margin: 0 }}>
                   {getProjectName(project)}
                 </p>
-                <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--ink-3)", margin: "2px 0 0" }}>
+                <p className="mt-0.5 text-[12px]" style={{ color: "var(--ink-3)", margin: "2px 0 0" }}>
                   {formatParsedDate(project.parsedDate)} · {formatBytes(project.sizeBytes)}
                 </p>
               </div>

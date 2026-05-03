@@ -75,7 +75,7 @@ export function DriveCard({
         borderLeft: "3px solid var(--drive-color)",
         backdropFilter: "blur(12px) saturate(160%)",
         WebkitBackdropFilter: "blur(12px) saturate(160%)",
-        background: "rgba(255,255,255,0.82)"
+        background: "color-mix(in srgb, var(--surface) 82%, transparent)"
       }}
     >
       {/* Clickable header — navigates to drive detail */}
@@ -109,7 +109,7 @@ export function DriveCard({
             ) : null}
             {scanFailed && !isScanning ? <StatusBadge label="Failed" /> : null}
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+          <div className="mt-0.5 flex items-center gap-1.5 text-[12px]" style={{ color: "var(--ink-3)" }}>
             {drive.volumeName !== drive.displayName ? <span>{drive.volumeName}</span> : null}
             {drive.volumeName !== drive.displayName && (drive.createdManually || volumeInfo) ? (
               <span style={{ color: "var(--ink-4)" }}>·</span>
@@ -162,7 +162,7 @@ export function DriveCard({
             }
           />
         ) : (
-          <p className="mt-2.5 text-[11px]" style={{ color: "var(--ink-4)" }}>
+          <p className="mt-2.5 text-[12px]" style={{ color: "var(--ink-4)" }}>
             Unknown capacity
           </p>
         )}
