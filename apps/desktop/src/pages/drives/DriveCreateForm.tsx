@@ -36,16 +36,16 @@ export function DriveCreateForm({
   isMutating
 }: DriveCreateFormProps) {
   return (
-    <div className="card p-4">
-      <p className="h-section mb-3">Add manual drive</p>
+    <div className="card" style={{ padding: 16 }}>
+      <p className="h-section" style={{ marginBottom: 12 }}>Add manual drive</p>
 
-      <form className="grid gap-4 md:grid-cols-3" onSubmit={onSubmit}>
+      <form className="drive-form-grid" onSubmit={onSubmit}>
         <FormField label="Drive name" required>
           <input
             required
             value={form.volumeName}
             onChange={(e) => onChange({ ...form, volumeName: e.target.value })}
-            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
+            className="field-shell w-full bg-transparent outline-none"
             placeholder="Archive Drive"
           />
         </FormField>
@@ -53,7 +53,7 @@ export function DriveCreateForm({
           <input
             value={form.displayName}
             onChange={(e) => onChange({ ...form, displayName: e.target.value })}
-            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
+            className="field-shell w-full bg-transparent outline-none"
             placeholder="Studio Archive (optional)"
           />
         </FormField>
@@ -64,12 +64,12 @@ export function DriveCreateForm({
             step="0.1"
             value={form.capacityTerabytes}
             onChange={(e) => onChange({ ...form, capacityTerabytes: e.target.value })}
-            className="field-shell w-full bg-transparent px-3 py-2 outline-none"
+            className="field-shell w-full bg-transparent outline-none"
             placeholder="4"
           />
         </FormField>
 
-        <div className="flex items-center justify-end gap-2 pt-1 md:col-span-3">
+        <div className="form-actions flex items-center justify-end" style={{ gap: 8, paddingTop: 4 }}>
           <button type="button" className="btn btn-sm" onClick={onCancel}>
             Discard
           </button>
@@ -96,11 +96,11 @@ function FormField({
   children: ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className="flex flex-col" style={{ gap: 6 }}>
       <span className="eyebrow">
         {label}
         {required ? (
-          <span className="ml-1" style={{ color: "var(--danger)" }}>
+          <span style={{ marginLeft: 4, color: "var(--danger)" }}>
             *
           </span>
         ) : null}

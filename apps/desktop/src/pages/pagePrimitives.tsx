@@ -21,24 +21,36 @@ interface SectionCardProps {
 export function SectionCard({ title, description, children, action }: SectionCardProps) {
   const hasHeaderDivider = Boolean(description || action);
   return (
-    <section className="card overflow-hidden">
+    <section className="card" style={{ overflow: "hidden" }}>
       <div
-        className="flex items-start justify-between gap-4 px-5 py-4"
+        className="flex items-start justify-between"
         style={{
+          gap: 16,
+          padding: "16px 20px",
           borderBottom: hasHeaderDivider ? "1px solid var(--hairline)" : "none"
         }}
       >
         <div className="min-w-0">
           <h4
-            className="text-[16px] font-semibold"
-            style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.01em" }}
+            style={{
+              color: "var(--ink)",
+              margin: 0,
+              fontSize: 16,
+              fontWeight: 600,
+              letterSpacing: "-0.01em"
+            }}
           >
             {title}
           </h4>
           {description ? (
             <p
-              className="mt-1 max-w-[62ch] text-[14px] leading-[1.5]"
-              style={{ color: "var(--ink-3)", margin: "4px 0 0" }}
+              style={{
+                color: "var(--ink-3)",
+                margin: "4px 0 0",
+                fontSize: 14,
+                lineHeight: 1.5,
+                maxWidth: "62ch"
+              }}
             >
               {description}
             </p>
@@ -46,7 +58,7 @@ export function SectionCard({ title, description, children, action }: SectionCar
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="px-5 py-4">{children}</div>
+      <div style={{ padding: "16px 20px" }}>{children}</div>
     </section>
   );
 }
@@ -132,32 +144,26 @@ export function EmptyState({
 }) {
   return (
     <div
-      className="rounded-[12px] border px-5 py-6"
       style={{
         background: "var(--surface)",
-        borderColor: "var(--hairline)"
+        border: "1px solid var(--hairline)",
+        borderRadius: "var(--radius-xl)",
+        padding: "24px 20px"
       }}
     >
-      <p className="text-[14px] font-semibold" style={{ color: "var(--ink)", margin: 0 }}>
-        {title}
-      </p>
-      <p
-        className="text-[14px] leading-[1.5]"
-        style={{ color: "var(--ink-3)", margin: "4px 0 0" }}
-      >
+      <p style={{ color: "var(--ink)", margin: 0, fontSize: 14, fontWeight: 600 }}>{title}</p>
+      <p style={{ color: "var(--ink-3)", margin: "4px 0 0", fontSize: 14, lineHeight: 1.5 }}>
         {description}
       </p>
-      {action ? <div className="mt-3">{action}</div> : null}
+      {action ? <div style={{ marginTop: 12 }}>{action}</div> : null}
     </div>
   );
 }
 
 export function LoadingState({ label }: { label: string }) {
   return (
-    <div className="py-6 text-center">
-      <p className="text-[14px]" style={{ color: "var(--ink-3)", margin: 0 }}>
-        {label}
-      </p>
+    <div className="text-center" style={{ padding: "24px 0" }}>
+      <p style={{ color: "var(--ink-3)", margin: 0, fontSize: 14 }}>{label}</p>
     </div>
   );
 }
@@ -168,30 +174,26 @@ export function LoadingState({ label }: { label: string }) {
 
 export function DriveCardSkeleton() {
   return (
-    <div
-      className="card flex flex-col overflow-hidden"
-      style={{ padding: 0 }}
-      aria-hidden="true"
-    >
-      <div className="px-4 pt-4 pb-3">
-        <div className="skeleton h-3.5 w-2/3 rounded" />
-        <div className="skeleton mt-2 h-2.5 w-1/3 rounded" />
-        <div className="skeleton mt-2 h-2.5 w-1/2 rounded" />
+    <div className="card flex flex-col" style={{ padding: 0 }} aria-hidden="true">
+      <div style={{ padding: "16px 16px 12px" }}>
+        <div className="skeleton" style={{ height: 14, width: "66%", borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 10, width: "33%", borderRadius: 4, marginTop: 8 }} />
+        <div className="skeleton" style={{ height: 10, width: "50%", borderRadius: 4, marginTop: 8 }} />
       </div>
-      <div className="px-4 pb-3">
-        <div className="skeleton h-1.5 w-full rounded-full" />
-        <div className="mt-2 flex gap-4">
-          <div className="skeleton h-2 w-16 rounded" />
-          <div className="skeleton h-2 w-16 rounded" />
-          <div className="skeleton h-2 w-12 rounded" />
+      <div style={{ padding: "0 16px 12px" }}>
+        <div className="skeleton" style={{ height: 6, width: "100%", borderRadius: 9999 }} />
+        <div className="flex" style={{ gap: 16, marginTop: 8 }}>
+          <div className="skeleton" style={{ height: 8, width: 64, borderRadius: 4 }} />
+          <div className="skeleton" style={{ height: 8, width: 64, borderRadius: 4 }} />
+          <div className="skeleton" style={{ height: 8, width: 48, borderRadius: 4 }} />
         </div>
       </div>
       <div
-        className="flex gap-3 border-t px-4 py-2.5"
-        style={{ borderColor: "var(--hairline)" }}
+        className="flex"
+        style={{ gap: 12, borderTop: "1px solid var(--hairline)", padding: "10px 16px" }}
       >
-        <div className="skeleton h-3 w-8 rounded" />
-        <div className="skeleton h-3 w-12 rounded" />
+        <div className="skeleton" style={{ height: 12, width: 32, borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 12, width: 48, borderRadius: 4 }} />
       </div>
     </div>
   );
@@ -200,17 +202,17 @@ export function DriveCardSkeleton() {
 export function ProjectRowSkeleton() {
   return (
     <div
-      className="flex items-center gap-3 border-b px-3 py-2.5"
-      style={{ borderColor: "var(--hairline)" }}
+      className="flex items-center"
+      style={{ gap: 12, borderBottom: "1px solid var(--hairline)", padding: "10px 12px" }}
       aria-hidden="true"
     >
-      <div className="skeleton h-3.5 w-3.5 shrink-0 rounded" />
-      <div className="skeleton h-2.5 w-16 shrink-0 rounded" />
-      <div className="skeleton h-2.5 w-24 shrink-0 rounded" />
-      <div className="skeleton h-2.5 flex-1 rounded" />
-      <div className="skeleton h-2.5 w-20 shrink-0 rounded" />
-      <div className="skeleton h-2.5 w-16 shrink-0 rounded" />
-      <div className="skeleton h-2.5 w-14 shrink-0 rounded" />
+      <div className="skeleton shrink-0" style={{ height: 14, width: 14, borderRadius: 4 }} />
+      <div className="skeleton shrink-0" style={{ height: 10, width: 64, borderRadius: 4 }} />
+      <div className="skeleton shrink-0" style={{ height: 10, width: 96, borderRadius: 4 }} />
+      <div className="skeleton flex-1" style={{ height: 10, borderRadius: 4 }} />
+      <div className="skeleton shrink-0" style={{ height: 10, width: 80, borderRadius: 4 }} />
+      <div className="skeleton shrink-0" style={{ height: 10, width: 64, borderRadius: 4 }} />
+      <div className="skeleton shrink-0" style={{ height: 10, width: 56, borderRadius: 4 }} />
     </div>
   );
 }
@@ -276,13 +278,21 @@ export function ConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(29, 29, 31, 0.48)" }}
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(29, 29, 31, 0.48)", padding: 16 }}
       onClick={onCancel}
     >
       <div
         ref={dialogRef}
-        className="w-full max-w-[480px] rounded-[12px]"
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          borderRadius: 12,
+          background: "var(--graphite)",
+          color: "#ffffff",
+          padding: 40,
+          boxShadow: "0 24px 56px rgba(0, 0, 0, 0.32)"
+        }}
         onClick={(e) => e.stopPropagation()}
         role="alertdialog"
         aria-modal="true"
@@ -293,12 +303,6 @@ export function ConfirmModal({
             : "confirm-modal-desc"
         }
         tabIndex={-1}
-        style={{
-          background: "var(--graphite)",
-          color: "#ffffff",
-          padding: 40,
-          boxShadow: "0 24px 56px rgba(0, 0, 0, 0.32)"
-        }}
       >
         <h3
           id="confirm-modal-title"
@@ -337,7 +341,7 @@ export function ConfirmModal({
             {consequence}
           </p>
         ) : null}
-        <div className="mt-8 flex justify-end gap-2">
+        <div className="flex justify-end" style={{ gap: 8, marginTop: 32 }}>
           {/* Cancel listed first in DOM so useFocusTrap focuses it on open —
               safer default for destructive confirmations. */}
           <button
@@ -457,24 +461,23 @@ export function CapacityLegend({
 }) {
   return (
     <div
-      className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px]"
-      style={{ color: "var(--ink-3)" }}
+      className="flex flex-wrap"
+      style={{ gap: "4px 16px", fontSize: 12, color: "var(--ink-3)", marginTop: 12 }}
     >
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2 w-2 rounded-full" style={{ background: "var(--ink)" }} />
+      <span className="inline-flex items-center" style={{ gap: 6 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink)", display: "inline-block" }} />
         {usedLabel}
       </span>
       {reservedLabel ? (
-        <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex items-center" style={{ gap: 6 }}>
           <span
-            className="h-2 w-2 rounded-full"
-            style={{ background: "var(--ink-3)" }}
+            style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink-3)", display: "inline-block" }}
           />
           {reservedLabel}
         </span>
       ) : null}
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2 w-2 rounded-full" style={{ background: "var(--ink-4)" }} />
+      <span className="inline-flex items-center" style={{ gap: 6 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--ink-4)", display: "inline-block" }} />
         {freeLabel}
       </span>
     </div>
@@ -517,31 +520,29 @@ export function FeedbackNotice({
     <div
       role="status"
       aria-live="polite"
-      className="rounded-[8px] border px-4 py-3"
       style={{
         background,
-        borderColor: "var(--hairline)",
+        border: "1px solid var(--hairline)",
+        borderRadius: 8,
+        padding: "12px 16px",
         color: "var(--ink)"
       }}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start" style={{ gap: 12 }}>
         <div
-          className="flex h-5 w-5 shrink-0 items-center justify-center"
-          style={{ color: iconColor }}
+          className="flex items-center justify-center shrink-0"
+          style={{ width: 20, height: 20, color: iconColor }}
           aria-hidden="true"
         >
           <FeedbackIcon tone={tone} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-semibold" style={{ color: "var(--ink)" }}>
-            {title}
-          </p>
-          <div className="mt-1 space-y-1">
+          <p style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", margin: 0 }}>{title}</p>
+          <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 4 }}>
             {messages.map((message) => (
               <p
                 key={message}
-                className="text-[14px] leading-[1.5]"
-                style={{ color: "var(--ink-2)" }}
+                style={{ fontSize: 14, lineHeight: 1.5, color: "var(--ink-2)", margin: 0 }}
               >
                 {message}
               </p>
@@ -571,16 +572,16 @@ export function MetaField({
   const valueColor =
     tone === "accent" ? "var(--accent-ink)" : tone === "warn" ? "var(--warn)" : "var(--ink)";
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
+    <div className="flex flex-col min-w-0" style={{ gap: 2 }}>
       <dt
-        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
+        className="text-eyebrow"
         style={{ color: "var(--ink-4)" }}
       >
         {label}
       </dt>
       <dd
-        className={`tnum truncate text-[13px] font-medium${mono ? " mono" : ""}`}
-        style={{ color: valueColor, margin: 0 }}
+        className={`tnum truncate${mono ? " mono" : ""}`}
+        style={{ color: valueColor, margin: 0, fontSize: 13, fontWeight: 500 }}
       >
         {value}
       </dd>

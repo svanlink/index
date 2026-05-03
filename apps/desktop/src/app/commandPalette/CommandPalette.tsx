@@ -41,8 +41,7 @@ const PINNED_ACTIONS: ReadonlyArray<PaletteAction> = [
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="px-4 py-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em]"
-      style={{ color: "var(--ink-4)" }}
+      style={{ padding: "6px 16px", fontSize: 10.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-4)" }}
     >
       {children}
     </div>
@@ -63,20 +62,20 @@ function ResultRow({
   accessory?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-1 px-2">
+    <div className="flex items-center" style={{ gap: 4, padding: "0 8px" }}>
       <button
         type="button"
         onClick={onClick}
-        className="flex flex-1 items-center gap-3 rounded-[8px] px-2 py-2.5 text-left min-w-0 transition-colors"
-        style={{ color: "var(--ink)" }}
+        className="flex flex-1 items-center min-w-0"
+        style={{ gap: 12, borderRadius: 8, padding: "10px 8px", textAlign: "left", color: "var(--ink)", transition: "background 140ms var(--ease)" }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--surface-inset)"; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
       >
         <Icon name={icon} size={14} color="var(--ink-3)" />
         <span className="flex-1 min-w-0">
-          <span className="block truncate text-[13px]" style={{ color: "var(--ink)" }}>{primary}</span>
+          <span className="truncate" style={{ display: "block", fontSize: 13, color: "var(--ink)" }}>{primary}</span>
           {secondary ? (
-            <span className="block truncate text-[12px]" style={{ color: "var(--ink-3)" }}>
+            <span className="truncate" style={{ display: "block", fontSize: 12, color: "var(--ink-3)" }}>
               {secondary}
             </span>
           ) : null}
@@ -88,7 +87,7 @@ function ResultRow({
 }
 
 function SectionDivider() {
-  return <div className="border-t" style={{ borderColor: "var(--hairline)" }} />;
+  return <div style={{ borderTop: "1px solid var(--hairline)" }} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,18 +149,23 @@ export function CommandPalette() {
       onClick={close}
     >
       <div
-        className="scale-in w-[600px] max-w-[90vw] overflow-hidden rounded-[14px] border"
+        className="scale-in overflow-hidden"
         style={{
-          background: "var(--surface)",
-          borderColor: "var(--hairline)",
-          boxShadow: "0 8px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08)"
+          width: 600,
+          maxWidth: "90vw",
+          borderRadius: 14,
+          border: "1px solid var(--hairline)",
+          background: "var(--glass-palette)",
+          backdropFilter: "var(--glass-palette-filter)",
+          WebkitBackdropFilter: "var(--glass-palette-filter)",
+          boxShadow: "0 16px 48px rgba(0, 0, 0, 0.18), 0 2px 8px rgba(0, 0, 0, 0.08)"
         }}
         onClick={(event) => event.stopPropagation()}
       >
         {/* Search input */}
         <div
-          className="flex items-center gap-2.5 px-4 py-3"
-          style={{ borderBottom: "1px solid var(--hairline)" }}
+          className="flex items-center"
+          style={{ gap: 10, padding: "12px 16px", borderBottom: "1px solid var(--hairline)" }}
         >
           <Icon name="search" size={15} color="var(--ink-3)" />
           <input
@@ -171,8 +175,8 @@ export function CommandPalette() {
             placeholder="Search projects, drives, or actions…"
             autoFocus
             aria-label="Command palette search"
-            className="flex-1 bg-transparent text-[13px] outline-none"
-            style={{ color: "var(--ink)" }}
+            className="flex-1 bg-transparent outline-none"
+            style={{ fontSize: 13, color: "var(--ink)" }}
           />
           {query ? (
             <button
@@ -188,7 +192,7 @@ export function CommandPalette() {
         </div>
 
         {/* Result list */}
-        <div className="max-h-[420px] overflow-y-auto py-1.5">
+        <div className="overflow-y-auto" style={{ maxHeight: 420, padding: "6px 0" }}>
 
           {/* Project results */}
           {isSearching && hasProjectResults ? (
@@ -219,8 +223,8 @@ export function CommandPalette() {
                               void showPathInFinder(project.folderPath);
                               close();
                             }}
-                            className="btn btn-ghost btn-sm shrink-0 opacity-0 group-focus-within:opacity-100"
-                            style={{ padding: "4px", minHeight: 0, color: "var(--ink-3)" }}
+                            className="btn btn-ghost btn-sm shrink-0"
+                            style={{ padding: "4px", minHeight: 0, color: "var(--ink-3)", opacity: 0 }}
                             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
                             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = ""; }}
                             onFocus={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
@@ -262,16 +266,16 @@ export function CommandPalette() {
 
           {/* No results state */}
           {noResults ? (
-            <div className="flex flex-col items-center gap-3 px-4 py-10">
+            <div className="flex flex-col items-center" style={{ gap: 12, padding: "40px 16px" }}>
               <div
-                className="flex h-10 w-10 items-center justify-center rounded-[10px]"
-                style={{ background: "var(--surface-inset)" }}
+                className="flex items-center justify-center"
+                style={{ height: 40, width: 40, borderRadius: 10, background: "var(--surface-inset)" }}
               >
                 <Icon name="search" size={18} color="var(--ink-4)" />
               </div>
               <div className="text-center">
-                <p className="text-[13px] font-medium" style={{ color: "var(--ink)" }}>No results</p>
-                <p className="mt-0.5 text-[12px]" style={{ color: "var(--ink-3)" }}>
+                <p className="font-medium" style={{ fontSize: 13, color: "var(--ink)" }}>No results</p>
+                <p style={{ marginTop: 2, fontSize: 12, color: "var(--ink-3)" }}>
                   Nothing matched &ldquo;{query}&rdquo;
                 </p>
               </div>

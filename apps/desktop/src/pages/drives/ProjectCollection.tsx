@@ -14,24 +14,25 @@ export function ProjectCollection({ title, description, projects, accentLabel }:
   return (
     <SectionCard title={title} description={description}>
       {projects.length === 0 ? (
-        <p className="text-[12px]" style={{ color: "var(--ink-3)", margin: 0 }}>Nothing here yet.</p>
+        <p style={{ fontSize: 12, color: "var(--ink-3)", margin: 0 }}>Nothing here yet.</p>
       ) : (
-        <div className="flex flex-col gap-px">
+        <div className="flex flex-col" style={{ gap: 1 }}>
           {projects.map((project) => (
             <Link
               key={project.id}
               to={`/projects/${project.id}`}
-              className="link-card flex items-center justify-between gap-3 rounded-[8px] px-2.5 py-2 transition-colors hover:bg-[color:var(--surface-inset)]"
+              className="link-card flex items-center justify-between"
+              style={{ gap: 12, borderRadius: 8, padding: "8px 10px", transition: "background 140ms var(--ease)" }}
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium" style={{ color: "var(--ink)", margin: 0 }}>
+                <p className="truncate font-medium" style={{ fontSize: 13, color: "var(--ink)", margin: 0 }}>
                   {getProjectName(project)}
                 </p>
-                <p className="mt-0.5 text-[12px]" style={{ color: "var(--ink-3)", margin: "2px 0 0" }}>
+                <p style={{ marginTop: 2, fontSize: 12, color: "var(--ink-3)", margin: "2px 0 0" }}>
                   {formatParsedDate(project.parsedDate)} · {formatBytes(project.sizeBytes)}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-1">
+              <div className="flex shrink-0" style={{ gap: 4 }}>
                 {accentLabel ? <StatusBadge label={accentLabel} /> : null}
                 {getProjectStatusBadges(project).map((badge) => (
                   <StatusBadge key={badge} label={badge} />

@@ -52,7 +52,7 @@ export function AppShell({
           onSearchChange={onSearchChange}
           onSearchSubmit={onSearchSubmit}
         />
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <main className="min-w-0 flex-1 overflow-y-auto" style={{ padding: "0 24px 32px" }}>
           {children}
         </main>
       </div>

@@ -231,7 +231,7 @@ export function ProjectDetailPage() {
     metadataForm.folderType !== currentProject.folderType;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col" style={{ gap: 24 }}>
       {showDeleteConfirm ? (
         <ConfirmModal
           title="Delete project?"
@@ -244,11 +244,11 @@ export function ProjectDetailPage() {
         />
       ) : null}
 
-      <div className="card overflow-hidden" style={statusAccent ? { boxShadow: statusAccent } : undefined}>
+      <div className="card" style={{ overflow: "hidden", ...(statusAccent ? { boxShadow: statusAccent } : {}) }}>
         {/* C4: Action toolbar */}
         <div
-          className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5"
-          style={{ borderColor: "var(--hairline)" }}
+          className="flex flex-wrap items-center"
+          style={{ gap: 8, borderBottom: "1px solid var(--hairline)", padding: "10px 16px" }}
         >
           <Link to="/projects" className="btn btn-ghost btn-sm">
             <Icon name="chevron" size={11} className="rotate-180" />
@@ -289,12 +289,20 @@ export function ProjectDetailPage() {
         </div>
 
         {/* C1: Identity body */}
-        <div className="px-6 py-6">
-          <div className="flex flex-wrap items-start gap-5">
+        <div style={{ padding: "24px" }}>
+          <div className="flex flex-wrap items-start" style={{ gap: 20 }}>
             {/* C1: Category-tinted avatar letter */}
             <div
-              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[14px] text-[20px] font-semibold"
-              style={{ background: avatar.bg, color: avatar.color }}
+              className="flex shrink-0 items-center justify-center"
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 14,
+                fontSize: 20,
+                fontWeight: 600,
+                background: avatar.bg,
+                color: avatar.color
+              }}
             >
               {avatarLetter}
             </div>
@@ -305,11 +313,11 @@ export function ProjectDetailPage() {
               <h1 className="h-title" style={{ margin: "6px 0 0" }}>
                 {getProjectName(currentProject)}
               </h1>
-              <p className="mono mt-2 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+              <p className="mono" style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 12, lineHeight: 1.5 }}>
                 {currentProject.folderPath ?? currentProject.folderName ?? "Path unavailable"}
               </p>
               {statusBadges.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap" style={{ gap: 6, marginTop: 16 }}>
                   {statusBadges.map((badge) => (
                     <StatusBadge key={badge} label={badge} />
                   ))}
@@ -318,16 +326,13 @@ export function ProjectDetailPage() {
             </div>
           </div>
 
-          <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
+          <dl className="meta-grid-4" style={{ marginTop: 20 }}>
             {/* Drive with color dot */}
             <div className="min-w-0">
-              <dt
-                className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
-                style={{ color: "var(--ink-4)" }}
-              >
+              <dt className="text-eyebrow" style={{ color: "var(--ink-4)" }}>
                 Current drive
               </dt>
-              <dd className="mt-0.5 flex items-center gap-1.5 tnum truncate text-[13px] font-medium" style={{ margin: 0 }}>
+              <dd className="flex items-center tnum truncate" style={{ margin: 0, marginTop: 2, gap: 6, fontSize: 13, fontWeight: 500 }}>
                 {currentProject.currentDriveId ? (
                   <>
                     <span
@@ -356,13 +361,13 @@ export function ProjectDetailPage() {
         <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
       ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
+      <section className="detail-layout">
+        <div className="flex flex-col" style={{ gap: 24 }}>
           <SectionCard
             title="Parsed fields"
             description="Values inferred from the folder name on disk. These are immutable — corrections live in the next section."
           >
-            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            <dl className="fields-grid-2">
               <MetaField label="Date" value={formatParsedDate(currentProject.parsedDate)} />
               <MetaField label="Client" value={currentProject.parsedClient ?? "—"} />
               <MetaField label="Project" value={currentProject.parsedProject ?? "—"} />
@@ -375,7 +380,7 @@ export function ProjectDetailPage() {
             description="Observed classifications and timestamps stored from scans of this project."
           >
             {hasClassificationDrift ? (
-              <div className="mb-4">
+              <div style={{ marginBottom: 16 }}>
                 <FeedbackNotice
                   tone="info"
                   title="Classification drift detected"
@@ -386,7 +391,7 @@ export function ProjectDetailPage() {
                 />
               </div>
             ) : null}
-            <dl className="mb-4 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+            <dl className="fields-grid-3" style={{ marginBottom: 16 }}>
               <MetaField label="Last seen" value={formatDate(currentProject.lastSeenAt)} />
               <MetaField
                 label="Last scanned"
@@ -397,7 +402,7 @@ export function ProjectDetailPage() {
             {isEventsLoading ? (
               <LoadingState label="Loading observations" />
             ) : events.length === 0 ? (
-              <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
+              <p style={{ color: "var(--ink-3)", fontSize: 13, margin: 0 }}>
                 No scan observations yet.
               </p>
             ) : (
@@ -410,22 +415,23 @@ export function ProjectDetailPage() {
             description="Other projects from the same client in the current catalog."
           >
             {relatedProjects.length === 0 ? (
-              <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
+              <p style={{ color: "var(--ink-3)", fontSize: 13, margin: 0 }}>
                 Nothing from this client yet.
               </p>
             ) : (
-              <div className="flex flex-col gap-px">
+              <div className="flex flex-col" style={{ gap: 1 }}>
                 {relatedProjects.map((relatedProject) => (
                   <Link
                     key={relatedProject.id}
                     to={`/projects/${relatedProject.id}`}
-                    className="link-card group flex items-center justify-between rounded-[10px] px-3 py-2.5 transition-colors hover:bg-[color:var(--surface-inset)]"
+                    className="link-card flex items-center justify-between"
+                    style={{ borderRadius: 10, padding: "10px 12px" }}
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium" style={{ color: "var(--ink)" }}>
+                      <p className="truncate" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 500, margin: 0 }}>
                         {getProjectName(relatedProject)}
                       </p>
-                      <p className="mt-0.5 text-[12px]" style={{ color: "var(--ink-3)" }}>
+                      <p style={{ color: "var(--ink-3)", fontSize: 12, marginTop: 2, margin: 0 }}>
                         {formatParsedDate(relatedProject.correctedDate ?? relatedProject.parsedDate)} · {relatedProject.sizeBytes !== null ? formatBytes(relatedProject.sizeBytes) : "Unknown"}
                       </p>
                     </div>
@@ -437,7 +443,7 @@ export function ProjectDetailPage() {
           </SectionCard>
         </div>
 
-        <div className="space-y-6">
+        <div className="flex flex-col" style={{ gap: 24 }}>
           <div id="project-metadata-card">
             <SectionCard
               title="Corrections"
@@ -447,12 +453,13 @@ export function ProjectDetailPage() {
                   : "Override parsed fields. The folder on disk is never renamed."
               }
             >
-              <form className="grid gap-4" onSubmit={handleMetadataSave}>
+              <form className="form-grid" onSubmit={handleMetadataSave}>
                 <FormField label="Date">
                   <input
                     value={metadataForm.correctedDate}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedDate: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
+                    className="field-shell w-full"
+                    style={{ fontSize: 13, padding: "10px 16px" }}
                     placeholder={currentProject.parsedDate ? formatParsedDate(currentProject.parsedDate) : "YYYY-MM-DD, e.g. 2024-03-12"}
                     maxLength={10}
                   />
@@ -461,7 +468,8 @@ export function ProjectDetailPage() {
                   <input
                     value={metadataForm.correctedClient}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedClient: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
+                    className="field-shell w-full"
+                    style={{ fontSize: 13, padding: "10px 16px" }}
                     placeholder={currentProject.parsedClient ?? (currentProject.folderType === "personal_folder" ? "e.g. Sony" : "Leave blank to keep empty")}
                   />
                 </FormField>
@@ -469,7 +477,8 @@ export function ProjectDetailPage() {
                   <input
                     value={metadataForm.correctedProject}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedProject: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
+                    className="field-shell w-full"
+                    style={{ fontSize: 13, padding: "10px 16px" }}
                     placeholder={currentProject.parsedProject ?? (currentProject.folderType === "personal_folder" ? "Leave blank to use folder name" : "Leave blank to keep empty")}
                   />
                 </FormField>
@@ -477,7 +486,8 @@ export function ProjectDetailPage() {
                   <select
                     value={metadataForm.category}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, category: event.target.value as Category | "" }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
+                    className="field-shell w-full"
+                    style={{ fontSize: 13, padding: "10px 16px" }}
                   >
                     <option value="">Uncategorized</option>
                     {categoryValues.map((category) => (
@@ -492,13 +502,14 @@ export function ProjectDetailPage() {
                     <select
                       value={metadataForm.folderType}
                       onChange={(event) => setMetadataForm((current) => ({ ...current, folderType: event.target.value as FolderType | "" }))}
-                      className="field-shell w-full bg-transparent px-4 py-2.5 text-[13px] outline-none"
+                      className="field-shell w-full"
+                      style={{ fontSize: 13, padding: "10px 16px" }}
                     >
                       <option value="personal_folder">Personal folder (keep as-is)</option>
                       <option value="personal_project">Personal project</option>
                       <option value="client">Client project</option>
                     </select>
-                    <p className="mt-1.5 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                    <p style={{ color: "var(--ink-3)", fontSize: 12, lineHeight: 1.5, marginTop: 6 }}>
                       {metadataForm.folderType === "personal_folder" || metadataForm.folderType === ""
                         ? "The folder on disk is never renamed. Changing this is permanent and cannot be reversed through this form."
                         : metadataForm.folderType === "client"
@@ -508,11 +519,11 @@ export function ProjectDetailPage() {
                   </FormField>
                 ) : null}
                 {/* C2: Unsaved indicator */}
-                <div className="flex items-center justify-end gap-2 pt-1">
+                <div className="flex items-center justify-end" style={{ gap: 8, paddingTop: 4 }}>
                   {isFormDirty && !metadataMutation.isPending ? (
-                    <span className="chip chip-warn text-[12px]">Unsaved changes</span>
+                    <span className="chip chip-warn">Unsaved changes</span>
                   ) : metadataMutation.isConfirmed && !isFormDirty ? (
-                    <span className="text-[12px] tnum" style={{ color: "var(--ink-3)" }}>
+                    <span className="tnum" style={{ fontSize: 12, color: "var(--ink-3)" }}>
                       Saved ✓
                     </span>
                   ) : null}
@@ -528,13 +539,13 @@ export function ProjectDetailPage() {
             </SectionCard>
           </div>
 
-          <div className="card px-5 py-4">
-            <div className="flex items-start justify-between gap-4">
+          <div className="card" style={{ padding: "16px 20px" }}>
+            <div className="flex items-start justify-between" style={{ gap: 16 }}>
               <div className="min-w-0">
-                <p className="text-[13px] font-semibold tracking-[-0.01em]" style={{ color: "var(--ink)" }}>
+                <p style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em", margin: 0 }}>
                   Delete project
                 </p>
-                <p className="mt-1 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                <p style={{ color: "var(--ink-3)", fontSize: 12, lineHeight: 1.5, marginTop: 4 }}>
                   Permanently removes this project from the catalog. This cannot be undone.
                 </p>
               </div>
@@ -561,8 +572,8 @@ export function ProjectDetailPage() {
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-[12px] font-medium" style={{ color: "var(--ink-2)" }}>
+    <label className="flex flex-col" style={{ gap: 6 }}>
+      <span style={{ color: "var(--ink-2)", fontSize: 12, fontWeight: 500 }}>
         {label}
       </span>
       {children}
@@ -572,15 +583,16 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 
 function ActivityTimeline({ events }: { events: ProjectScanEvent[] }) {
   return (
-    <div className="relative pl-4">
+    <div className="relative" style={{ paddingLeft: 16 }}>
       {/* Decorative vertical rule — hidden from AT */}
       <div
         aria-hidden="true"
-        className="absolute bottom-1 left-[3px] top-[6px] w-px"
-        style={{ background: "var(--hairline)" }}
+        className="absolute"
+        style={{ background: "var(--hairline)", left: 3, top: 6, bottom: 4, width: 1 }}
       />
       <ol
-        className="m-0 list-none space-y-4 p-0"
+        className="list-none"
+        style={{ margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 16 }}
         aria-label={`Scan activity, ${events.length} event${events.length === 1 ? "" : "s"}`}
       >
         {events.map((event) => (
@@ -588,26 +600,31 @@ function ActivityTimeline({ events }: { events: ProjectScanEvent[] }) {
             {/* Decorative timeline dot — hidden from AT */}
             <span
               aria-hidden="true"
-              className="absolute -left-4 top-[5px] h-[7px] w-[7px] rounded-full"
+              className="absolute"
               style={{
+                left: -16,
+                top: 5,
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
                 background:
                   event.observedFolderType != null ? "var(--accent)" : "var(--ink-3)",
                 boxShadow: "0 0 0 3px var(--surface)"
               }}
             />
-            <div className="flex items-center gap-3">
-              <p className="text-[13px] font-medium" style={{ color: "var(--ink)" }}>
+            <div className="flex items-center" style={{ gap: 12 }}>
+              <p style={{ color: "var(--ink)", fontSize: 13, fontWeight: 500, margin: 0 }}>
                 {event.observedFolderName}
               </p>
               <time
                 dateTime={event.observedAt}
-                className="tnum text-[12px]"
-                style={{ color: "var(--ink-4)" }}
+                className="tnum"
+                style={{ color: "var(--ink-4)", fontSize: 12 }}
               >
                 {formatDate(event.observedAt)}
               </time>
             </div>
-            <div className="mt-1 flex flex-wrap gap-2 text-[12px]" style={{ color: "var(--ink-3)" }}>
+            <div className="flex flex-wrap" style={{ gap: 8, marginTop: 4, fontSize: 12, color: "var(--ink-3)" }}>
               <span>{event.observedDriveName}</span>
               {event.observedFolderType != null ? (
                 <>
@@ -623,4 +640,3 @@ function ActivityTimeline({ events }: { events: ProjectScanEvent[] }) {
     </div>
   );
 }
-

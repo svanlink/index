@@ -80,39 +80,42 @@ export function ProjectRow({
   return (
     <div
       role="listitem"
-      className="proj-row group grid items-center gap-3 border-b px-4 py-3"
+      className="proj-row grid items-center"
       style={{
+        gap: 12,
         gridTemplateColumns: "minmax(0,1fr) minmax(170px,220px) 88px minmax(140px,180px) 16px",
-        borderColor: "var(--hairline)",
+        borderBottom: "1px solid var(--hairline)",
+        padding: "12px 16px",
         boxShadow: statusAccent
       }}
     >
       {/* Project — avatar + title + subtitle */}
       <Link
         to={`/projects/${project.id}`}
-        className="flex min-w-0 items-center gap-3"
+        className="flex min-w-0 items-center"
+        style={{ gap: 12 }}
         aria-label={`Open ${project.folderName}`}
       >
         <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[12px] font-semibold"
-          style={{ background: avatar.bg, color: avatar.color }}
+          className="flex shrink-0 items-center justify-center font-semibold"
+          style={{ height: 32, width: 32, borderRadius: 10, fontSize: 12, background: avatar.bg, color: avatar.color }}
         >
           {avatarLetter}
         </div>
         <div className="min-w-0 flex-1">
           <div
-            className="truncate text-[13px] font-medium leading-snug"
-            style={{ color: "var(--ink)" }}
+            className="truncate font-medium leading-snug"
+            style={{ fontSize: 13, color: "var(--ink)" }}
           >
             {primaryLine}
             {!isPersonalFolder && displayClient !== "—" && displayName ? (
-              <span className="ml-1" style={{ color: "var(--ink-3)", fontWeight: 400 }}>
+              <span style={{ marginLeft: 4, color: "var(--ink-3)", fontWeight: 400 }}>
                 · {displayName}
               </span>
             ) : null}
           </div>
           {secondaryLine || displayDate !== "—" ? (
-            <div className="mt-0.5 flex gap-2 text-[12px]" style={{ color: "var(--ink-3)" }}>
+            <div className="flex" style={{ marginTop: 2, gap: 8, fontSize: 12, color: "var(--ink-3)" }}>
               {displayDate !== "—" ? (
                 <span className="tnum shrink-0">{displayDate}</span>
               ) : null}
@@ -128,9 +131,9 @@ export function ProjectRow({
       </Link>
 
       {/* Drive — drive-dot + name, with optional "→ target" for pending moves */}
-      <div className="min-w-0 text-[12px]">
+      <div className="min-w-0" style={{ fontSize: 12 }}>
         {project.currentDriveId ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center" style={{ gap: 8 }}>
             <span
               className="drive-dot"
               style={{ "--drive-color": driveColor, width: 8, height: 8 } as CSSProperties}
@@ -157,12 +160,12 @@ export function ProjectRow({
       </div>
 
       {/* Size */}
-      <div className="tnum text-right text-[12px]" style={{ color: "var(--ink-2)" }}>
+      <div className="tnum" style={{ textAlign: "right", fontSize: 12, color: "var(--ink-2)" }}>
         {project.sizeBytes != null ? formatBytes(project.sizeBytes) : "—"}
       </div>
 
       {/* Status chips */}
-      <div className="flex flex-wrap justify-end gap-1 overflow-hidden">
+      <div className="flex flex-wrap justify-end overflow-hidden" style={{ gap: 4 }}>
         {statusBadges.map((b: string) => (
           <StatusBadge key={b} label={b} />
         ))}
@@ -171,8 +174,8 @@ export function ProjectRow({
       {/* Chevron */}
       <Link
         to={`/projects/${project.id}`}
-        className="link-card flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        style={{ color: "var(--ink-4)" }}
+        className="link-card row-chevron flex items-center justify-center"
+        style={{ opacity: 0, transition: "opacity 150ms var(--ease)", color: "var(--ink-4)" }}
         aria-label={`Open ${project.folderName}`}
         tabIndex={-1}
       >
@@ -188,15 +191,14 @@ export const PROJECT_COL_TEMPLATE = "minmax(0,1fr) minmax(170px,220px) 88px minm
 export function ProjectTableHeader() {
   return (
     <div
-      className="table-head-glass grid items-center gap-3 px-4 py-2"
-      style={{ gridTemplateColumns: PROJECT_COL_TEMPLATE }}
+      className="table-head-glass grid items-center"
+      style={{ gap: 12, gridTemplateColumns: PROJECT_COL_TEMPLATE, padding: "8px 16px" }}
       aria-hidden="true"
     >
       {(["Project", "Drive", "Size", "Status", ""] as const).map((col) => (
         <span
           key={col}
-          className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
-          style={{ color: "var(--ink-4)", textAlign: col === "Size" ? "right" : "left" }}
+          style={{ fontSize: 10.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-4)", textAlign: col === "Size" ? "right" : "left" }}
         >
           {col}
         </span>
@@ -222,23 +224,23 @@ export function ProjectList({
 }) {
   if (isLoading) {
     return (
-      <div className="card overflow-hidden py-12 text-center">
-        <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>Loading…</p>
+      <div className="card text-center" style={{ overflow: "hidden", padding: "48px 0" }}>
+        <p style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</p>
       </div>
     );
   }
   if (projects.length === 0) {
     return (
-      <div className="card overflow-hidden">
-        <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+      <div className="card" style={{ overflow: "hidden" }}>
+        <div className="flex flex-col items-center text-center" style={{ gap: 8, padding: "48px 16px" }}>
           <span
-            className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-[10px]"
-            style={{ background: "var(--surface-inset)" }}
+            className="inline-flex items-center justify-center"
+            style={{ marginBottom: 4, height: 44, width: 44, borderRadius: 10, background: "var(--surface-inset)" }}
             aria-hidden="true"
           >
-            <Icon name="folder" size={17} color="var(--ink-3)" />
+            <Icon name="folder" size={20} color="var(--ink-3)" />
           </span>
-          <p className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
+          <p className="font-semibold" style={{ fontSize: 13, color: "var(--ink)" }}>
             {emptyMessage}
           </p>
         </div>
@@ -246,7 +248,7 @@ export function ProjectList({
     );
   }
   return (
-    <div className="card overflow-hidden">
+    <div className="card" style={{ overflow: "hidden" }}>
       <ProjectTableHeader />
       <div role="list">
         {projects.map((project) => (

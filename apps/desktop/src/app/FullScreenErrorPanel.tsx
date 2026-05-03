@@ -55,47 +55,44 @@ export function FullScreenErrorPanel({
     <div
       role="alert"
       aria-live="assertive"
-      className="flex min-h-screen items-center justify-center p-6"
-      style={{ background: "var(--canvas)" }}
+      className="flex items-center justify-center"
+      style={{ minHeight: "100vh", padding: 24, background: "var(--canvas)" }}
     >
-      <div className="app-panel w-full max-w-md space-y-4 px-6 py-6">
-        <div className="space-y-1">
+      <div className="app-panel w-full flex flex-col" style={{ maxWidth: 448, gap: 16, padding: 24 }}>
+        <div className="flex flex-col" style={{ gap: 4 }}>
           <p
-            className="text-[11px] font-semibold uppercase tracking-[0.16em]"
-            style={{ color: eyebrowColor }}
+            style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.16em", color: eyebrowColor }}
           >
             {eyebrow}
           </p>
-          <h1 className="text-[16px] font-semibold" style={{ color: "var(--ink)" }}>
+          <h1 className="font-semibold" style={{ fontSize: 16, color: "var(--ink)" }}>
             {title}
           </h1>
         </div>
 
-        <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
+        <p style={{ fontSize: 13, color: "var(--ink-3)" }}>
           {description}
         </p>
 
         {detail ? (
           <details
-            className="rounded-md border px-3 py-2"
-            style={{ borderColor: "var(--hairline)", background: "var(--surface-inset)" }}
+            style={{ borderRadius: 6, border: "1px solid var(--hairline)", background: "var(--surface-inset)", padding: "8px 12px" }}
           >
             <summary
-              className="cursor-pointer select-none text-[12px] font-medium"
-              style={{ color: "var(--ink-2)" }}
+              className="cursor-pointer select-none font-medium"
+              style={{ fontSize: 12, color: "var(--ink-2)" }}
             >
               Technical detail
             </summary>
             <pre
-              className="mt-2 whitespace-pre-wrap break-all font-mono text-[11px] leading-snug"
-              style={{ color: "var(--ink-3)" }}
+              style={{ marginTop: 8, whiteSpace: "pre-wrap", wordBreak: "break-all", fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: 1.35, color: "var(--ink-3)" }}
             >
               {detail}
             </pre>
           </details>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2 pt-1">{actions}</div>
+        <div className="flex flex-wrap items-center" style={{ gap: 8, paddingTop: 4 }}>{actions}</div>
       </div>
     </div>
   );

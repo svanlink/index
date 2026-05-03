@@ -115,13 +115,14 @@ export function ImportFoldersDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(17, 17, 17, 0.22)", backdropFilter: "blur(20px) saturate(1.6)" }}
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ padding: 16, background: "rgba(17, 17, 17, 0.22)", backdropFilter: "blur(20px) saturate(1.6)" }}
       onClick={onCancel}
     >
       <div
         ref={dialogRef}
-        className="app-panel sheet w-full max-w-[640px] overflow-hidden p-0"
+        className="app-panel sheet w-full"
+        style={{ maxWidth: 640, overflow: "hidden", padding: 0 }}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -130,24 +131,35 @@ export function ImportFoldersDialog({
         tabIndex={-1}
       >
         {/* D3: Header — title + source path + close */}
-        <header className="px-6 pt-5 pb-4">
-          <div className="flex items-start justify-between gap-4">
+        <header style={{ padding: "20px 24px 16px" }}>
+          <div className="flex items-start justify-between" style={{ gap: 16 }}>
             <div className="min-w-0 flex-1">
               <h3
                 id="import-folders-dialog-title"
-                className="text-[16px] font-semibold tracking-[-0.015em]"
-                style={{ color: "var(--ink)" }}
+                className="font-semibold"
+                style={{ fontSize: 16, letterSpacing: "-0.015em", color: "var(--ink)" }}
               >
                 Review folders to import
               </h3>
-              <p
-                id="import-folders-dialog-source"
-                className="mono mt-1.5 truncate text-[12px]"
-                style={{ color: "var(--ink-3)" }}
-                title={sourcePath}
-              >
-                {sourcePath}
-              </p>
+              <div className="flex min-w-0 items-baseline" style={{ marginTop: 6, gap: 8 }}>
+                <p
+                  id="import-folders-dialog-source"
+                  className="mono min-w-0 flex-1 truncate"
+                  style={{ fontSize: 12, color: "var(--ink-3)" }}
+                  title={sourcePath}
+                >
+                  {sourcePath}
+                </p>
+                <button
+                  type="button"
+                  className="shrink-0"
+                  style={{ fontSize: 12, color: "var(--action)", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                  onClick={onPickAgain}
+                  disabled={isImporting}
+                >
+                  Change folder
+                </button>
+              </div>
             </div>
             <button
               type="button"
@@ -160,10 +172,10 @@ export function ImportFoldersDialog({
               <Icon name="close" size={14} color="currentColor" />
             </button>
           </div>
-          {contextBanner ? <div className="mt-3">{contextBanner}</div> : null}
+          {contextBanner ? <div style={{ marginTop: 12 }}>{contextBanner}</div> : null}
         </header>
 
-        <div className="px-6 pb-5">
+        <div style={{ padding: "0 24px 20px" }}>
           <ImportSummary
             newCount={newFolders.length}
             duplicateCount={duplicateFolders.length}
@@ -171,13 +183,14 @@ export function ImportFoldersDialog({
 
           {/* D2: Inline search — only when list is long enough to warrant it */}
           {showSearch ? (
-            <div className="mt-3">
+            <div style={{ marginTop: 12 }}>
               <input
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Filter folders…"
-                className="field-shell w-full bg-transparent px-3 py-2 text-[13px] outline-none"
+                className="field-shell w-full bg-transparent outline-none"
+                style={{ fontSize: 13 }}
                 aria-label="Filter folders"
               />
             </div>
@@ -185,8 +198,7 @@ export function ImportFoldersDialog({
 
           {folders.length === 0 ? (
             <div
-              className="mt-4 rounded-[12px] px-4 py-4 text-[12px] leading-[1.5]"
-              style={{ background: "var(--surface-inset)", color: "var(--ink-3)" }}
+              style={{ marginTop: 16, borderRadius: 12, padding: 16, fontSize: 12, lineHeight: 1.5, background: "var(--surface-inset)", color: "var(--ink-3)" }}
             >
               No folders were found at this location. Hidden files, system
               folders (<code className="mono" style={{ color: "var(--ink-2)" }}>.Spotlight-V100</code>,{" "}
@@ -195,8 +207,8 @@ export function ImportFoldersDialog({
           ) : (
             /* D1: Split sections — new vs. already-in-catalog */
             <div
-              className="mt-4 max-h-[360px] overflow-y-auto rounded-[12px] border"
-              style={{ borderColor: "var(--hairline)" }}
+              className="overflow-y-auto"
+              style={{ marginTop: 16, maxHeight: 360, borderRadius: 12, border: "1px solid var(--hairline)" }}
               role="region"
               aria-label="Folders to import"
               tabIndex={0}
@@ -219,7 +231,7 @@ export function ImportFoldersDialog({
                   </ul>
                 </>
               ) : searchTrimmed && newFolders.length > 0 ? (
-                <p className="px-4 py-3 text-[12px]" style={{ color: "var(--ink-3)" }}>
+                <p style={{ padding: "12px 16px", fontSize: 12, color: "var(--ink-3)" }}>
                   No new folders match "{search}".
                 </p>
               ) : null}
@@ -246,7 +258,7 @@ export function ImportFoldersDialog({
 
               {/* No results from search */}
               {searchTrimmed && filteredNew.length === 0 && filteredDup.length === 0 ? (
-                <p className="px-4 py-3 text-[12px]" style={{ color: "var(--ink-3)" }}>
+                <p style={{ padding: "12px 16px", fontSize: 12, color: "var(--ink-3)" }}>
                   No folders match "{search}".
                 </p>
               ) : null}
@@ -255,17 +267,9 @@ export function ImportFoldersDialog({
         </div>
 
         <footer
-          className="flex flex-wrap items-center justify-end gap-2 border-t px-6 py-3.5"
-          style={{ borderColor: "var(--hairline)", background: "var(--surface-inset)" }}
+          className="flex flex-wrap items-center justify-end"
+          style={{ gap: 8, borderTop: "1px solid var(--hairline)", padding: "14px 24px", background: "var(--surface-inset)" }}
         >
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={onPickAgain}
-            disabled={isImporting}
-          >
-            Pick different folder
-          </button>
           <div className="flex-1" />
           <button
             type="button"
@@ -300,9 +304,13 @@ export function ImportFoldersDialog({
 function SectionHeader({ label, faded = false }: { label: string; faded?: boolean }) {
   return (
     <div
-      className="border-b px-4 py-2 text-[10.5px] font-medium uppercase tracking-[0.08em]"
       style={{
-        borderColor: "var(--hairline)",
+        borderBottom: "1px solid var(--hairline)",
+        padding: "8px 16px",
+        fontSize: 10.5,
+        fontWeight: 500,
+        textTransform: "uppercase",
+        letterSpacing: "0.08em",
         background: "var(--surface-inset)",
         color: faded ? "var(--ink-4)" : "var(--ink-3)"
       }}
@@ -323,14 +331,16 @@ function FolderRow({
 }) {
   return (
     <li
-      className="flex items-center justify-between gap-3 px-4 py-2.5"
+      className="flex items-center justify-between"
       style={{
+        gap: 12,
+        padding: "10px 16px",
         borderBottom: isLast ? undefined : "1px solid var(--hairline)",
         background: "transparent",
         opacity: isDuplicate ? 0.5 : 1
       }}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+      <div className="flex min-w-0 flex-1 items-center" style={{ gap: 10 }}>
         <Icon
           name="folder"
           size={14}
@@ -338,15 +348,15 @@ function FolderRow({
         />
         <div className="min-w-0">
           <p
-            className="truncate text-[13px] font-medium"
-            style={{ color: "var(--ink)" }}
+            className="truncate font-medium"
+            style={{ fontSize: 13, color: "var(--ink)" }}
             title={folder.name}
           >
             {folder.name}
           </p>
           <p
-            className="mono truncate text-[12px]"
-            style={{ color: "var(--ink-4)" }}
+            className="mono truncate"
+            style={{ fontSize: 12, color: "var(--ink-4)" }}
             title={folder.path}
           >
             {folder.path}
@@ -354,7 +364,7 @@ function FolderRow({
         </div>
       </div>
       {isDuplicate ? (
-        <span className="shrink-0 text-[12px]" style={{ color: "var(--ink-3)" }}>
+        <span className="shrink-0" style={{ fontSize: 12, color: "var(--ink-3)" }}>
           In catalog
         </span>
       ) : null}
@@ -378,32 +388,30 @@ function ImportSummary({
   }
 
   return (
-    <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-      <div className="flex items-baseline gap-2">
+    <dl className="flex flex-wrap items-baseline" style={{ columnGap: 24, rowGap: 8 }}>
+      <div className="flex items-baseline" style={{ gap: 8 }}>
         <dt
-          className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
-          style={{ color: "var(--ink-4)" }}
+          style={{ fontSize: 10.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-4)" }}
         >
           To import
         </dt>
         <dd
-          className="tnum text-[14px] font-semibold"
-          style={{ color: newCount === 0 ? "var(--ink-3)" : "var(--ink)" }}
+          className="tnum font-semibold"
+          style={{ fontSize: 14, color: newCount === 0 ? "var(--ink-3)" : "var(--ink)" }}
         >
           {newCount}
         </dd>
       </div>
       {duplicateCount > 0 ? (
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-baseline" style={{ gap: 8 }}>
           <dt
-            className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
-            style={{ color: "var(--ink-4)" }}
+            style={{ fontSize: 10.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-4)" }}
           >
             Already in catalog
           </dt>
           <dd
-            className="tnum text-[14px] font-semibold"
-            style={{ color: "var(--ink-3)" }}
+            className="tnum font-semibold"
+            style={{ fontSize: 14, color: "var(--ink-3)" }}
           >
             {duplicateCount}
           </dd>

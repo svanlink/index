@@ -1,7 +1,3 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* ──────────────────────────────────────────────────────────────
    Catalog — DESIGN.md source of truth
    Cold-neutral canvas, Apple-blue action, Inter, dense transaction UI.
@@ -82,11 +78,23 @@
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* ── Radius (DESIGN.md §5) ── */
-  --radius: 4px;        /* default: inputs, small controls */
-  --radius-sm: 4px;     /* alias */
-  --radius-lg: 8px;     /* buttons, list rows */
+  --radius-xs: 4px;     /* inputs, small controls */
+  --radius-sm: 6px;     /* icon buttons */
+  --radius: 4px;        /* default: inputs, small controls (alias → --radius-xs) */
+  --radius-lg: 10px;    /* buttons, nav items, drive cards */
   --radius-xl: 12px;    /* cards, modals, bento tiles */
+  --radius-2xl: 16px;   /* large sheets */
   --radius-full: 9999px;
+
+  /* ── Glass materials (Liquid Glass 2025) ── */
+  --glass-sidebar:         rgba(235, 235, 240, 0.72);
+  --glass-sidebar-filter:  blur(24px) saturate(1.8) brightness(1.02);
+  --glass-toolbar:         rgba(255, 255, 255, 0.82);
+  --glass-toolbar-filter:  blur(16px) saturate(1.5);
+  --glass-sheet:           rgba(255, 255, 255, 0.88);
+  --glass-sheet-filter:    blur(40px) saturate(1.8);
+  --glass-palette:         rgba(252, 252, 254, 0.88);
+  --glass-palette-filter:  blur(48px) saturate(1.9) brightness(1.03);
 
   /* ── Density (DESIGN.md §4 — 44px default, 36px dense) ── */
   --dens-row: 44px;
@@ -221,6 +229,14 @@
   --border-soft: #48484b;
   --border-mid: #6e6e73;
   --accent-soft: rgba(0, 113, 227, 0.18);
+  --glass-sidebar:         rgba(30, 30, 32, 0.78);
+  --glass-sidebar-filter:  blur(24px) saturate(1.5) brightness(0.97);
+  --glass-toolbar:         rgba(42, 42, 44, 0.85);
+  --glass-toolbar-filter:  blur(16px) saturate(1.5);
+  --glass-sheet:           rgba(44, 44, 46, 0.92);
+  --glass-sheet-filter:    blur(40px) saturate(1.8);
+  --glass-palette:         rgba(36, 36, 38, 0.96);
+  --glass-palette-filter:  blur(48px) saturate(1.8);
   --drive-a: #8ea0b5;
   --drive-b: #a4aab5;
   --drive-c: #8aa69d;
@@ -292,15 +308,13 @@ a {
   color: var(--action-hover);
 }
 
-@layer base {
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    letter-spacing: -0.02em;
-  }
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: -0.02em;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -374,620 +388,642 @@ a {
   flex: 1;
 }
 
-@layer components {
-  /* ── Panels / cards ── */
-  .app-panel {
-    @apply rounded-[12px] border bg-[color:var(--surface)];
-    border-color: var(--hairline);
-    box-shadow: none;
-    transition:
-      border-color 140ms var(--ease),
-      background 140ms var(--ease);
-  }
-  .app-panel-subtle {
-    @apply rounded-[12px] border bg-[color:var(--surface-container-low)];
-    border-color: var(--hairline);
-  }
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-xl);
-    box-shadow: none;
-    transition:
-      border-color 140ms var(--ease),
-      background 140ms var(--ease);
-  }
-  /* ── Fields ── */
-  .field {
-    display: inline-flex;
-    align-items: center;
-    height: 36px;
-    padding: 0 12px;
-    background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius);
-    font-size: 14px;
-    box-shadow: none;
-    transition:
-      background 120ms,
-      border-color 120ms,
-      box-shadow 120ms;
-  }
-  .field:focus-within {
-    background: var(--surface);
-    border-color: var(--action);
-    box-shadow: 0 0 0 2px var(--accent-soft);
-  }
-  .field input {
-    flex: 1;
-    min-width: 0;
-  }
-  .field input::placeholder {
-    color: var(--ink-4);
-  }
+/* ── Panels / cards ── */
+.app-panel {
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  box-shadow: none;
+  transition:
+    border-color 140ms var(--ease),
+    background 140ms var(--ease);
+}
+.app-panel-subtle {
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--surface-container-low);
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xl);
+  box-shadow: none;
+  transition:
+    border-color 140ms var(--ease),
+    background 140ms var(--ease);
+}
 
-  .field-shell {
-    @apply rounded-[4px] border px-3 py-2;
-    background: var(--surface);
-    border-color: var(--border-soft);
-    box-shadow: none;
-    transition:
-      border-color 120ms ease,
-      background 120ms ease,
-      box-shadow 120ms ease;
-  }
-  .field-shell:hover {
-    border-color: var(--border-mid);
-  }
-  .field-shell:focus-within {
-    background: var(--surface);
-    border-color: var(--action);
-    box-shadow: 0 0 0 2px var(--accent-soft);
-    outline: none;
-  }
-  .field-shell--active {
-    background: var(--surface);
-    border-color: var(--action);
-  }
+/* ── Fields ── */
+.field {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  font-size: 14px;
+  box-shadow: none;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    box-shadow 120ms;
+}
+.field:focus-within {
+  background: var(--surface);
+  border-color: var(--action);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.field input {
+  flex: 1;
+  min-width: 0;
+}
+.field input::placeholder {
+  color: var(--ink-4);
+}
 
-  /* ──────────────────────────────────────────────────────────
-     Buttons — DESIGN.md §6.
-     Five canonical variants: .btn-primary, .btn-secondary,
-     .btn-ghost, .btn-danger, .btn-sm. The .btn base is shared.
-     Legacy `.button-*` aliases remain below for compat; they
-     mirror the new style and will be removed in Layer 1b.
-     ────────────────────────────────────────────────────────── */
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 36px;
-    padding: 0 16px;
-    background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius-lg);
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--ink);
-    cursor: pointer;
-    box-shadow: none;
-    transition:
-      background 120ms var(--ease),
-      border-color 120ms var(--ease),
-      color 120ms var(--ease);
-    white-space: nowrap;
-  }
-  .btn:hover {
-    background: var(--surface-container-low);
-    border-color: var(--border-mid);
-    color: var(--ink);
-  }
-  .btn:focus-visible {
-    outline: 2px solid var(--action);
-    outline-offset: 2px;
-  }
-  .btn:disabled,
-  .btn[aria-disabled="true"] {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-  .btn-sm {
-    height: 28px;
-    padding: 0 12px;
-    font-size: 12px;
-    border-radius: var(--radius-lg);
-  }
-  .btn-lg {
-    height: 40px;
-    padding: 0 20px;
-    font-size: 14px;
-    border-radius: 999px; /* Liquid Glass: Large/XL = capsule */
-  }
+.field-shell {
+  border-radius: 4px;
+  border: 1px solid var(--border-soft);
+  padding: 8px 12px;
+  background: var(--surface);
+  box-shadow: none;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+.field-shell:hover {
+  border-color: var(--border-mid);
+}
+.field-shell:focus-within {
+  background: var(--surface);
+  border-color: var(--action);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
+}
+.field-shell--active {
+  background: var(--surface);
+  border-color: var(--action);
+}
 
-  .btn-primary {
-    background: var(--action);
-    color: #fff;
-    border-color: var(--action);
-  }
-  .btn-primary:hover {
-    background: var(--action-hover);
-    border-color: var(--action-hover);
-    color: #fff;
-  }
+/* ──────────────────────────────────────────────────────────
+   Buttons — DESIGN.md §6.
+   Five canonical variants: .btn-primary, .btn-secondary,
+   .btn-ghost, .btn-danger, .btn-sm. The .btn base is shared.
+   Legacy `.button-*` aliases remain below for compat; they
+   mirror the new style and will be removed in Layer 1b.
+   ────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background 120ms var(--ease),
+    border-color 120ms var(--ease),
+    color 120ms var(--ease);
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--surface-container-low);
+  border-color: var(--border-mid);
+  color: var(--ink);
+}
+.btn:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-sm {
+  height: 26px;
+  padding: 0 11px;
+  font-size: 12px;
+  border-radius: var(--radius-lg);
+}
+.btn-lg {
+  height: 34px;
+  padding: 0 18px;
+  font-size: 13px;
+  border-radius: 999px; /* Liquid Glass: Large/XL = capsule */
+}
 
-  .btn-secondary {
-    background: var(--surface);
-    color: var(--ink);
-    border-color: var(--border-soft);
-  }
-  .btn-secondary:hover {
-    background: var(--surface-container-low);
-    border-color: var(--border-mid);
-  }
+.btn-primary {
+  background: var(--action);
+  color: #fff;
+  border-color: var(--action);
+}
+.btn-primary:hover {
+  background: var(--action-hover);
+  border-color: var(--action-hover);
+  color: #fff;
+}
 
-  /* .btn-accent retained as alias to .btn-primary. */
-  .btn-accent {
-    background: var(--action);
-    color: #fff;
-    border-color: var(--action);
-  }
-  .btn-accent:hover {
-    background: var(--action-hover);
-    border-color: var(--action-hover);
-  }
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--border-soft);
+}
+.btn-secondary:hover {
+  background: var(--surface-container-low);
+  border-color: var(--border-mid);
+}
 
-  .btn-ghost {
-    background: transparent;
-    border-color: transparent;
-    color: var(--ink-2);
-    box-shadow: none;
-  }
-  .btn-ghost:hover {
-    background: var(--surface-container-low);
-    color: var(--ink);
-  }
+/* .btn-accent retained as alias to .btn-primary. */
+.btn-accent {
+  background: var(--action);
+  color: #fff;
+  border-color: var(--action);
+}
+.btn-accent:hover {
+  background: var(--action-hover);
+  border-color: var(--action-hover);
+}
 
-  .btn-danger {
-    color: #fff;
-    border-color: var(--danger);
-    background: var(--danger);
-    box-shadow: none;
-  }
-  .btn-danger:hover {
-    background: #a41717;
-    border-color: #a41717;
-  }
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+  box-shadow: none;
+}
+.btn-ghost:hover {
+  background: var(--surface-container-low);
+  color: var(--ink);
+}
 
-  .btn-icon {
-    padding: 0;
-    width: 36px;
-    justify-content: center;
-  }
-  .btn-icon.btn-sm {
-    width: 28px;
-  }
+.btn-danger {
+  color: #fff;
+  border-color: var(--danger);
+  background: var(--danger);
+  box-shadow: none;
+}
+.btn-danger:hover {
+  background: #a41717;
+  border-color: #a41717;
+}
 
-  /* ──────────────────────────────────────────────────────────
-     DEPRECATED — `.button-*` legacy aliases. Existing pages
-     call these. They mirror the new `.btn-*` family so the
-     visual output matches the new direction during migration.
-     Remove in Layer 1b.
-     ────────────────────────────────────────────────────────── */
-  .button-secondary {
-    @apply rounded-[8px] border px-4 py-[8px] text-[14px] font-medium;
-    border-color: var(--border-soft);
-    background: var(--surface);
-    color: var(--ink);
-    box-shadow: none;
-    transition:
-      background 120ms ease,
-      border-color 120ms ease;
-  }
-  .button-secondary:hover {
-    background: var(--surface-container-low);
-    border-color: var(--border-mid);
-  }
-  .button-secondary:active {
-    background: var(--surface-container);
-  }
-  .button-secondary:focus-visible {
-    outline: 2px solid var(--action);
-    outline-offset: 2px;
-  }
+.btn-icon {
+  padding: 0;
+  width: 30px;
+  border-radius: var(--radius-sm);
+  justify-content: center;
+}
+.btn-icon.btn-sm {
+  width: 26px;
+  height: 26px;
+}
 
-  .button-primary {
-    @apply rounded-[8px] px-4 py-[8px] text-[14px] font-medium;
-    background: var(--action);
-    color: #fff;
-    border: 1px solid var(--action);
-    transition: background 120ms ease;
-  }
-  .button-primary:hover {
-    background: var(--action-hover);
-    border-color: var(--action-hover);
-  }
-  .button-primary:active {
-    background: var(--action-hover);
-  }
-  .button-primary:focus-visible {
-    outline: 2px solid var(--action);
-    outline-offset: 2px;
-  }
+/* ──────────────────────────────────────────────────────────
+   DEPRECATED — `.button-*` legacy aliases. Existing pages
+   call these. They mirror the new `.btn-*` family so the
+   visual output matches the new direction during migration.
+   Remove in Layer 1b.
+   ────────────────────────────────────────────────────────── */
+.button-secondary {
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: none;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+.button-secondary:hover {
+  background: var(--surface-container-low);
+  border-color: var(--border-mid);
+}
+.button-secondary:active {
+  background: var(--surface-container);
+}
+.button-secondary:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
 
-  .button-danger {
-    @apply rounded-[8px] border px-4 py-[8px] text-[14px] font-medium;
-    border-color: var(--danger);
-    background: var(--danger);
-    color: #fff;
-    transition: background 120ms ease;
-  }
-  .button-danger:hover {
-    background: #a41717;
-    border-color: #a41717;
-  }
-  .button-danger:active {
-    background: #8f1414;
-  }
-  .button-danger:focus-visible {
-    outline: 2px solid var(--danger);
-    outline-offset: 2px;
-  }
+.button-primary {
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--action);
+  color: #fff;
+  border: 1px solid var(--action);
+  transition: background 120ms ease;
+}
+.button-primary:hover {
+  background: var(--action-hover);
+  border-color: var(--action-hover);
+}
+.button-primary:active {
+  background: var(--action-hover);
+}
+.button-primary:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
 
-  .button-success {
-    @apply rounded-[8px] border px-4 py-[8px] text-[14px] font-medium;
-    border-color: var(--action);
-    background: var(--action);
-    color: #fff;
-    transition: background 120ms ease;
-  }
-  .button-success:hover {
-    background: var(--action-hover);
-    border-color: var(--action-hover);
-  }
-  .button-success:active {
-    background: var(--action-hover);
-  }
-  .button-success:focus-visible {
-    outline: 2px solid var(--action);
-    outline-offset: 2px;
-  }
+.button-danger {
+  border-radius: 8px;
+  border: 1px solid var(--danger);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--danger);
+  color: #fff;
+  transition: background 120ms ease;
+}
+.button-danger:hover {
+  background: #a41717;
+  border-color: #a41717;
+}
+.button-danger:active {
+  background: #8f1414;
+}
+.button-danger:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
 
-  /* ──────────────────────────────────────────────────────────
-     Chips — DESIGN.md §6.StatusBadge.
-     Height 20, padding 0 8, radius full, utility-micro text.
-     Neutral chip uses transparent background. Semantic variants
-     tint only when the state is beyond "idle / synced".
-     ────────────────────────────────────────────────────────── */
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    height: 20px;
-    padding: 0 8px;
-    background: transparent;
-    border: 1px solid var(--hairline);
-    border-radius: var(--radius-full);
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--ink-3);
-    white-space: nowrap;
-  }
-  .chip-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: var(--radius-full);
-    background: currentColor;
-  }
-  .chip-accent {
-    background: transparent;
-    color: var(--action);
-    border-color: transparent;
-  }
-  .chip-ok {
-    background: transparent;
-    color: var(--ok);
-    border-color: transparent;
-  }
-  .chip-warn {
-    background: transparent;
-    color: var(--warn);
-    border-color: transparent;
-  }
-  .chip-danger {
-    background: var(--danger-soft);
-    color: var(--danger);
-    border-color: transparent;
-  }
-  .chip-info {
-    background: transparent;
-    color: var(--action);
-    border-color: transparent;
-  }
-  .chip-ghost {
-    background: var(--surface-container);
-    border: 1px solid transparent;
-    color: var(--ink-3);
-  }
+.button-success {
+  border-radius: 8px;
+  border: 1px solid var(--action);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--action);
+  color: #fff;
+  transition: background 120ms ease;
+}
+.button-success:hover {
+  background: var(--action-hover);
+  border-color: var(--action-hover);
+}
+.button-success:active {
+  background: var(--action-hover);
+}
+.button-success:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
 
-  /* ──────────────────────────────────────────────────────────
-     Sidebar nav items — DESIGN.md §4.
-     14/500 ink-2, 8px radius hover fill surface-container-low,
-     selected state is action-blue text (no fill).
-     ────────────────────────────────────────────────────────── */
-  .side-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border-radius: var(--radius-lg);
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--ink-2);
-    cursor: pointer;
-    user-select: none;
-    transition:
-      background 100ms var(--ease),
-      color 100ms var(--ease);
-    position: relative;
-    text-align: left;
-    width: 100%;
-    background: transparent;
-    border: none;
-  }
-  .side-item:hover {
-    background: var(--surface-container-low);
-    color: var(--ink);
-  }
-  .side-item.active {
-    color: var(--action);
-    background: transparent;
-  }
-  /* No rail bar. Active state is carried by the text color alone. */
-  .side-item.active::before {
-    content: none;
-  }
-  .side-item .side-icon {
-    flex-shrink: 0;
-  }
-  .side-item .side-count {
-    margin-left: auto;
-    font-size: 12px;
-    color: var(--ink-4);
-    font-variant-numeric: tabular-nums;
-    font-weight: 500;
-  }
-  .side-item.active .side-count {
-    color: var(--action);
-  }
-  .side-item .side-shortcut {
-    margin-left: auto;
-    font-size: 12px;
-    color: var(--ink-4);
-    font-family: var(--font-mono);
-    letter-spacing: 0;
-    opacity: 0;
-    transition: opacity 120ms var(--ease);
-  }
-  .side-item:hover .side-shortcut,
-  .side-item:focus-visible .side-shortcut {
-    opacity: 1;
-  }
+/* ──────────────────────────────────────────────────────────
+   Chips — DESIGN.md §6.StatusBadge.
+   Height 20, padding 0 8, radius full, utility-micro text.
+   Neutral chip uses transparent background. Semantic variants
+   tint only when the state is beyond "idle / synced".
+   ────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+.chip-accent {
+  background: transparent;
+  color: var(--action);
+  border-color: transparent;
+}
+.chip-ok {
+  background: transparent;
+  color: var(--ok);
+  border-color: transparent;
+}
+.chip-warn {
+  background: transparent;
+  color: var(--warn);
+  border-color: transparent;
+}
+.chip-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: transparent;
+}
+.chip-info {
+  background: transparent;
+  color: var(--action);
+  border-color: transparent;
+}
+.chip-ghost {
+  background: var(--surface-container);
+  border: 1px solid transparent;
+  color: var(--ink-3);
+}
 
-  /* ──────────────────────────────────────────────────────────
-     Capacity bar — DESIGN.md §6.CapacityBar.
-     6px height, full radius, track surface-container, fill
-     ink (<80%), warn (80-95%), danger (>95%). Never blue.
-     The `--drive-color` override is kept for drive-scoped
-     fills on DrivesPage where per-drive identity is the signal.
-     ────────────────────────────────────────────────────────── */
-  .cap-bar {
-    position: relative;
-    width: 100%;
-    height: 6px;
-    background: var(--surface-container);
-    border-radius: var(--radius-full);
-    overflow: hidden;
-  }
-  .cap-bar.lg {
-    height: 8px;
-  }
-  .cap-bar.xl {
-    height: 10px;
-  }
-  .cap-used {
-    position: absolute;
-    inset: 0 auto 0 0;
-    background: var(--drive-color, var(--ink));
-    border-radius: inherit;
-  }
-  .cap-used[data-level="warn"] {
-    background: var(--warn);
-  }
-  .cap-used[data-level="danger"] {
-    background: var(--danger);
-  }
-  .cap-reserved {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    background: repeating-linear-gradient(
-      45deg,
-      var(--ink-4),
-      var(--ink-4) 3px,
-      transparent 3px,
-      transparent 6px
-    );
-    opacity: 0.4;
-  }
+/* ──────────────────────────────────────────────────────────
+   Sidebar nav items — DESIGN.md §4.
+   14/500 ink-2, 8px radius hover fill surface-container-low,
+   selected state is action-blue text (no fill).
+   ────────────────────────────────────────────────────────── */
+.side-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background 90ms var(--ease),
+    color 90ms var(--ease);
+  position: relative;
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  border: none;
+}
+.side-item:hover {
+  background: rgba(128, 128, 128, 0.1);
+  color: var(--ink);
+}
+.side-item.active {
+  color: var(--action);
+  background: rgba(0, 122, 255, 0.08);
+  font-weight: 600;
+}
+.side-item.active::before {
+  content: none;
+}
+.side-item .side-icon {
+  flex-shrink: 0;
+}
+.side-item .side-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-4);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.side-item.active .side-count {
+  color: var(--action);
+}
+.side-item .side-shortcut {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  opacity: 0;
+  transition: opacity 120ms var(--ease);
+}
+.side-item:hover .side-shortcut,
+.side-item:focus-visible .side-shortcut {
+  opacity: 1;
+}
 
-  /* ── Drive dot ── */
-  .drive-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: var(--radius-full);
-    background: var(--drive-color, var(--ink-3));
-    flex-shrink: 0;
-    display: inline-block;
-  }
+/* ──────────────────────────────────────────────────────────
+   Capacity bar — DESIGN.md §6.CapacityBar.
+   6px height, full radius, track surface-container, fill
+   ink (<80%), warn (80-95%), danger (>95%). Never blue.
+   The `--drive-color` override is kept for drive-scoped
+   fills on DrivesPage where per-drive identity is the signal.
+   ────────────────────────────────────────────────────────── */
+.cap-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: var(--surface-container);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.cap-bar.lg {
+  height: 8px;
+}
+.cap-bar.xl {
+  height: 10px;
+}
+.cap-used {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--drive-color, var(--ink));
+  border-radius: inherit;
+}
+.cap-used[data-level="warn"] {
+  background: var(--warn);
+}
+.cap-used[data-level="danger"] {
+  background: var(--danger);
+}
+.cap-reserved {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--ink-4),
+    var(--ink-4) 3px,
+    transparent 3px,
+    transparent 6px
+  );
+  opacity: 0.4;
+}
 
-  /* ── ActivityTimelineRow — DESIGN.md §6 ──
-     Single row cadence used by the Inbox for last activity + recent
-     projects. 28px icon tile, 17/400 primary, 14/400 ink-3 secondary,
-     utility-micro timestamp on the right. Hover fills to
-     --surface-container-low; no shadow, no border, no translate. ── */
-  .activity-row {
-    display: grid;
-    grid-template-columns: 28px minmax(0, 1fr) auto 12px;
-    align-items: center;
-    column-gap: 14px;
-    padding: 12px 14px;
-    border-radius: 10px;
-    color: var(--ink);
-    text-decoration: none;
-    transition: background 140ms var(--ease);
-  }
-  .activity-row:hover {
-    background: var(--surface-container-low);
-  }
-  .activity-row:focus-visible {
-    outline: 2px solid var(--action);
-    outline-offset: 2px;
-    background: var(--surface-container-low);
-  }
-  .activity-row--static,
-  .activity-row--static:hover,
-  .activity-row--static:focus-visible {
-    background: transparent;
-    cursor: default;
-    outline: none;
-  }
-  .activity-row__tile {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: var(--surface-container-low);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .activity-row__body {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    gap: 2px;
-  }
-  .activity-row__primary {
-    font-size: 17px;
-    font-weight: 400;
-    line-height: 1.3;
-    color: var(--ink);
-    letter-spacing: -0.005em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .activity-row__secondary {
-    font-size: 14px;
-    line-height: 1.3;
-    color: var(--ink-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-  }
-  .activity-row__meta {
-    font-size: 12px;
-    color: var(--ink-3);
-    flex-shrink: 0;
-    font-variant-numeric: tabular-nums;
-  }
-  .activity-row__chevron {
-    opacity: 0;
-    transition: opacity 140ms var(--ease);
-  }
-  .activity-row:hover .activity-row__chevron,
-  .activity-row:focus-visible .activity-row__chevron {
-    opacity: 1;
-  }
+/* ── Drive dot ── */
+.drive-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--drive-color, var(--ink-3));
+  flex-shrink: 0;
+  display: inline-block;
+}
 
-  /* ── Keyboard shortcut hint ── */
-  .kbd {
-    margin-left: auto;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--ink-3);
-    background: var(--surface-container-low);
-    border: 1px solid var(--hairline);
-    padding: 2px 6px;
-    border-radius: var(--radius);
-    letter-spacing: 0;
-  }
+/* ── ActivityTimelineRow — DESIGN.md §6 ──
+   Single row cadence used by the Inbox for last activity + recent
+   projects. 28px icon tile, 17/400 primary, 14/400 ink-3 secondary,
+   utility-micro timestamp on the right. Hover fills to
+   --surface-container-low; no shadow, no border, no translate. ── */
+.activity-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto 12px;
+  align-items: center;
+  column-gap: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: background 140ms var(--ease);
+}
+.activity-row:hover {
+  background: var(--surface-container-low);
+}
+.activity-row:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  background: var(--surface-container-low);
+}
+.activity-row--static,
+.activity-row--static:hover,
+.activity-row--static:focus-visible {
+  background: transparent;
+  cursor: default;
+  outline: none;
+}
+.activity-row__tile {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface-container-low);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.activity-row__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.activity-row__primary {
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-row__secondary {
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+.activity-row__meta {
+  font-size: 12px;
+  color: var(--ink-3);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.activity-row__chevron {
+  opacity: 0;
+  transition: opacity 140ms var(--ease);
+}
+.activity-row:hover .activity-row__chevron,
+.activity-row:focus-visible .activity-row__chevron {
+  opacity: 1;
+}
 
-  /* ── Link card focus ring ── */
-  .link-card:focus-visible {
-    outline: 2px solid var(--action);
-    outline-offset: 2px;
-    box-shadow: none;
-  }
+/* ── Keyboard shortcut hint ── */
+.kbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+  background: var(--surface-container-low);
+  border: 1px solid var(--hairline);
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  letter-spacing: 0;
+}
 
-  /* ── Search suggestion item hover ── */
-  .search-suggestion-item:hover {
-    background: var(--surface-container-low);
-  }
+/* ── Link card ── */
+.link-card {
+  transition: background 140ms var(--ease);
+}
+.link-card:hover {
+  background: var(--surface-inset);
+}
+.link-card:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  box-shadow: none;
+}
 
-  kbd {
-    font-family: inherit;
-  }
+/* ── Search suggestion item hover ── */
+.search-suggestion-item:hover {
+  background: var(--surface-container-low);
+}
 
-  /* ── Skeleton loader ── */
-  .skeleton {
-    background: var(--color-skeleton);
-    border-radius: var(--radius);
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
-  }
+kbd {
+  font-family: inherit;
+}
 
-  /* ── Button press micro-interaction. DESIGN.md §7 allows
-     small affordances but not scale-on-hover. Keep at 0.98. ── */
-  .button-secondary:active,
-  .button-primary:active,
-  .button-danger:active,
-  .button-success:active {
-    transform: scale(0.98);
-    transition:
-      background var(--duration-instant) ease,
-      transform var(--duration-instant) ease;
-  }
+/* ── Skeleton loader ── */
+.skeleton {
+  background: var(--color-skeleton);
+  border-radius: var(--radius);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
 
-  /* ── Animated capacity bar width ── */
-  .capacity-bar-fill {
-    transition: width var(--duration-slow) var(--ease-out);
-  }
+/* ── Button press micro-interaction. DESIGN.md §7 allows
+   small affordances but not scale-on-hover. Keep at 0.98. ── */
+.button-secondary:active,
+.button-primary:active,
+.button-danger:active,
+.button-success:active {
+  transform: scale(0.98);
+  transition:
+    background var(--duration-instant) ease,
+    transform var(--duration-instant) ease;
+}
 
-  /* ── Project row hover (flat list style) ── */
-  .proj-row {
-    transition:
-      background 100ms,
-      border-color 100ms;
-  }
-  .proj-row:hover {
-    background: var(--surface-container-low);
-  }
-  .proj-row[aria-selected="true"] {
-    background: var(--surface-container);
-  }
+/* ── Animated capacity bar width ── */
+.capacity-bar-fill {
+  transition: width var(--duration-slow) var(--ease-out);
+}
 
-  /* ── Inbox attention tile hover ── */
-  .attention-tile:hover {
-    border-color: var(--border-soft);
-  }
-  .attention-tile:focus-visible {
-    outline: 2px solid var(--action);
-    outline-offset: 2px;
-    box-shadow: none;
-  }
+/* ── Project row hover (flat list style) ── */
+.proj-row {
+  transition:
+    background 100ms,
+    border-color 100ms;
+}
+.proj-row:hover {
+  background: var(--surface-container-low);
+}
+.proj-row[aria-selected="true"] {
+  background: var(--surface-container);
+}
+
+/* ── Inbox attention tile hover ── */
+.attention-tile:hover {
+  border-color: var(--border-soft);
+}
+.attention-tile:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 /* ── Scrollbars ── */
@@ -1121,6 +1157,73 @@ a {
   border-bottom: 1px solid var(--hairline);
 }
 
+/* ── Page-level layout grids — semantic replacements for Tailwind responsive grids ── */
+.detail-layout {
+  display: grid;
+  gap: 24px;
+}
+@media (min-width: 1280px) {
+  .detail-layout {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+}
+.meta-grid-4 {
+  display: grid;
+  gap: 12px 24px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 768px) {
+  .meta-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.fields-grid-2 {
+  display: grid;
+  gap: 12px 24px;
+}
+@media (min-width: 640px) {
+  .fields-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.fields-grid-3 {
+  display: grid;
+  gap: 12px 24px;
+}
+@media (min-width: 640px) {
+  .fields-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.form-grid {
+  display: grid;
+  gap: 16px;
+}
+.drive-identity-grid {
+  display: grid;
+  gap: 24px;
+  padding: 24px;
+}
+@media (min-width: 768px) {
+  .drive-identity-grid {
+    grid-template-columns: 1fr 280px;
+  }
+}
+.meta-grid-2 {
+  display: grid;
+  gap: 12px 16px;
+  grid-template-columns: repeat(2, 1fr);
+}
+.dual-grid {
+  display: grid;
+  gap: 24px;
+}
+@media (min-width: 1280px) {
+  .dual-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   .skeleton {
@@ -1135,3 +1238,111 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────
+   Utility layer — replaces Tailwind utilities.
+   Only values actually used in this codebase. No full scale.
+   ────────────────────────────────────────────────────────────── */
+
+/* Layout */
+.flex         { display: flex; }
+.flex-col     { flex-direction: column; }
+.flex-wrap    { flex-wrap: wrap; }
+.flex-1       { flex: 1; }
+.shrink-0     { flex-shrink: 0; }
+.grid         { display: grid; }
+.inline-flex  { display: inline-flex; }
+.items-center { align-items: center; }
+.items-start  { align-items: flex-start; }
+.items-baseline { align-items: baseline; }
+.justify-center  { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-end     { justify-content: flex-end; }
+.min-w-0      { min-width: 0; }
+.w-full       { width: 100%; }
+.overflow-hidden { overflow: hidden; }
+.overflow-y-auto { overflow-y: auto; }
+.relative     { position: relative; }
+.absolute     { position: absolute; }
+.fixed        { position: fixed; }
+.inset-0      { inset: 0; }
+.z-50         { z-index: 50; }
+.hidden       { display: none; }
+.h-screen     { height: 100vh; }
+
+/* Gap / spacing — only values used in this codebase */
+.gap-1  { gap: 4px; }
+.gap-2  { gap: 8px; }
+.gap-3  { gap: 12px; }
+.gap-4  { gap: 16px; }
+.gap-5  { gap: 20px; }
+.gap-6  { gap: 24px; }
+
+/* Typography */
+.text-large-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.text-title       { font-size: 17px; font-weight: 600; letter-spacing: -0.015em; }
+.text-headline    { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.text-body        { font-size: 13px; }
+.text-callout     { font-size: 12px; }
+.text-caption     { font-size: 11px; }
+.text-eyebrow     { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+.font-medium      { font-weight: 500; }
+.font-semibold    { font-weight: 600; }
+.font-bold        { font-weight: 700; }
+.truncate         { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-center      { text-align: center; }
+.leading-snug     { line-height: 1.35; }
+
+/* Misc */
+.outline-none         { outline: none; }
+.bg-transparent       { background: transparent; }
+.border-none          { border: none; }
+.cursor-default       { cursor: default; }
+.select-none          { user-select: none; }
+.pointer-events-none  { pointer-events: none; }
+.list-none            { list-style: none; }
+.p-0                  { padding: 0; }
+.m-0                  { margin: 0; }
+.cursor-pointer       { cursor: pointer; }
+.sr-only              { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
+.hover-underline:hover { text-decoration: underline; }
+
+/* Create-project form grid — md:grid-cols-2 xl:grid-cols-3 */
+.create-form-grid { display: grid; gap: 16px; }
+@media (min-width: 768px)  { .create-form-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1280px) { .create-form-grid { grid-template-columns: repeat(3, 1fr); } }
+.form-actions { grid-column: 1 / -1; }
+
+/* Drive create form — 3 cols above md */
+.drive-form-grid { display: grid; gap: 16px; }
+@media (min-width: 768px) { .drive-form-grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* Drives page — 2 col grid above lg */
+.drives-grid { display: grid; }
+@media (min-width: 1024px) { .drives-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* Scan status meta fields — 2→4 cols */
+.scan-meta-grid { display: grid; gap: 8px 24px; grid-template-columns: repeat(2, 1fr); }
+@media (min-width: 768px) { .scan-meta-grid { grid-template-columns: repeat(4, 1fr); } }
+
+/* Sidebar chrome — hidden below lg, flex column above */
+.sidebar-aside {
+  display: flex;
+  height: 100vh;
+  flex-shrink: 0;
+  flex-direction: column;
+  overflow-y: auto;
+  border-right: 1px solid var(--hairline);
+}
+
+/* Card hover shadow — opt-in per card variant */
+.card-hoverable { transition: box-shadow 150ms var(--ease); }
+.card-hoverable:hover { box-shadow: var(--sh-2); }
+
+/* Drive card hover-reveal action strip */
+.card-hover-actions { opacity: 0; transition: opacity 150ms var(--ease); }
+.card-hoverable:hover .card-hover-actions { opacity: 1; }
+
+/* Project row — reveal chevron on row hover or chevron focus */
+.proj-row:hover .row-chevron { opacity: 1; }
+.row-chevron:focus-visible { opacity: 1; }

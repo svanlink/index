@@ -197,27 +197,25 @@ export function ProjectsPage() {
   // still reachable via Cmd+N or the secondary button.
   if (!isLoading && projects.length === 0 && !isCreateOpen) {
     return (
-      <div className="pt-8">
+      <div style={{ paddingTop: 32 }}>
         <div
-          className="mb-5 flex h-11 w-11 items-center justify-center rounded-[10px]"
-          style={{ background: "var(--surface-container-low)" }}
+          className="flex items-center justify-center"
+          style={{ marginBottom: 20, height: 44, width: 44, borderRadius: 10, background: "var(--surface-container-low)" }}
         >
           <Icon name="folder" size={20} color="var(--ink)" />
         </div>
         <h1
-          className="text-[22px] font-semibold"
-          style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}
+          style={{ fontSize: 22, fontWeight: 600, color: "var(--ink)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}
         >
           No projects yet.
         </h1>
         <p
-          className="mt-2 max-w-[48ch] text-[14px] leading-relaxed"
-          style={{ color: "var(--ink-2)", margin: "8px 0 0" }}
+          style={{ color: "var(--ink-2)", margin: "8px 0 0", fontSize: 14, lineHeight: 1.625, maxWidth: "48ch" }}
         >
           Scan a connected drive to index its folders, or create a manual project
           to start building the catalog.
         </p>
-        <div className="mt-6 flex items-center gap-2">
+        <div className="flex items-center" style={{ marginTop: 24, gap: 8 }}>
           <Link to="/drives" className="btn btn-primary">
             <Icon name="scan" size={13} color="currentColor" />
             Scan a drive
@@ -235,7 +233,7 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="space-y-6 pt-2">
+    <div className="flex flex-col" style={{ gap: 24, paddingTop: 8 }}>
       {/* sr-only h1 for WCAG 2.4.6 and test identification. The top-nav
           breadcrumb names this section for sighted users; the h1 exists for
           screen readers and automated tests only. */}
@@ -277,7 +275,7 @@ export function ProjectsPage() {
         <div>
           {statusTabs.length > 1 ? (
             <div
-              className="flex flex-wrap items-center gap-0"
+              className="flex flex-wrap items-center"
               style={{ borderBottom: "1px solid var(--hairline)" }}
             >
               {statusTabs.map((tab) => {
@@ -287,8 +285,14 @@ export function ProjectsPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => selectStatusTab(tab.id)}
-                    className="flex items-center gap-1.5 pb-3 pt-[10px] pr-5 text-[14px] transition-colors"
+                    className="flex items-center"
                     style={{
+                      gap: 6,
+                      paddingBottom: 12,
+                      paddingTop: 10,
+                      paddingRight: 20,
+                      fontSize: 14,
+                      transition: "color 140ms var(--ease)",
                       borderBottom: isActive ? "2px solid var(--ink)" : "2px solid transparent",
                       color: isActive ? "var(--ink)" : "var(--ink-3)",
                       fontWeight: isActive ? 500 : 400,
@@ -298,8 +302,8 @@ export function ProjectsPage() {
                     <span>{tab.label}</span>
                     {tab.count > 0 ? (
                       <span
-                        className="tnum text-[12px]"
-                        style={{ color: isActive ? "var(--ink-3)" : "var(--ink-4)" }}
+                        className="tnum"
+                        style={{ fontSize: 12, color: isActive ? "var(--ink-3)" : "var(--ink-4)" }}
                       >
                         {tab.count}
                       </span>
@@ -310,7 +314,7 @@ export function ProjectsPage() {
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-2 pt-3">
+          <div className="flex flex-wrap items-center" style={{ gap: 8, paddingTop: 12 }}>
             <CompactSelect
               value={folderTypeFilter}
               onChange={(v) => updateQueryParam("folderType", v)}
@@ -349,8 +353,8 @@ export function ProjectsPage() {
               <button
                 type="button"
                 onClick={clearAllFilters}
-                className="text-[13px] transition-colors"
-                style={{ color: "var(--ink-3)" }}
+                className="hover-underline"
+                style={{ fontSize: 13, color: "var(--ink-3)" }}
               >
                 Clear filters
               </button>
@@ -360,36 +364,36 @@ export function ProjectsPage() {
       ) : null}
 
       {/* ── Project list ── */}
-      <div className="card overflow-hidden">
+      <div className="card" style={{ overflow: "hidden" }}>
         {isLoading ? (
           <div aria-busy="true" aria-label="Loading projects">
             {[0, 1, 2, 3, 4, 5].map((i) => <ProjectRowSkeleton key={i} />)}
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
+          <div className="flex flex-col items-center text-center" style={{ gap: 8, padding: "64px 16px" }}>
             <span
-              className="mb-1 inline-flex h-9 w-9 items-center justify-center rounded-[10px]"
-              style={{ background: "var(--surface-inset)" }}
+              className="inline-flex items-center justify-center"
+              style={{ marginBottom: 4, height: 44, width: 44, borderRadius: 10, background: "var(--surface-inset)" }}
               aria-hidden="true"
             >
               <Icon
                 name={hasActiveFilters || search.trim() ? "search" : "folder"}
-                size={17}
+                size={20}
                 color="var(--ink-3)"
               />
             </span>
-            <p className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
+            <p className="font-semibold" style={{ fontSize: 13, color: "var(--ink)" }}>
               {hasActiveFilters || search.trim() ? "No projects match" : "No projects yet"}
             </p>
-            <p className="text-[12px]" style={{ color: "var(--ink-3)" }}>
+            <p style={{ fontSize: 12, color: "var(--ink-3)" }}>
               {hasActiveFilters || search.trim() ? (
                 <>
                   Try a broader search or{" "}
                   <button
                     type="button"
                     onClick={clearAllFilters}
-                    className="font-medium underline-offset-2 hover:underline"
-                    style={{ color: "var(--ink-2)" }}
+                    className="hover-underline font-medium"
+                    style={{ color: "var(--ink-2)", textUnderlineOffset: 2 }}
                   >
                     clear filters
                   </button>
@@ -404,10 +408,10 @@ export function ProjectsPage() {
           <>
             {/* Table controls strip */}
             <div
-              className="flex items-center justify-end gap-4 border-b px-4 py-3"
-              style={{ borderColor: "var(--hairline)" }}
+              className="flex items-center justify-end"
+              style={{ gap: 16, borderBottom: "1px solid var(--hairline)", padding: "12px 16px" }}
             >
-              <p className="tnum text-[12px]" style={{ color: "var(--ink-3)" }}>
+              <p className="tnum" style={{ fontSize: 12, color: "var(--ink-3)" }}>
                 {hasActiveFilters || search.trim() ? (
                   <>
                     <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{filteredProjects.length}</span>
@@ -471,41 +475,41 @@ function CreateProjectForm({
       description="Manual projects join the catalog immediately and can be assigned to a drive later."
     >
       {validation.errors.length > 0 ? (
-        <div className="mb-4">
+        <div style={{ marginBottom: 16 }}>
           <FeedbackNotice tone="error" title="Creation requirements" messages={validation.errors} />
         </div>
       ) : null}
       {validation.warnings.length > 0 ? (
-        <div className="mb-4">
+        <div style={{ marginBottom: 16 }}>
           <FeedbackNotice tone="info" title="Note" messages={validation.warnings} />
         </div>
       ) : null}
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={onSubmit}>
+      <form className="create-form-grid" onSubmit={onSubmit}>
         <FormField label="Date (YYYY-MM-DD)">
-          <input required maxLength={10} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="2024-03-12" />
+          <input required maxLength={10} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent outline-none" placeholder="2024-03-12" />
         </FormField>
         <FormField label="Client">
-          <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="Apple" />
+          <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent outline-none" placeholder="Apple" />
         </FormField>
         <FormField label="Project">
-          <input required value={form.parsedProject} onChange={(e) => onChange({ ...form, parsedProject: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="ProductShoot" />
+          <input required value={form.parsedProject} onChange={(e) => onChange({ ...form, parsedProject: e.target.value })} className="field-shell w-full bg-transparent outline-none" placeholder="ProductShoot" />
         </FormField>
         <FormField label="Category">
-          <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value as Category | "" })} className="field-shell w-full bg-transparent px-3 py-2 outline-none">
+          <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value as Category | "" })} className="field-shell w-full bg-transparent outline-none">
             <option value="">Choose category</option>
             {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </FormField>
         <FormField label="Size (GB)">
-          <input type="number" min="0" step="0.1" value={form.sizeGigabytes} onChange={(e) => onChange({ ...form, sizeGigabytes: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="120" />
+          <input type="number" min="0" step="0.1" value={form.sizeGigabytes} onChange={(e) => onChange({ ...form, sizeGigabytes: e.target.value })} className="field-shell w-full bg-transparent outline-none" placeholder="120" />
         </FormField>
         <FormField label="Drive">
-          <select value={form.currentDriveId} onChange={(e) => onChange({ ...form, currentDriveId: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none">
+          <select value={form.currentDriveId} onChange={(e) => onChange({ ...form, currentDriveId: e.target.value })} className="field-shell w-full bg-transparent outline-none">
             <option value="">Unassigned</option>
             {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
           </select>
         </FormField>
-        <div className="md:col-span-2 xl:col-span-3 flex items-center justify-end gap-2">
+        <div className="form-actions flex items-center justify-end" style={{ gap: 8 }}>
           <button type="button" className="btn btn-sm" onClick={onCancel}>Discard</button>
           <button type="submit" className="btn btn-sm btn-primary" disabled={isMutating}>{isMutating ? "Saving…" : "Create project"}</button>
         </div>
@@ -520,7 +524,7 @@ function CreateProjectForm({
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className="flex flex-col" style={{ gap: 6 }}>
       <span className="eyebrow">{label}</span>
       {children}
     </label>
@@ -543,8 +547,10 @@ function CompactSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`field-shell cursor-pointer bg-transparent px-3 py-1.5 text-[12px] outline-none${isActive ? " field-shell--active" : ""}`}
+      className={`field-shell cursor-pointer bg-transparent outline-none${isActive ? " field-shell--active" : ""}`}
       style={{
+        fontSize: 12,
+        padding: "6px 12px",
         color: isActive ? "var(--ink)" : "var(--ink-3)"
       }}
       aria-label={placeholder}
