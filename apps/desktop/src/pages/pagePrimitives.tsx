@@ -76,16 +76,19 @@ const LABEL_TONE: Record<string, BadgeTone> = {
   Cancelled: "warn",
   "Near capacity": "warn",
   Running: "accent",
+  Mounting: "accent",
   "Pending size": "accent",
   "Unknown size impact": "accent",
   "Personal project": "accent",
   Completed: "neutral",
   "Size ready": "neutral",
   Healthy: "ok",
+  Online: "ok",
   Client: "ok",
   "Unknown impact": "info",
   Unassigned: "info",
-  "Personal folder": "muted"
+  "Personal folder": "muted",
+  Offline: "muted"
 };
 
 const LABEL_SHOWS_DOT: Record<string, boolean> = {
@@ -96,6 +99,8 @@ const LABEL_SHOWS_DOT: Record<string, boolean> = {
   Overcommitted: true,
   "Near capacity": true,
   Running: true,
+  Mounting: true,
+  Online: true,
   Healthy: true
 };
 

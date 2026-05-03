@@ -244,6 +244,8 @@ export function DrivesPage() {
                 projectCount={projectCounts[row.drive.id] ?? 0}
                 scanSession={getDriveScanSession(row.drive, scanSessions)}
                 health={row.health}
+                onScan={canUseImport && !isPickingImport && !isImporting && !isMutating ? () => void runImportFromVolume() : undefined}
+                onImport={canUseImport && !isPickingImport && !isImporting && !isMutating ? () => void runImportFromVolume() : undefined}
               />
             ))}
           </div>
