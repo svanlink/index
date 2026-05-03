@@ -34,6 +34,67 @@ const PINNED_ACTIONS: ReadonlyArray<PaletteAction> = [
   }
 ];
 
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="px-4 py-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em]"
+      style={{ color: "var(--ink-4)" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ResultRow({
+  icon,
+  primary,
+  secondary,
+  onClick,
+  accessory
+}: {
+  icon: IconName;
+  primary: string;
+  secondary?: string;
+  onClick(): void;
+  accessory?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1 px-2">
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex flex-1 items-center gap-3 rounded-[8px] px-2 py-2.5 text-left min-w-0 transition-colors"
+        style={{ color: "var(--ink)" }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--surface-inset)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
+      >
+        <Icon name={icon} size={14} color="var(--ink-3)" />
+        <span className="flex-1 min-w-0">
+          <span className="block truncate text-[13px]" style={{ color: "var(--ink)" }}>{primary}</span>
+          {secondary ? (
+            <span className="block truncate text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+              {secondary}
+            </span>
+          ) : null}
+        </span>
+      </button>
+      {accessory}
+    </div>
+  );
+}
+
+function SectionDivider() {
+  return <div className="border-t" style={{ borderColor: "var(--hairline)" }} />;
+}
+
+// ---------------------------------------------------------------------------
+// CommandPalette
+// ---------------------------------------------------------------------------
+
 export function CommandPalette() {
   const { isOpen, close } = useCommandPalette();
   const { projects, drives } = useCatalogStore();
@@ -80,228 +141,178 @@ export function CommandPalette() {
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm"
-      style={{ paddingTop: "20vh" }}
+      className="fixed inset-0 z-50 flex items-start justify-center"
+      style={{
+        background: "rgba(17, 17, 17, 0.28)",
+        backdropFilter: "blur(4px)",
+        paddingTop: "20vh"
+      }}
       onClick={close}
     >
       <div
-        className="w-[600px] max-w-[90vw] overflow-hidden rounded-xl border shadow-2xl"
+        className="w-[600px] max-w-[90vw] overflow-hidden rounded-[14px] border"
         style={{
-          background: "var(--color-surface)",
-          borderColor: "var(--color-border)"
+          background: "var(--surface)",
+          borderColor: "var(--hairline)",
+          boxShadow: "0 8px 40px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08)"
         }}
         onClick={(event) => event.stopPropagation()}
       >
         {/* Search input */}
         <div
-          className="flex items-center gap-2 px-4 py-3 border-b"
-          style={{ borderColor: "var(--color-border)" }}
+          className="flex items-center gap-2.5 px-4 py-3"
+          style={{ borderBottom: "1px solid var(--hairline)" }}
         >
-          <Icon name="search" size={16} />
+          <Icon name="search" size={15} color="var(--ink-3)" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search projects, drives, or actions"
+            placeholder="Search projects, drives, or actions…"
             autoFocus
             aria-label="Command palette search"
-            className="flex-1 bg-transparent text-[13px] outline-none"
-            style={{ color: "var(--color-text)" }}
+            className="flex-1 bg-transparent text-[13.5px] outline-none"
+            style={{ color: "var(--ink)" }}
           />
+          {query ? (
+            <button
+              type="button"
+              aria-label="Clear"
+              className="btn btn-ghost btn-sm shrink-0"
+              style={{ padding: "4px", minHeight: 0 }}
+              onClick={() => setQuery("")}
+            >
+              <Icon name="close" size={11} color="var(--ink-3)" />
+            </button>
+          ) : null}
         </div>
 
-        {/* Project results */}
-        {isSearching && hasProjectResults && (
-          <section>
-            <div
-              className="px-4 py-1.5 text-[11px] font-medium uppercase tracking-wider"
-              style={{ color: "var(--color-text-muted, var(--color-text))", opacity: 0.5 }}
-            >
-              Projects
-            </div>
-            <ul aria-label="Project results">
-              {projectResults.map((project) => {
-                const drive = drives.find((d) => d.id === project.currentDriveId);
-                const name = getDisplayProject(project);
-                const date = getDisplayDate(project);
-                const driveName = drive?.displayName ?? "Unassigned";
+        {/* Result list */}
+        <div className="max-h-[420px] overflow-y-auto py-1.5">
 
-                return (
-                  <li key={project.id}>
-                    <div className="flex items-center gap-1 px-4 hover:bg-white/5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigate(`/projects/${project.id}`);
-                          close();
-                        }}
-                        className="flex flex-1 items-center gap-3 py-2.5 text-left min-w-0"
-                        style={{ color: "var(--color-text)" }}
-                      >
-                        <Icon name="folder" size={14} />
-                        <span className="flex-1 min-w-0">
-                          <span className="block truncate text-[13px]">{name}</span>
-                          <span
-                            className="block truncate text-[11px]"
-                            style={{ opacity: 0.55 }}
+          {/* Project results */}
+          {isSearching && hasProjectResults ? (
+            <section>
+              <SectionLabel>Projects</SectionLabel>
+              <ul aria-label="Project results">
+                {projectResults.map((project) => {
+                  const drive = drives.find((d) => d.id === project.currentDriveId);
+                  const name = getDisplayProject(project);
+                  const date = getDisplayDate(project);
+                  const driveName = drive?.displayName ?? "Unassigned";
+                  const secondary = date ? `${driveName} · ${date}` : driveName;
+
+                  return (
+                    <li key={project.id}>
+                      <ResultRow
+                        icon="folder"
+                        primary={name}
+                        secondary={secondary}
+                        onClick={() => { navigate(`/projects/${project.id}`); close(); }}
+                        accessory={project.folderPath ? (
+                          <button
+                            type="button"
+                            aria-label="Show in Finder"
+                            title="Show in Finder"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void showPathInFinder(project.folderPath);
+                              close();
+                            }}
+                            className="btn btn-ghost btn-sm shrink-0 opacity-0 group-focus-within:opacity-100"
+                            style={{ padding: "4px", minHeight: 0, color: "var(--ink-3)" }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = ""; }}
+                            onFocus={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+                            onBlur={(e) => { (e.currentTarget as HTMLElement).style.opacity = ""; }}
                           >
-                            {driveName}
-                            {date ? ` · ${date}` : ""}
-                          </span>
-                        </span>
-                      </button>
-                      {project.folderPath ? (
-                        <button
-                          type="button"
-                          aria-label="Show in Finder"
-                          title="Show in Finder"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void showPathInFinder(project.folderPath);
-                            close();
-                          }}
-                          className="shrink-0 rounded p-1 opacity-0 hover:opacity-100 focus:opacity-100"
-                          style={{ color: "var(--color-text)" }}
-                        >
-                          <Icon name="folderOpen" size={13} />
-                        </button>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
+                            <Icon name="folderOpen" size={13} color="currentColor" />
+                          </button>
+                        ) : null}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
 
-        {/* Drive results */}
-        {isSearching && hasDriveResults && (
-          <section>
-            <div
-              className="px-4 py-1.5 text-[11px] font-medium uppercase tracking-wider border-t"
-              style={{
-                color: "var(--color-text-muted, var(--color-text))",
-                opacity: 0.5,
-                borderColor: "var(--color-border)"
-              }}
-            >
-              Drives
+          {/* Drive results */}
+          {isSearching && hasDriveResults ? (
+            <section>
+              {hasProjectResults ? <SectionDivider /> : null}
+              <SectionLabel>Drives</SectionLabel>
+              <ul aria-label="Drive results">
+                {driveResults.map((drive) => {
+                  const count = projects.filter((p) => p.currentDriveId === drive.id).length;
+                  return (
+                    <li key={drive.id}>
+                      <ResultRow
+                        icon="hardDrive"
+                        primary={drive.displayName}
+                        secondary={`${count} ${count === 1 ? "project" : "projects"}`}
+                        onClick={() => { navigate(`/drives/${drive.id}`); close(); }}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : null}
+
+          {/* No results state */}
+          {noResults ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
+                No results for &ldquo;{query}&rdquo;
+              </p>
             </div>
-            <ul aria-label="Drive results">
-              {driveResults.map((drive) => {
-                const count = projects.filter((p) => p.currentDriveId === drive.id).length;
+          ) : null}
 
-                return (
-                  <li key={drive.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigate(`/drives/${drive.id}`);
-                        close();
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5"
-                      style={{ color: "var(--color-text)" }}
-                    >
-                      <Icon name="hardDrive" size={14} />
-                      <span className="flex-1 min-w-0">
-                        <span className="block truncate text-[13px]">{drive.displayName}</span>
-                        <span
-                          className="block truncate text-[11px]"
-                          style={{ opacity: 0.55 }}
-                        >
-                          {count} {count === 1 ? "project" : "projects"}
-                        </span>
-                      </span>
-                    </button>
+          {/* Default state: pinned actions + recent */}
+          {!isSearching ? (
+            <>
+              <ul aria-label="Pinned actions">
+                {PINNED_ACTIONS.map((action) => (
+                  <li key={action.id}>
+                    <ResultRow
+                      icon={action.icon}
+                      primary={action.label}
+                      onClick={() => { action.onSelect(navigate); close(); }}
+                    />
                   </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
+                ))}
+              </ul>
 
-        {/* No results state */}
-        {noResults && (
-          <div
-            className="px-4 py-6 text-center text-[13px]"
-            style={{ opacity: 0.5, color: "var(--color-text)" }}
-          >
-            No results for &ldquo;{query}&rdquo;
-          </div>
-        )}
+              {recentProjects.length > 0 ? (
+                <section>
+                  <SectionDivider />
+                  <SectionLabel>Recent</SectionLabel>
+                  <ul aria-label="Recent projects">
+                    {recentProjects.map((project) => {
+                      const drive = drives.find((d) => d.id === project.currentDriveId);
+                      const name = getDisplayProject(project);
+                      const date = getDisplayDate(project);
+                      const driveName = drive?.displayName ?? "Unassigned";
+                      const secondary = date ? `${driveName} · ${date}` : driveName;
 
-        {/* Default state: pinned actions + recent (shown when not searching) */}
-        {!isSearching && (
-          <>
-            <ul aria-label="Pinned actions" className="py-1">
-              {PINNED_ACTIONS.map((action) => (
-                <li key={action.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      action.onSelect(navigate);
-                      close();
-                    }}
-                    className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[13px] hover:bg-white/5"
-                    style={{ color: "var(--color-text)" }}
-                  >
-                    <Icon name={action.icon} size={16} />
-                    <span>{action.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            {recentProjects.length > 0 && (
-              <section>
-                <div
-                  className="px-4 py-1.5 text-[11px] font-medium uppercase tracking-wider border-t"
-                  style={{
-                    color: "var(--color-text-muted, var(--color-text))",
-                    opacity: 0.5,
-                    borderColor: "var(--color-border)"
-                  }}
-                >
-                  Recent
-                </div>
-                <ul aria-label="Recent projects">
-                  {recentProjects.map((project) => {
-                    const drive = drives.find((d) => d.id === project.currentDriveId);
-                    const name = getDisplayProject(project);
-                    const date = getDisplayDate(project);
-                    const driveName = drive?.displayName ?? "Unassigned";
-
-                    return (
-                      <li key={project.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigate(`/projects/${project.id}`);
-                            close();
-                          }}
-                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-white/5"
-                          style={{ color: "var(--color-text)" }}
-                        >
-                          <Icon name="clock" size={14} />
-                          <span className="flex-1 min-w-0">
-                            <span className="block truncate text-[13px]">{name}</span>
-                            <span
-                              className="block truncate text-[11px]"
-                              style={{ opacity: 0.55 }}
-                            >
-                              {driveName}
-                              {date ? ` · ${date}` : ""}
-                            </span>
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            )}
-          </>
-        )}
+                      return (
+                        <li key={project.id}>
+                          <ResultRow
+                            icon="clock"
+                            primary={name}
+                            secondary={secondary}
+                            onClick={() => { navigate(`/projects/${project.id}`); close(); }}
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
     </div>,
     document.body
