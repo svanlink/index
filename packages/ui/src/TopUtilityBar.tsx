@@ -66,17 +66,21 @@ export function TopUtilityBar({
   return (
     <header
       data-tauri-drag-region
-      className="sticky top-0 z-20 flex h-14 items-center border-b px-6"
+      className="sticky z-20 flex items-center"
       style={{
-        borderColor: "var(--hairline)",
-        background: "rgba(242, 242, 247, 0.82)",
-        backdropFilter: "blur(20px) saturate(180%)",
-        WebkitBackdropFilter: "blur(20px) saturate(180%)"
+        top: 0,
+        height: 48,
+        padding: "0 20px",
+        borderBottom: "1px solid var(--hairline)",
+        background: "var(--glass-toolbar)",
+        backdropFilter: "var(--glass-toolbar-filter)",
+        WebkitBackdropFilter: "var(--glass-toolbar-filter)"
       }}
     >
       <div
-        className="grid min-w-0 flex-1 items-center gap-6"
+        className="grid min-w-0 flex-1 items-center"
         style={{
+          gap: 24,
           gridTemplateColumns: showSearch
             ? "minmax(140px, 1fr) minmax(280px, 420px) minmax(72px, auto)"
             : "minmax(0, 1fr) auto"
@@ -85,12 +89,13 @@ export function TopUtilityBar({
         {/* Breadcrumb — plain text, no pill, no border. */}
         <div
           data-tauri-drag-region
-          className="flex min-w-0 items-center gap-2"
+          className="flex min-w-0 items-center"
+          style={{ gap: 8 }}
         >
           <span
             data-tauri-drag-region
-            className="truncate text-[14px] font-semibold"
-            style={{ color: "var(--ink)", letterSpacing: "-0.005em" }}
+            className="truncate font-semibold"
+            style={{ fontSize: 14, color: "var(--ink)", letterSpacing: "-0.005em" }}
           >
             {section}
           </span>
@@ -106,8 +111,8 @@ export function TopUtilityBar({
               </span>
               <span
                 data-tauri-drag-region
-                className="truncate text-[14px]"
-                style={{ color: "var(--ink-2)" }}
+                className="truncate"
+                style={{ fontSize: 14, color: "var(--ink-2)" }}
                 title={sectionDetail}
               >
                 {sectionDetail}
@@ -123,8 +128,8 @@ export function TopUtilityBar({
             role="search"
           >
             <label
-              className="field flex w-full items-center gap-2"
-              style={{ height: 32 }}
+              className="field flex w-full items-center"
+              style={{ gap: 8, height: 32 }}
             >
               <Icon name="search" size={14} color="var(--ink-3)" />
               <span className="sr-only">{searchPlaceholder}</span>
@@ -150,7 +155,7 @@ export function TopUtilityBar({
           <div data-tauri-drag-region aria-hidden="true" />
         )}
 
-        <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
+        <div className="flex shrink-0 items-center justify-end" style={{ marginLeft: "auto", gap: 8 }}>
           {action}
         </div>
       </div>

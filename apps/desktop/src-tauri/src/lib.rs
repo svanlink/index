@@ -56,7 +56,6 @@ pub fn run() {
                         .expect("Failed to apply vibrancy — requires macOS 10.14+");
                 }
             }
-            let _ = app.handle();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

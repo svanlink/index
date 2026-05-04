@@ -5,19 +5,24 @@ import type { Drive, ScanSessionSnapshot } from "@drive-project-catalog/domain";
 import { getDriveHealthLabel, type DriveHealthState } from "@drive-project-catalog/data";
 import { useVolumeInfo } from "../../app/scanCommands";
 import { formatBytes, formatDate } from "../dashboardHelpers";
-import { StatusBadge } from "../pagePrimitives";
+import { CapacityLegend } from "../capacity";
+import { StatusBadge } from "../feedback";
 import { getDriveColor } from "../driveColor";
 
 export function DriveCard({
   drive,
   projectCount,
   scanSession,
-  health
+  health,
+  onScan,
+  onImport
 }: {
   drive: Drive;
   projectCount: number;
   scanSession: ScanSessionSnapshot | null;
   health?: DriveHealthState;
+  onScan?: () => void;
+  onImport?: () => void;
 }) {
   const navigate = useNavigate();
   const volumeInfo = useVolumeInfo(scanSession?.rootPath);
@@ -25,6 +30,9 @@ export function DriveCard({
   const scanFailed =
     scanSession?.status === "failed" || scanSession?.status === "interrupted";
   const driveColor = getDriveColor(drive.id);
+
+  // Connection state derived from live volume info + scan session status
+  const connectionLabel: string = isScanning ? "Mounting" : volumeInfo ? "Online" : "Offline";
 
   // Prefer stored drive values; fall back to live OS volume info when null.
   const effectiveTotalBytes = drive.totalCapacityBytes ?? volumeInfo?.totalBytes ?? null;
@@ -47,12 +55,8 @@ export function DriveCard({
       ? Math.min(100 - (usedPercent ?? 0), Math.max(1, (drive.reservedIncomingBytes / effectiveTotalBytes!) * 100))
       : null;
 
-  // Use --drive-color scoped to this card to colorize the capacity bar + dot
+  // --drive-color scoped to this card for the capacity bar fill and left border accent
   const cardStyle = { "--drive-color": driveColor } as CSSProperties;
-
-  const capacityFooter = hasCapacity
-    ? `${formatBytes(effectiveUsedBytes!)} of ${formatBytes(effectiveTotalBytes!)}`
-    : "Unknown capacity";
 
   const lastScan = scanSession?.finishedAt ?? drive.lastScannedAt;
   const lastScanLabel = isScanning
@@ -61,63 +65,51 @@ export function DriveCard({
       ? formatDate(lastScan)
       : "Never";
 
+  const hasHoverActions = Boolean(onScan || onImport);
+
   return (
     <article
-      className="card cursor-pointer p-5 transition-all duration-150 hover:shadow-[var(--sh-2)]"
+      className="card card-hoverable"
       style={{
         ...cardStyle,
-        backdropFilter: "blur(12px) saturate(160%)",
-        WebkitBackdropFilter: "blur(12px) saturate(160%)",
-        background: "rgba(255,255,255,0.82)"
+        overflow: "hidden",
+        // 3px left accent border — drive identity (HIG: content surface uses plain --surface, no glass)
+        borderLeft: "3px solid var(--drive-color)"
       }}
-      onClick={() => navigate(`/drives/${drive.id}`)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          navigate(`/drives/${drive.id}`);
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open ${drive.displayName}`}
     >
-      <div className="flex items-start gap-3">
-        {/* 40×40 icon tile with drive-color dot overlay */}
+      {/* Clickable header — navigates to drive detail */}
+      <button
+        type="button"
+        className="flex w-full items-start text-left"
+        style={{ gap: 12, padding: "20px 20px 0", background: "transparent", border: "none", cursor: "pointer" }}
+        onClick={() => navigate(`/drives/${drive.id}`)}
+        aria-label={`Open ${drive.displayName}`}
+      >
+        {/* 40×40 icon tile — dot removed; accent now lives on the card left border */}
         <div
-          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]"
-          style={{ background: "var(--surface-inset)" }}
+          className="flex shrink-0 items-center justify-center"
+          style={{ height: 40, width: 40, borderRadius: 10, background: "var(--surface-inset)" }}
         >
           <Icon name="hardDrive" size={20} color="var(--ink-2)" />
-          <span
-            className="absolute"
-            style={{
-              bottom: 6,
-              right: 6,
-              width: 7,
-              height: 7,
-              borderRadius: 4,
-              background: "var(--drive-color)",
-              border: "1.5px solid var(--surface)"
-            }}
-          />
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
             <h3
-              className="truncate text-[15px] font-semibold"
-              style={{ fontFamily: "var(--font-display)", letterSpacing: "-0.005em", color: "var(--ink)" }}
+              className="truncate font-semibold"
+              style={{ fontSize: 15, fontFamily: "var(--font-display)", letterSpacing: "-0.005em", color: "var(--ink)" }}
             >
-            {drive.displayName}
+              {drive.displayName}
             </h3>
+            {/* A2: Connection state chip — Online / Offline / Mounting */}
+            <StatusBadge label={connectionLabel} />
             {health && health !== "healthy" ? (
               <StatusBadge label={getDriveHealthLabel(health)} />
             ) : null}
-            {isScanning ? <StatusBadge label="Running" /> : null}
             {scanFailed && !isScanning ? <StatusBadge label="Failed" /> : null}
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
-            {drive.volumeName !== drive.displayName ? <span>{drive.volumeName}</span> : null}
+          <div className="flex items-center" style={{ marginTop: 2, gap: 6, fontSize: 12, color: "var(--ink-3)" }}>
+            {drive.volumeName !== drive.displayName ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{drive.volumeName}</span> : null}
             {drive.volumeName !== drive.displayName && (drive.createdManually || volumeInfo) ? (
               <span style={{ color: "var(--ink-4)" }}>·</span>
             ) : null}
@@ -127,59 +119,103 @@ export function DriveCard({
         </div>
 
         <Icon name="chevron" size={14} color="var(--ink-4)" />
-      </div>
+      </button>
 
-      {/* Capacity bar */}
-      <div
-        className="cap-bar lg mt-4"
-        role="progressbar"
-        aria-valuenow={usedPercentInt ?? undefined}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={
-          usedPercentInt !== null ? `${usedPercentInt}% storage used` : "Storage usage unknown"
-        }
-      >
-        {usedPercent !== null ? (
-          <div className="cap-used capacity-bar-fill" style={{ width: `${usedPercent}%` }} />
-        ) : null}
-        {reservedPercent !== null ? (
-          <div
-            className="cap-reserved"
-            style={{ left: `${usedPercent ?? 0}%`, width: `${reservedPercent}%` }}
+      {/* Non-interactive card body */}
+      <div style={{ padding: "0 20px 20px" }}>
+        {/* Capacity bar */}
+        <div
+          className="cap-bar lg"
+          style={{ marginTop: 16 }}
+          role="progressbar"
+          aria-valuenow={usedPercentInt ?? undefined}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={
+            usedPercentInt !== null ? `${usedPercentInt}% storage used` : "Storage usage unknown"
+          }
+        >
+          {usedPercent !== null ? (
+            <div className="cap-used capacity-bar-fill" style={{ width: `${usedPercent}%` }} />
+          ) : null}
+          {reservedPercent !== null ? (
+            <div
+              className="cap-reserved"
+              style={{ left: `${usedPercent ?? 0}%`, width: `${reservedPercent}%` }}
+            />
+          ) : null}
+        </div>
+
+        {/* A4: Three-item capacity legend below the bar */}
+        {hasCapacity ? (
+          <CapacityLegend
+            usedLabel={`${usedPercentInt}% used · ${formatBytes(effectiveUsedBytes!)}`}
+            reservedLabel={
+              drive.reservedIncomingBytes > 0
+                ? `${formatBytes(drive.reservedIncomingBytes)} reserved`
+                : undefined
+            }
+            freeLabel={
+              effectiveFreeBytes !== null
+                ? `${formatBytes(effectiveFreeBytes)} free`
+                : "Unknown free"
+            }
           />
-        ) : null}
-      </div>
+        ) : (
+          <p style={{ marginTop: 10, fontSize: 12, color: "var(--ink-4)" }}>
+            Unknown capacity
+          </p>
+        )}
 
-      <div className="mt-2.5 flex items-center gap-3 text-[11px]" style={{ color: "var(--ink-3)" }}>
-        <span className="tnum font-medium" style={{ color: "var(--ink-2)" }}>
-          {usedPercentInt !== null ? `${usedPercentInt}% used` : "Unknown"}
-        </span>
-        <span style={{ color: "var(--ink-4)" }}>·</span>
-        <span>{capacityFooter}</span>
-      </div>
-
-      {/* Meta row — inline, hairline-separated, no beige tiles. */}
-      <div
-        className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-[12px] tnum"
-        style={{ borderColor: "var(--hairline)", color: "var(--ink-3)" }}
-      >
-        <span>
-          <span className="font-medium" style={{ color: "var(--ink-2)" }}>{projectCount}</span>{" "}
-          {projectCount === 1 ? "project" : "projects"}
-        </span>
-        <span style={{ color: "var(--ink-4)" }}>·</span>
-        <span>
-          {effectiveFreeBytes !== null ? `${formatBytes(effectiveFreeBytes)} free` : "Unknown free"}
-        </span>
-        {drive.reservedIncomingBytes > 0 ? (
-          <>
+        {/* Meta row — project count, last scan, and A3: hover-reveal action buttons */}
+        <div
+          className="flex items-center"
+          style={{ marginTop: 14, gap: 12, borderTop: "1px solid var(--hairline)", paddingTop: 12 }}
+        >
+          <div
+            className="flex flex-1 flex-wrap items-center tnum"
+            style={{ columnGap: 12, rowGap: 4, fontSize: 12, color: "var(--ink-3)" }}
+          >
+            <span>
+              <span className="font-medium" style={{ color: "var(--ink-2)" }}>{projectCount}</span>{" "}
+              {projectCount === 1 ? "project" : "projects"}
+            </span>
             <span style={{ color: "var(--ink-4)" }}>·</span>
-            <span>{formatBytes(drive.reservedIncomingBytes)} reserved</span>
-          </>
-        ) : null}
-        <span style={{ color: "var(--ink-4)" }}>·</span>
-        <span>Last scan {lastScanLabel}</span>
+            <span>Last scan {lastScanLabel}</span>
+          </div>
+
+          {/* A3: Hover-reveal actions — stopPropagation prevents card navigation */}
+          {hasHoverActions ? (
+            <div className="flex shrink-0 items-center card-hover-actions" style={{ gap: 6 }}>
+              {onScan ? (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onScan();
+                  }}
+                >
+                  <Icon name="scan" size={12} color="currentColor" />
+                  Scan
+                </button>
+              ) : null}
+              {onImport ? (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onImport();
+                  }}
+                >
+                  <Icon name="download" size={12} color="currentColor" />
+                  Import
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </article>
   );

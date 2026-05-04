@@ -13,16 +13,17 @@ function MetaField({
   tone?: "warn";
 }) {
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
+    <div className="flex flex-col min-w-0" style={{ gap: 2 }}>
       <dt
-        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
-        style={{ color: "var(--ink-4)" }}
+        style={{ fontSize: 10.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-4)" }}
       >
         {label}
       </dt>
       <dd
-        className="tnum truncate text-[13.5px] font-medium"
+        className="tnum truncate"
         style={{
+          fontSize: 13,
+          fontWeight: 500,
           color: tone === "warn" ? "var(--warn)" : "var(--ink)",
           margin: 0
         }}
@@ -55,41 +56,51 @@ export function ScanStatusPanel({ scanSummary, isRunning }: ScanStatusPanelProps
 
   return (
     <div
-      className="rounded-[12px] px-4 py-3.5"
-      style={{ background: "var(--surface-inset)" }}
+      style={{ borderRadius: 12, padding: "14px 16px", background: "var(--surface-inset)" }}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className="inline-block h-2 w-2 rounded-full"
-          style={{
-            background:
-              statusTone === "danger"
-                ? "var(--danger)"
-                : statusTone === "warn"
-                  ? "var(--warn)"
-                  : statusTone === "accent"
-                    ? "var(--accent)"
-                    : "var(--ok)"
-          }}
-          aria-hidden="true"
-        />
-        <span className="text-[13px] font-semibold" style={{ color: "var(--ink)" }}>
+      <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
+        {isRunning ? (
+          <span className="relative flex shrink-0 items-center justify-center" style={{ height: 16, width: 16 }} aria-hidden="true">
+            <span className="pulse-ring absolute inline-flex rounded-full" style={{ height: 16, width: 16, background: "var(--action)", opacity: 0.4 }} />
+            <span className="pulse-ring pulse-ring-2 absolute inline-flex rounded-full" style={{ height: 16, width: 16, background: "var(--action)", opacity: 0.4 }} />
+            <span className="relative inline-flex rounded-full" style={{ height: 8, width: 8, background: "var(--action)" }} />
+          </span>
+        ) : (
+          <span
+            style={{
+              display: "inline-block",
+              height: 8,
+              width: 8,
+              borderRadius: "50%",
+              background:
+                statusTone === "danger"
+                  ? "var(--danger)"
+                  : statusTone === "warn"
+                    ? "var(--warn)"
+                    : statusTone === "neutral"
+                      ? "var(--ink-3)"
+                      : "var(--ok)"
+            }}
+            aria-hidden="true"
+          />
+        )}
+        <span className="font-semibold" style={{ fontSize: 13, color: "var(--ink)" }}>
           {isRunning ? "Running" : "Last scan"}
         </span>
-        <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
           {getScanStatusLabel(scanSummary)}
         </span>
       </div>
       <p
-        className="mono mt-1.5 text-[11.5px] break-all"
-        style={{ color: "var(--ink-3)", margin: "6px 0 0" }}
+        className="mono"
+        style={{ fontSize: 12, wordBreak: "break-all", margin: "6px 0 0", color: "var(--ink-3)" }}
       >
         {scanSummary.rootPath}
       </p>
 
       <dl
-        className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-4"
-        style={{ color: "var(--ink-3)" }}
+        className="scan-meta-grid"
+        style={{ marginTop: 12, color: "var(--ink-3)" }}
       >
         <MetaField label="Folders" value={String(scanSummary.foldersScanned)} />
         <MetaField label="Matches" value={String(scanSummary.matchesFound)} />
@@ -109,10 +120,10 @@ export function ScanStatusPanel({ scanSummary, isRunning }: ScanStatusPanelProps
         scanSummary.status === "interrupted" ||
         scanSummary.status === "cancelled") ? (
         <p
-          className="mt-3 text-[12.5px]"
           style={{
-            color: scanSummary.status === "cancelled" ? "var(--warn)" : "var(--danger)",
-            margin: "12px 0 0"
+            fontSize: 12,
+            margin: "12px 0 0",
+            color: scanSummary.status === "cancelled" ? "var(--warn)" : "var(--danger)"
           }}
         >
           {getScanStatusMessage(scanSummary)}

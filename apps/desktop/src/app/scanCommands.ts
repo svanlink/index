@@ -84,7 +84,9 @@ export function useVolumeInfo(rootPath: string | null | undefined): VolumeInfo |
 export async function getVolumeInfo(path: string): Promise<VolumeInfo | null> {
   if (!isDesktopScanAvailable()) return null;
   try {
-    return await invoke<VolumeInfo | null>("get_volume_info", { path });
+    // Rust returns Result<VolumeInfo, String>: Ok → value, Err → thrown exception.
+    // We treat any error as "no volume info available" — the Rust layer logs the cause.
+    return await invoke<VolumeInfo>("get_volume_info", { path });
   } catch {
     return null;
   }

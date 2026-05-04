@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { categoryValues, type Category, type FolderType, type ProjectScanEvent } from "@drive-project-catalog/domain";
 import { Icon } from "@drive-project-catalog/ui";
@@ -14,8 +14,11 @@ import {
   getProjectName,
   getProjectStatusBadges
 } from "./dashboardHelpers";
-import { ConfirmModal, EmptyState, FeedbackNotice, LoadingState, SectionCard, StatusBadge } from "./pagePrimitives";
+import { ConfirmModal, MetaField, SectionCard } from "./pagePrimitives";
+import { EmptyState, LoadingState } from "./search";
+import { FeedbackNotice, StatusBadge } from "./feedback";
 import { showPathInFinder } from "../app/nativeContextMenu";
+import { getDriveColor } from "./driveColor";
 
 interface ProjectMetadataFormState {
   correctedDate: string;
@@ -199,12 +202,43 @@ export function ProjectDetailPage() {
   const displayClient = currentProject.correctedClient ?? currentProject.parsedClient ?? "No client";
   const displayDate = formatParsedDate(currentProject.correctedDate ?? currentProject.parsedDate);
 
+  // Category-tinted avatar for the identity card
+  const avatarPalette: Record<string, { bg: string; color: string }> = {
+    photo: { bg: "var(--info-soft)", color: "var(--info)" },
+    video: { bg: "var(--accent-soft)", color: "var(--accent-ink)" },
+    design: { bg: "var(--ok-soft)", color: "var(--ok)" },
+    mixed: { bg: "var(--warn-soft)", color: "var(--warn)" },
+    personal: { bg: "var(--danger-soft)", color: "var(--danger)" }
+  };
+  const avatar = avatarPalette[currentProject.category ?? ""] ?? {
+    bg: "var(--surface-inset)",
+    color: "var(--ink-3)"
+  };
+  const avatarLetter = getProjectName(currentProject)[0]?.toUpperCase() ?? "?";
+
+  // Status accent on the identity card
+  const statusAccent =
+    currentProject.missingStatus === "missing"
+      ? "inset 3px 0 0 var(--danger)"
+      : currentProject.duplicateStatus === "duplicate"
+        ? "inset 3px 0 0 var(--warn)"
+        : undefined;
+
+  // Unsaved changes — compare form state to the persisted project values
+  const isFormDirty =
+    metadataForm.correctedDate !== (currentProject.correctedDate ?? "") ||
+    metadataForm.correctedClient !== (currentProject.correctedClient ?? "") ||
+    metadataForm.correctedProject !== (currentProject.correctedProject ?? "") ||
+    metadataForm.category !== (currentProject.category ?? "") ||
+    metadataForm.folderType !== currentProject.folderType;
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col" style={{ gap: 24 }}>
       {showDeleteConfirm ? (
         <ConfirmModal
           title="Delete project?"
-          description={`"${getProjectName(currentProject)}" will be permanently removed from the catalog. This cannot be undone.`}
+          description={`"${getProjectName(currentProject)}" will be permanently removed from the catalog.`}
+          consequence="This cannot be undone."
           confirmLabel="Delete project"
           onConfirm={() => void handleDeleteProject()}
           onCancel={() => setShowDeleteConfirm(false)}
@@ -212,16 +246,23 @@ export function ProjectDetailPage() {
         />
       ) : null}
 
-      <div className="card overflow-hidden">
+      <div className="card" style={{ overflow: "hidden", ...(statusAccent ? { boxShadow: statusAccent } : {}) }}>
+        {/* C4: Action toolbar */}
         <div
-          className="flex flex-wrap items-center gap-2 border-b px-5 py-4"
-          style={{ borderColor: "var(--hairline)" }}
+          className="flex flex-wrap items-center"
+          style={{ gap: 8, borderBottom: "1px solid var(--hairline)", padding: "10px 16px" }}
         >
           <Link to="/projects" className="btn btn-ghost btn-sm">
             <Icon name="chevron" size={11} className="rotate-180" />
             Projects
           </Link>
           <div className="flex-1" />
+          {currentProject.currentDriveId ? (
+            <Link to={`/drives/${currentProject.currentDriveId}`} className="btn btn-sm">
+              <Icon name="hardDrive" size={11} color="currentColor" />
+              Drive
+            </Link>
+          ) : null}
           <button
             type="button"
             className="btn btn-sm"
@@ -249,8 +290,24 @@ export function ProjectDetailPage() {
           </button>
         </div>
 
-        <div className="px-6 py-6">
-          <div className="flex flex-wrap items-start gap-5">
+        {/* C1: Identity body */}
+        <div style={{ padding: "24px" }}>
+          <div className="flex flex-wrap items-start" style={{ gap: 20 }}>
+            {/* C1: Category-tinted avatar letter */}
+            <div
+              className="flex shrink-0 items-center justify-center"
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 14,
+                fontSize: 20,
+                fontWeight: 600,
+                background: avatar.bg,
+                color: avatar.color
+              }}
+            >
+              {avatarLetter}
+            </div>
             <div className="min-w-0 flex-1">
               <div className="eyebrow mono">
                 {displayDate} · {displayClient}
@@ -258,28 +315,39 @@ export function ProjectDetailPage() {
               <h1 className="h-title" style={{ margin: "6px 0 0" }}>
                 {getProjectName(currentProject)}
               </h1>
-              <p className="mono mt-2 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+              <p className="mono" style={{ color: "var(--ink-3)", marginTop: 8, fontSize: 12, lineHeight: 1.5 }}>
                 {currentProject.folderPath ?? currentProject.folderName ?? "Path unavailable"}
               </p>
               {statusBadges.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap" style={{ gap: 6, marginTop: 16 }}>
                   {statusBadges.map((badge) => (
                     <StatusBadge key={badge} label={badge} />
                   ))}
                 </div>
               ) : null}
             </div>
-
-            <div
-              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[14px]"
-              style={{ background: "var(--surface-inset)" }}
-            >
-              <Icon name="folder" size={24} color="var(--ink-2)" />
-            </div>
           </div>
 
-          <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
-            <MetaField label="Current drive" value={currentDriveName} />
+          <dl className="meta-grid-4" style={{ marginTop: 20 }}>
+            {/* Drive with color dot */}
+            <div className="min-w-0">
+              <dt className="text-eyebrow" style={{ color: "var(--ink-4)" }}>
+                Current drive
+              </dt>
+              <dd className="flex items-center tnum truncate" style={{ margin: 0, marginTop: 2, gap: 6, fontSize: 13, fontWeight: 500 }}>
+                {currentProject.currentDriveId ? (
+                  <>
+                    <span
+                      className="drive-dot shrink-0"
+                      style={{ "--drive-color": getDriveColor(currentProject.currentDriveId), width: 8, height: 8 } as CSSProperties}
+                    />
+                    <span className="truncate" style={{ color: "var(--ink)" }}>{currentDriveName}</span>
+                  </>
+                ) : (
+                  <span style={{ color: "var(--warn)" }}>{currentDriveName}</span>
+                )}
+              </dd>
+            </div>
             <MetaField
               label={isMovePending ? "Target drive" : "Size"}
               value={isMovePending ? targetDriveName : (currentProject.sizeBytes !== null ? formatBytes(currentProject.sizeBytes) : "Unknown")}
@@ -295,13 +363,13 @@ export function ProjectDetailPage() {
         <FeedbackNotice tone={feedback.tone} title={feedback.title} messages={feedback.messages} />
       ) : null}
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-6">
+      <section className="detail-layout">
+        <div className="flex flex-col" style={{ gap: 24 }}>
           <SectionCard
             title="Parsed fields"
             description="Values inferred from the folder name on disk. These are immutable — corrections live in the next section."
           >
-            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            <dl className="fields-grid-2">
               <MetaField label="Date" value={formatParsedDate(currentProject.parsedDate)} />
               <MetaField label="Client" value={currentProject.parsedClient ?? "—"} />
               <MetaField label="Project" value={currentProject.parsedProject ?? "—"} />
@@ -314,7 +382,7 @@ export function ProjectDetailPage() {
             description="Observed classifications and timestamps stored from scans of this project."
           >
             {hasClassificationDrift ? (
-              <div className="mb-4">
+              <div style={{ marginBottom: 16 }}>
                 <FeedbackNotice
                   tone="info"
                   title="Classification drift detected"
@@ -325,7 +393,7 @@ export function ProjectDetailPage() {
                 />
               </div>
             ) : null}
-            <dl className="mb-4 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+            <dl className="fields-grid-3" style={{ marginBottom: 16 }}>
               <MetaField label="Last seen" value={formatDate(currentProject.lastSeenAt)} />
               <MetaField
                 label="Last scanned"
@@ -336,7 +404,7 @@ export function ProjectDetailPage() {
             {isEventsLoading ? (
               <LoadingState label="Loading observations" />
             ) : events.length === 0 ? (
-              <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
+              <p style={{ color: "var(--ink-3)", fontSize: 13, margin: 0 }}>
                 No scan observations yet.
               </p>
             ) : (
@@ -349,22 +417,23 @@ export function ProjectDetailPage() {
             description="Other projects from the same client in the current catalog."
           >
             {relatedProjects.length === 0 ? (
-              <p className="text-[13px]" style={{ color: "var(--ink-3)" }}>
+              <p style={{ color: "var(--ink-3)", fontSize: 13, margin: 0 }}>
                 Nothing from this client yet.
               </p>
             ) : (
-              <div className="flex flex-col gap-px">
+              <div className="flex flex-col" style={{ gap: 1 }}>
                 {relatedProjects.map((relatedProject) => (
                   <Link
                     key={relatedProject.id}
                     to={`/projects/${relatedProject.id}`}
-                    className="link-card group flex items-center justify-between rounded-[10px] px-3 py-2.5 transition-colors hover:bg-[color:var(--surface-inset)]"
+                    className="link-card flex items-center justify-between"
+                    style={{ borderRadius: 10, padding: "10px 12px" }}
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium" style={{ color: "var(--ink)" }}>
+                      <p className="truncate" style={{ color: "var(--ink)", fontSize: 13, fontWeight: 500, margin: 0 }}>
                         {getProjectName(relatedProject)}
                       </p>
-                      <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+                      <p style={{ color: "var(--ink-3)", fontSize: 12, marginTop: 2, margin: 0 }}>
                         {formatParsedDate(relatedProject.correctedDate ?? relatedProject.parsedDate)} · {relatedProject.sizeBytes !== null ? formatBytes(relatedProject.sizeBytes) : "Unknown"}
                       </p>
                     </div>
@@ -376,7 +445,7 @@ export function ProjectDetailPage() {
           </SectionCard>
         </div>
 
-        <div className="space-y-6">
+        <div className="flex flex-col" style={{ gap: 24 }}>
           <div id="project-metadata-card">
             <SectionCard
               title="Corrections"
@@ -386,12 +455,13 @@ export function ProjectDetailPage() {
                   : "Override parsed fields. The folder on disk is never renamed."
               }
             >
-              <form className="grid gap-4" onSubmit={handleMetadataSave}>
+              <form className="form-grid" onSubmit={handleMetadataSave}>
                 <FormField label="Date">
                   <input
                     value={metadataForm.correctedDate}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedDate: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    className="field-shell w-full"
+                    style={{ fontSize: 13, padding: "10px 16px" }}
                     placeholder={currentProject.parsedDate ? formatParsedDate(currentProject.parsedDate) : "YYYY-MM-DD, e.g. 2024-03-12"}
                     maxLength={10}
                   />
@@ -400,7 +470,8 @@ export function ProjectDetailPage() {
                   <input
                     value={metadataForm.correctedClient}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedClient: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    className="field-shell w-full"
+                    style={{ fontSize: 13, padding: "10px 16px" }}
                     placeholder={currentProject.parsedClient ?? (currentProject.folderType === "personal_folder" ? "e.g. Sony" : "Leave blank to keep empty")}
                   />
                 </FormField>
@@ -408,7 +479,8 @@ export function ProjectDetailPage() {
                   <input
                     value={metadataForm.correctedProject}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, correctedProject: event.target.value }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    className="field-shell w-full"
+                    style={{ fontSize: 13, padding: "10px 16px" }}
                     placeholder={currentProject.parsedProject ?? (currentProject.folderType === "personal_folder" ? "Leave blank to use folder name" : "Leave blank to keep empty")}
                   />
                 </FormField>
@@ -416,7 +488,8 @@ export function ProjectDetailPage() {
                   <select
                     value={metadataForm.category}
                     onChange={(event) => setMetadataForm((current) => ({ ...current, category: event.target.value as Category | "" }))}
-                    className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                    className="field-shell w-full"
+                    style={{ fontSize: 13, padding: "10px 16px" }}
                   >
                     <option value="">Uncategorized</option>
                     {categoryValues.map((category) => (
@@ -431,13 +504,14 @@ export function ProjectDetailPage() {
                     <select
                       value={metadataForm.folderType}
                       onChange={(event) => setMetadataForm((current) => ({ ...current, folderType: event.target.value as FolderType | "" }))}
-                      className="field-shell w-full bg-transparent px-4 py-2.5 text-[13.5px] outline-none"
+                      className="field-shell w-full"
+                      style={{ fontSize: 13, padding: "10px 16px" }}
                     >
                       <option value="personal_folder">Personal folder (keep as-is)</option>
                       <option value="personal_project">Personal project</option>
                       <option value="client">Client project</option>
                     </select>
-                    <p className="mt-1.5 text-[11.5px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                    <p style={{ color: "var(--ink-3)", fontSize: 12, lineHeight: 1.5, marginTop: 6 }}>
                       {metadataForm.folderType === "personal_folder" || metadataForm.folderType === ""
                         ? "The folder on disk is never renamed. Changing this is permanent and cannot be reversed through this form."
                         : metadataForm.folderType === "client"
@@ -446,9 +520,12 @@ export function ProjectDetailPage() {
                     </p>
                   </FormField>
                 ) : null}
-                <div className="flex items-center justify-end gap-2 pt-1">
-                  {metadataMutation.isConfirmed ? (
-                    <span className="text-[11.5px] tnum" style={{ color: "var(--ink-3)" }}>
+                {/* C2: Unsaved indicator */}
+                <div className="flex items-center justify-end" style={{ gap: 8, paddingTop: 4 }}>
+                  {isFormDirty && !metadataMutation.isPending ? (
+                    <span className="chip chip-warn">Unsaved changes</span>
+                  ) : metadataMutation.isConfirmed && !isFormDirty ? (
+                    <span className="tnum" style={{ fontSize: 12, color: "var(--ink-3)" }}>
                       Saved ✓
                     </span>
                   ) : null}
@@ -464,13 +541,13 @@ export function ProjectDetailPage() {
             </SectionCard>
           </div>
 
-          <div className="card px-5 py-4">
-            <div className="flex items-start justify-between gap-4">
+          <div className="card" style={{ padding: "16px 20px" }}>
+            <div className="flex items-start justify-between" style={{ gap: 16 }}>
               <div className="min-w-0">
-                <p className="text-[13px] font-semibold tracking-[-0.01em]" style={{ color: "var(--ink)" }}>
+                <p style={{ color: "var(--ink)", fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em", margin: 0 }}>
                   Delete project
                 </p>
-                <p className="mt-1 text-[12px] leading-[1.5]" style={{ color: "var(--ink-3)" }}>
+                <p style={{ color: "var(--ink-3)", fontSize: 12, lineHeight: 1.5, marginTop: 4 }}>
                   Permanently removes this project from the catalog. This cannot be undone.
                 </p>
               </div>
@@ -494,42 +571,11 @@ export function ProjectDetailPage() {
  * Matches the MetaField pattern in DriveDetailPage and DrivesPage so every detail
  * surface reads with the same visual rhythm.
  */
-function MetaField({
-  label,
-  value,
-  tone,
-  mono
-}: {
-  label: string;
-  value: string;
-  tone?: "accent" | "warn";
-  mono?: boolean;
-}) {
-  const valueColor =
-    tone === "accent" ? "var(--accent-ink)" : tone === "warn" ? "var(--warn)" : "var(--ink)";
-
-  return (
-    <div className="min-w-0">
-      <dt
-        className="text-[10.5px] font-medium uppercase tracking-[0.08em]"
-        style={{ color: "var(--ink-4)" }}
-      >
-        {label}
-      </dt>
-      <dd
-        className={`tnum truncate text-[13.5px] font-medium ${mono ? "mono" : ""}`}
-        style={{ color: valueColor, marginTop: 2 }}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="block space-y-1.5">
-      <span className="text-[12px] font-medium" style={{ color: "var(--ink-2)" }}>
+    <label className="flex flex-col" style={{ gap: 6 }}>
+      <span style={{ color: "var(--ink-2)", fontSize: 12, fontWeight: 500 }}>
         {label}
       </span>
       {children}
@@ -539,43 +585,60 @@ function FormField({ label, children }: { label: string; children: ReactNode }) 
 
 function ActivityTimeline({ events }: { events: ProjectScanEvent[] }) {
   return (
-    <div className="relative pl-4">
+    <div className="relative" style={{ paddingLeft: 16 }}>
+      {/* Decorative vertical rule — hidden from AT */}
       <div
-        className="absolute bottom-1 left-[3px] top-[6px] w-px"
-        style={{ background: "var(--hairline)" }}
+        aria-hidden="true"
+        className="absolute"
+        style={{ background: "var(--hairline)", left: 3, top: 6, bottom: 4, width: 1 }}
       />
-      <div className="space-y-4">
+      <ol
+        className="list-none"
+        style={{ margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 16 }}
+        aria-label={`Scan activity, ${events.length} event${events.length === 1 ? "" : "s"}`}
+      >
         {events.map((event) => (
-          <div key={event.id} className="relative">
+          <li key={event.id} className="relative">
+            {/* Decorative timeline dot — hidden from AT */}
             <span
-              className="absolute -left-4 top-[5px] h-[7px] w-[7px] rounded-full"
+              aria-hidden="true"
+              className="absolute"
               style={{
+                left: -16,
+                top: 5,
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
                 background:
                   event.observedFolderType != null ? "var(--accent)" : "var(--ink-3)",
                 boxShadow: "0 0 0 3px var(--surface)"
               }}
             />
-            <div className="flex items-center gap-3">
-              <p className="text-[13px] font-medium" style={{ color: "var(--ink)" }}>
+            <div className="flex items-center" style={{ gap: 12 }}>
+              <p style={{ color: "var(--ink)", fontSize: 13, fontWeight: 500, margin: 0 }}>
                 {event.observedFolderName}
               </p>
-              <span className="text-[11px] tnum" style={{ color: "var(--ink-4)" }}>
+              <time
+                dateTime={event.observedAt}
+                className="tnum"
+                style={{ color: "var(--ink-4)", fontSize: 12 }}
+              >
                 {formatDate(event.observedAt)}
-              </span>
+              </time>
             </div>
-            <div className="mt-1 flex flex-wrap gap-2 text-[11.5px]" style={{ color: "var(--ink-3)" }}>
+            <div className="flex flex-wrap" style={{ gap: 8, marginTop: 4, fontSize: 12, color: "var(--ink-3)" }}>
               <span>{event.observedDriveName}</span>
               {event.observedFolderType != null ? (
                 <>
-                  <span style={{ color: "var(--ink-4)" }}>·</span>
+                  {/* Decorative separator — hidden from AT */}
+                  <span aria-hidden="true" style={{ color: "var(--ink-4)" }}>·</span>
                   <span>{getFolderTypeLabel(event.observedFolderType)}</span>
                 </>
               ) : null}
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+      </ol>
     </div>
   );
 }
-

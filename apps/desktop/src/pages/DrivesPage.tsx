@@ -9,7 +9,8 @@ import { useImportFromVolume } from "../app/useImportFromVolume";
 import { formatBytes } from "./dashboardHelpers";
 import { useFeedbackDismiss, type FeedbackState } from "./feedbackHelpers";
 import { ImportFoldersDialog } from "./ImportFoldersDialog";
-import { DriveCardSkeleton, FeedbackNotice } from "./pagePrimitives";
+import { DriveCardSkeleton } from "./search";
+import { FeedbackNotice } from "./feedback";
 import { DriveCreateForm, type DriveFormState, initialDriveForm } from "./drives/DriveCreateForm";
 import { DriveCard } from "./drives/DriveCard";
 
@@ -132,7 +133,7 @@ export function DrivesPage() {
   }
 
   return (
-    <div className="space-y-6 pt-2">
+    <div className="flex flex-col" style={{ gap: 24, paddingTop: 8 }}>
       <h1 className="sr-only">Drives</h1>
       {importSourcePath && importFolders ? (
         <ImportFoldersDialog
@@ -154,7 +155,7 @@ export function DrivesPage() {
       ) : null}
 
       {!isLoading && drives.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end" style={{ gap: 8 }}>
           <button
             type="button"
             className="btn btn-sm"
@@ -191,33 +192,31 @@ export function DrivesPage() {
       ) : null}
 
       {isLoading ? (
-        <div className="grid gap-5 lg:grid-cols-2" aria-busy="true" aria-label="Loading drives">
+        <div className="drives-grid" style={{ gap: 20 }} aria-busy="true" aria-label="Loading drives">
           {[0, 1, 2, 3].map((i) => <DriveCardSkeleton key={i} />)}
         </div>
       ) : drives.length === 0 && projects.length === 0 && !isCreateOpen ? (
-        <div className="flex items-start pt-6">
+        <div className="flex items-start" style={{ paddingTop: 24 }}>
           <div style={{ maxWidth: 520 }}>
             <span
-              className="mb-5 inline-flex h-9 w-9 items-center justify-center rounded-[10px]"
-              style={{ background: "var(--surface-container-low)" }}
+              className="inline-flex items-center justify-center"
+              style={{ marginBottom: 20, height: 44, width: 44, borderRadius: 10, background: "var(--surface-container-low)" }}
               aria-hidden="true"
             >
-              <Icon name="hardDrive" size={18} color="var(--ink-2)" />
+              <Icon name="hardDrive" size={20} color="var(--ink-2)" />
             </span>
             <h2
-              className="text-[22px] font-semibold leading-tight"
-              style={{ color: "var(--ink)", letterSpacing: "-0.01em", margin: 0 }}
+              style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.25, color: "var(--ink)", letterSpacing: "-0.01em", margin: 0 }}
             >
               Add your first drive.
             </h2>
             <p
-              className="mt-3 text-[14px] leading-relaxed"
-              style={{ color: "var(--ink-2)", margin: 0 }}
+              style={{ marginTop: 12, fontSize: 14, lineHeight: 1.625, color: "var(--ink-2)", margin: "12px 0 0" }}
             >
               Scanning a connected drive creates the drive record and imports its top-level
               folders in one step. Add manually if the volume isn&rsquo;t mounted.
             </p>
-            <div className="mt-6 flex items-center gap-2">
+            <div className="flex items-center" style={{ marginTop: 24, gap: 8 }}>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -234,9 +233,9 @@ export function DrivesPage() {
           </div>
         </div>
       ) : (
-        <section className="space-y-3">
+        <section className="flex flex-col" style={{ gap: 12 }}>
           <h2 className="h-section" style={{ margin: 0 }}>Drive inventory</h2>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="drives-grid" style={{ gap: 16 }}>
             {planningRows.map((row) => (
               <DriveCard
                 key={row.drive.id}
@@ -244,6 +243,8 @@ export function DrivesPage() {
                 projectCount={projectCounts[row.drive.id] ?? 0}
                 scanSession={getDriveScanSession(row.drive, scanSessions)}
                 health={row.health}
+                onScan={canUseImport && !isPickingImport && !isImporting && !isMutating ? () => void runImportFromVolume() : undefined}
+                onImport={canUseImport && !isPickingImport && !isImporting && !isMutating ? () => void runImportFromVolume() : undefined}
               />
             ))}
           </div>
@@ -269,8 +270,7 @@ function ImportDriveBanner({
   if (matchedDrive) {
     return (
       <div
-        className="rounded-[7px] border px-3 py-2 text-[12px]"
-        style={{ borderColor: "var(--hairline)", background: "var(--surface-inset)", color: "var(--ink-2)" }}
+        style={{ borderRadius: 7, border: "1px solid var(--hairline)", background: "var(--surface-inset)", color: "var(--ink-2)", padding: "8px 12px", fontSize: 12 }}
       >
         Matches existing drive{" "}
         <span className="font-medium" style={{ color: "var(--ink)" }}>{matchedDrive.displayName}</span>
@@ -280,8 +280,7 @@ function ImportDriveBanner({
   }
   return (
     <div
-      className="rounded-[7px] border px-3 py-2 text-[12px]"
-      style={{ borderColor: "var(--hairline)", background: "var(--surface-inset)", color: "var(--ink-2)" }}
+      style={{ borderRadius: 7, border: "1px solid var(--hairline)", background: "var(--surface-inset)", color: "var(--ink-2)", padding: "8px 12px", fontSize: 12 }}
     >
       A new drive{" "}
       <span className="font-medium" style={{ color: "var(--ink)" }}>{newDriveName}</span>{" "}
@@ -290,4 +289,3 @@ function ImportDriveBanner({
     </div>
   );
 }
-

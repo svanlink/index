@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "@drive-project-catalog/ui";
 import { useShortcut } from "../app/useShortcut";
@@ -6,23 +6,16 @@ import { filterProjectCatalog, UNASSIGNED_DRIVE_FILTER_VALUE } from "@drive-proj
 import {
   categoryValues,
   folderTypeValues,
-  getDisplayClient,
-  getDisplayProject,
   type Category,
   type Drive,
-  type FolderType,
-  type Project
+  type FolderType
 } from "@drive-project-catalog/domain";
 import { validateManualProjectForm } from "../app/catalogValidation";
 import { useCatalogStore } from "../app/providers";
-import {
-  formatBytes,
-  formatParsedDate,
-  getDriveName,
-  getProjectStatusBadges
-} from "./dashboardHelpers";
-import { FeedbackNotice, ProjectRowSkeleton, SectionCard, StatusBadge } from "./pagePrimitives";
-import { getDriveColor } from "./driveColor";
+import { ProjectRowSkeleton } from "./search";
+import { FeedbackNotice } from "./feedback";
+import { SectionCard } from "./pagePrimitives";
+import { ProjectRow, ProjectTableHeader, useKeyboardListNav } from "./ProjectList";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -127,6 +120,8 @@ export function ProjectsPage() {
     [projectForm]
   );
 
+  const selectedIndex = useKeyboardListNav(filteredProjects, navigate);
+
   // Auto-dismiss feedback
   useEffect(() => {
     if (!feedback) return;
@@ -206,27 +201,25 @@ export function ProjectsPage() {
   // still reachable via Cmd+N or the secondary button.
   if (!isLoading && projects.length === 0 && !isCreateOpen) {
     return (
-      <div className="pt-8">
+      <div style={{ paddingTop: 32 }}>
         <div
-          className="mb-5 flex h-11 w-11 items-center justify-center rounded-[10px]"
-          style={{ background: "var(--surface-container-low)" }}
+          className="flex items-center justify-center"
+          style={{ marginBottom: 20, height: 44, width: 44, borderRadius: 10, background: "var(--surface-container-low)" }}
         >
           <Icon name="folder" size={20} color="var(--ink)" />
         </div>
         <h1
-          className="text-[22px] font-semibold"
-          style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}
+          style={{ fontSize: 22, fontWeight: 600, color: "var(--ink)", margin: 0, letterSpacing: "-0.01em", lineHeight: 1.2 }}
         >
           No projects yet.
         </h1>
         <p
-          className="mt-2 max-w-[48ch] text-[14px] leading-relaxed"
-          style={{ color: "var(--ink-2)", margin: "8px 0 0" }}
+          style={{ color: "var(--ink-2)", margin: "8px 0 0", fontSize: 14, lineHeight: 1.625, maxWidth: "48ch" }}
         >
           Scan a connected drive to index its folders, or create a manual project
           to start building the catalog.
         </p>
-        <div className="mt-6 flex items-center gap-2">
+        <div className="flex items-center" style={{ marginTop: 24, gap: 8 }}>
           <Link to="/drives" className="btn btn-primary">
             <Icon name="scan" size={13} color="currentColor" />
             Scan a drive
@@ -244,7 +237,7 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="space-y-6 pt-2">
+    <div className="flex flex-col" style={{ gap: 24, paddingTop: 8 }}>
       {/* sr-only h1 for WCAG 2.4.6 and test identification. The top-nav
           breadcrumb names this section for sighted users; the h1 exists for
           screen readers and automated tests only. */}
@@ -286,7 +279,7 @@ export function ProjectsPage() {
         <div>
           {statusTabs.length > 1 ? (
             <div
-              className="flex flex-wrap items-center gap-0"
+              className="flex flex-wrap items-center"
               style={{ borderBottom: "1px solid var(--hairline)" }}
             >
               {statusTabs.map((tab) => {
@@ -296,8 +289,14 @@ export function ProjectsPage() {
                     key={tab.id}
                     type="button"
                     onClick={() => selectStatusTab(tab.id)}
-                    className="flex items-center gap-1.5 pb-3 pt-[10px] pr-5 text-[14px] transition-colors"
+                    className="flex items-center"
                     style={{
+                      gap: 6,
+                      paddingBottom: 12,
+                      paddingTop: 10,
+                      paddingRight: 20,
+                      fontSize: 14,
+                      transition: "color 140ms var(--ease)",
                       borderBottom: isActive ? "2px solid var(--ink)" : "2px solid transparent",
                       color: isActive ? "var(--ink)" : "var(--ink-3)",
                       fontWeight: isActive ? 500 : 400,
@@ -307,8 +306,8 @@ export function ProjectsPage() {
                     <span>{tab.label}</span>
                     {tab.count > 0 ? (
                       <span
-                        className="tnum text-[12px]"
-                        style={{ color: isActive ? "var(--ink-3)" : "var(--ink-4)" }}
+                        className="tnum"
+                        style={{ fontSize: 12, color: isActive ? "var(--ink-3)" : "var(--ink-4)" }}
                       >
                         {tab.count}
                       </span>
@@ -319,7 +318,7 @@ export function ProjectsPage() {
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center gap-2 pt-3">
+          <div className="flex flex-wrap items-center" style={{ gap: 8, paddingTop: 12 }}>
             <CompactSelect
               value={folderTypeFilter}
               onChange={(v) => updateQueryParam("folderType", v)}
@@ -358,8 +357,8 @@ export function ProjectsPage() {
               <button
                 type="button"
                 onClick={clearAllFilters}
-                className="text-[13px] transition-colors"
-                style={{ color: "var(--ink-3)" }}
+                className="hover-underline"
+                style={{ fontSize: 13, color: "var(--ink-3)" }}
               >
                 Clear filters
               </button>
@@ -369,42 +368,54 @@ export function ProjectsPage() {
       ) : null}
 
       {/* ── Project list ── */}
-      <div className="card overflow-hidden">
+      <div className="card" style={{ overflow: "hidden" }}>
         {isLoading ? (
           <div aria-busy="true" aria-label="Loading projects">
             {[0, 1, 2, 3, 4, 5].map((i) => <ProjectRowSkeleton key={i} />)}
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div
-            className="flex flex-col items-center gap-1 px-4 py-16 text-center"
-          >
-            <p
-              className="text-[13.5px] font-semibold"
-              style={{ color: "var(--ink)" }}
+          <div className="flex flex-col items-center text-center" style={{ gap: 8, padding: "64px 16px" }}>
+            <span
+              className="inline-flex items-center justify-center"
+              style={{ marginBottom: 4, height: 44, width: 44, borderRadius: 10, background: "var(--surface-inset)" }}
+              aria-hidden="true"
             >
-              No results
+              <Icon
+                name={hasActiveFilters || search.trim() ? "search" : "folder"}
+                size={20}
+                color="var(--ink-3)"
+              />
+            </span>
+            <p className="font-semibold" style={{ fontSize: 13, color: "var(--ink)" }}>
+              {hasActiveFilters || search.trim() ? "No projects match" : "No projects yet"}
             </p>
-            <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-              Try a broader search or{" "}
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                className="font-medium underline-offset-2 hover:underline"
-                style={{ color: "var(--ink-2)" }}
-              >
-                clear filters
-              </button>
-              .
+            <p style={{ fontSize: 12, color: "var(--ink-3)" }}>
+              {hasActiveFilters || search.trim() ? (
+                <>
+                  Try a broader search or{" "}
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="hover-underline font-medium"
+                    style={{ color: "var(--ink-2)", textUnderlineOffset: 2 }}
+                  >
+                    clear filters
+                  </button>
+                  .
+                </>
+              ) : (
+                "Scan a connected drive to import projects, or add one manually."
+              )}
             </p>
           </div>
         ) : (
           <>
             {/* Table controls strip */}
             <div
-              className="flex items-center justify-end gap-4 border-b px-4 py-3"
-              style={{ borderColor: "var(--hairline)" }}
+              className="flex items-center justify-end"
+              style={{ gap: 16, borderBottom: "1px solid var(--hairline)", padding: "12px 16px" }}
             >
-              <p className="tnum text-[11px]" style={{ color: "var(--ink-3)" }}>
+              <p className="tnum" style={{ fontSize: 12, color: "var(--ink-3)" }}>
                 {hasActiveFilters || search.trim() ? (
                   <>
                     <span className="font-semibold" style={{ color: "var(--ink-2)" }}>{filteredProjects.length}</span>
@@ -423,185 +434,21 @@ export function ProjectsPage() {
               </p>
             </div>
 
+            <ProjectTableHeader />
             {/* Things-3 flat list — each row is a click target, checkbox reveals on hover */}
             <div role="list">
-              {filteredProjects.map((project) => (
+              {filteredProjects.map((project, i) => (
                 <ProjectRow
                   key={project.id}
                   project={project}
                   drives={drives}
+                  isSelected={i === selectedIndex}
                 />
               ))}
             </div>
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Project row
-// ---------------------------------------------------------------------------
-
-function ProjectRow({
-  project,
-  drives
-}: {
-  project: Project;
-  drives: Drive[];
-}) {
-  const displayName = getDisplayProject(project);
-  const displayClient = getDisplayClient(project);
-  const displayDate = formatParsedDate(project.correctedDate ?? project.parsedDate);
-  const isPersonalFolder = project.folderType === "personal_folder";
-  const statusBadges = getProjectStatusBadges(project).filter((b: string) => b !== "Normal");
-  const currentDrive = project.currentDriveId ? drives.find((d) => d.id === project.currentDriveId) : null;
-  const driveName = getDriveName(currentDrive);
-  const driveColor = getDriveColor(project.currentDriveId);
-  const targetDrive = project.targetDriveId
-    ? drives.find((d) => d.id === project.targetDriveId)
-    : null;
-  const targetDriveName = targetDrive?.displayName ?? null;
-  const targetDriveColor = targetDrive ? getDriveColor(targetDrive.id) : null;
-
-  const isMissing = project.missingStatus === "missing";
-  const isDuplicate = project.duplicateStatus === "duplicate";
-  const statusAccent = isMissing
-    ? "inset 3px 0 0 var(--danger)"
-    : isDuplicate
-      ? "inset 3px 0 0 var(--warn)"
-      : undefined;
-
-  // Primary line: `Client · Name` for structured entries, folder name for
-  // personal_folder. The primary line keeps the density users want in a
-  // flat list — one horizontal scan answers "what is this?"
-  const primaryLine = isPersonalFolder ? project.folderName : displayClient !== "—" ? displayClient : displayName;
-  const secondaryLine = isPersonalFolder
-    ? project.folderPath || ""
-    : displayClient !== "—"
-      ? displayName
-      : project.folderName !== displayName
-        ? project.folderName
-        : "";
-
-  // Cat/category accent color for the left avatar. Soft category colors so the
-  // primary drive-color dot stays the most saturated on the row.
-  const avatarPalette: Record<string, { bg: string; color: string }> = {
-    photo: { bg: "var(--info-soft)", color: "var(--info)" },
-    video: { bg: "var(--accent-soft)", color: "var(--accent-ink)" },
-    design: { bg: "var(--ok-soft)", color: "var(--ok)" },
-    mixed: { bg: "var(--warn-soft)", color: "var(--warn)" },
-    personal: { bg: "var(--danger-soft)", color: "var(--danger)" }
-  };
-  const avatar =
-    avatarPalette[project.category ?? ""] ?? {
-      bg: "var(--surface-inset)",
-      color: "var(--ink-3)"
-    };
-  const avatarLetter = (primaryLine || "?")[0]?.toUpperCase() ?? "?";
-
-  return (
-    <div
-      role="listitem"
-      className="proj-row group grid items-center gap-3 border-b px-4 py-3"
-      style={{
-        gridTemplateColumns: "minmax(0,1fr) minmax(170px,220px) 88px minmax(140px,180px) 16px",
-        borderColor: "var(--hairline)",
-        boxShadow: statusAccent
-      }}
-    >
-      {/* Project — avatar + title + subtitle */}
-      <Link
-        to={`/projects/${project.id}`}
-        className="flex min-w-0 items-center gap-3"
-        aria-label={`Open ${project.folderName}`}
-      >
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-[11.5px] font-semibold"
-          style={{ background: avatar.bg, color: avatar.color }}
-        >
-          {avatarLetter}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div
-            className="truncate text-[13px] font-medium leading-snug"
-            style={{ color: "var(--ink)" }}
-          >
-            {primaryLine}
-            {!isPersonalFolder && displayClient !== "—" && displayName ? (
-              <span className="ml-1" style={{ color: "var(--ink-3)", fontWeight: 400 }}>
-                · {displayName}
-              </span>
-            ) : null}
-          </div>
-          {secondaryLine || displayDate !== "—" ? (
-            <div className="mt-0.5 flex gap-2 text-[11px]" style={{ color: "var(--ink-3)" }}>
-              {displayDate !== "—" ? (
-                <span className="tnum shrink-0">{displayDate}</span>
-              ) : null}
-              {displayDate !== "—" && secondaryLine ? (
-                <span style={{ color: "var(--ink-4)" }}>·</span>
-              ) : null}
-              {secondaryLine ? (
-                <span className="truncate">{secondaryLine}</span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </Link>
-
-      {/* Drive — drive-dot + name, with optional "→ target" for pending moves */}
-      <div className="min-w-0 text-[12.5px]">
-        {project.currentDriveId ? (
-          <div className="flex items-center gap-2">
-            <span
-              className="drive-dot"
-              style={{ "--drive-color": driveColor, width: 8, height: 8 } as CSSProperties}
-            />
-            <span className="truncate" style={{ color: "var(--ink-2)" }}>
-              {driveName}
-            </span>
-            {targetDriveName && project.moveStatus === "pending" ? (
-              <>
-                <Icon name="arrowRight" size={10} color="var(--ink-4)" />
-                <span
-                  className="drive-dot"
-                  style={{ "--drive-color": targetDriveColor ?? "var(--ink-3)", width: 7, height: 7 } as CSSProperties}
-                />
-                <span className="truncate" style={{ color: "var(--ink-3)" }}>
-                  {targetDriveName}
-                </span>
-              </>
-            ) : null}
-          </div>
-        ) : (
-          <span style={{ color: "var(--warn)" }}>Unassigned</span>
-        )}
-      </div>
-
-      {/* Size — right-aligned tabular numbers */}
-      <div className="tnum text-right text-[12.5px]" style={{ color: "var(--ink-2)" }}>
-        {project.sizeBytes != null ? formatBytes(project.sizeBytes) : "—"}
-      </div>
-
-      {/* Status chips — stack to the right */}
-      <div className="flex flex-wrap justify-end gap-1 overflow-hidden">
-        {statusBadges.map((b: string) => (
-          <StatusBadge key={b} label={b} />
-        ))}
-      </div>
-
-      {/* Chevron */}
-      <Link
-        to={`/projects/${project.id}`}
-        className="link-card flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        style={{ color: "var(--ink-4)" }}
-        aria-label={`Open ${project.folderName}`}
-        tabIndex={-1}
-      >
-        <Icon name="chevron" size={12} />
-      </Link>
     </div>
   );
 }
@@ -633,41 +480,41 @@ function CreateProjectForm({
       description="Manual projects join the catalog immediately and can be assigned to a drive later."
     >
       {validation.errors.length > 0 ? (
-        <div className="mb-4">
+        <div style={{ marginBottom: 16 }}>
           <FeedbackNotice tone="error" title="Creation requirements" messages={validation.errors} />
         </div>
       ) : null}
       {validation.warnings.length > 0 ? (
-        <div className="mb-4">
+        <div style={{ marginBottom: 16 }}>
           <FeedbackNotice tone="info" title="Note" messages={validation.warnings} />
         </div>
       ) : null}
-      <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={onSubmit}>
+      <form className="create-form-grid" onSubmit={onSubmit}>
         <FormField label="Date (YYYY-MM-DD)">
-          <input required maxLength={10} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="2024-03-12" />
+          <input required maxLength={10} value={form.parsedDate} onChange={(e) => onChange({ ...form, parsedDate: e.target.value })} className="field-shell w-full bg-transparent outline-none" placeholder="2024-03-12" />
         </FormField>
         <FormField label="Client">
-          <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="Apple" />
+          <input required value={form.parsedClient} onChange={(e) => onChange({ ...form, parsedClient: e.target.value })} className="field-shell w-full bg-transparent outline-none" placeholder="Apple" />
         </FormField>
         <FormField label="Project">
-          <input required value={form.parsedProject} onChange={(e) => onChange({ ...form, parsedProject: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="ProductShoot" />
+          <input required value={form.parsedProject} onChange={(e) => onChange({ ...form, parsedProject: e.target.value })} className="field-shell w-full bg-transparent outline-none" placeholder="ProductShoot" />
         </FormField>
         <FormField label="Category">
-          <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value as Category | "" })} className="field-shell w-full bg-transparent px-3 py-2 outline-none">
+          <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value as Category | "" })} className="field-shell w-full bg-transparent outline-none">
             <option value="">Choose category</option>
             {categoryValues.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </FormField>
         <FormField label="Size (GB)">
-          <input type="number" min="0" step="0.1" value={form.sizeGigabytes} onChange={(e) => onChange({ ...form, sizeGigabytes: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none" placeholder="120" />
+          <input type="number" min="0" step="0.1" value={form.sizeGigabytes} onChange={(e) => onChange({ ...form, sizeGigabytes: e.target.value })} className="field-shell w-full bg-transparent outline-none" placeholder="120" />
         </FormField>
         <FormField label="Drive">
-          <select value={form.currentDriveId} onChange={(e) => onChange({ ...form, currentDriveId: e.target.value })} className="field-shell w-full bg-transparent px-3 py-2 outline-none">
+          <select value={form.currentDriveId} onChange={(e) => onChange({ ...form, currentDriveId: e.target.value })} className="field-shell w-full bg-transparent outline-none">
             <option value="">Unassigned</option>
             {drives.map((d) => <option key={d.id} value={d.id}>{d.displayName}</option>)}
           </select>
         </FormField>
-        <div className="md:col-span-2 xl:col-span-3 flex items-center justify-end gap-2">
+        <div className="form-actions flex items-center justify-end" style={{ gap: 8 }}>
           <button type="button" className="btn btn-sm" onClick={onCancel}>Discard</button>
           <button type="submit" className="btn btn-sm btn-primary" disabled={isMutating}>{isMutating ? "Saving…" : "Create project"}</button>
         </div>
@@ -682,7 +529,7 @@ function CreateProjectForm({
 
 function FormField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className="flex flex-col" style={{ gap: 6 }}>
       <span className="eyebrow">{label}</span>
       {children}
     </label>
@@ -705,8 +552,10 @@ function CompactSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`field-shell cursor-pointer bg-transparent px-3 py-1.5 text-[12.5px] outline-none${isActive ? " field-shell--active" : ""}`}
+      className={`field-shell cursor-pointer bg-transparent outline-none${isActive ? " field-shell--active" : ""}`}
       style={{
+        fontSize: 12,
+        padding: "6px 12px",
         color: isActive ? "var(--ink)" : "var(--ink-3)"
       }}
       aria-label={placeholder}

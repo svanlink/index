@@ -17,100 +17,156 @@ export interface NavItem {
   scanActive?: boolean;
   /** Optional key shortcut shown on hover (e.g. "⌘1"). */
   shortcut?: string;
+  /** Drive identity color (CSS value e.g. "var(--drive-a)"). Renders a colored dot instead of icon. */
+  accentColor?: string;
+}
+
+export interface NavSection {
+  /** Eyebrow label — rendered UPPERCASE 11px/600 above the group. */
+  eyebrow: string;
+  items: NavItem[];
 }
 
 interface SidebarNavProps {
-  /** Primary nav items — the core surfaces (Inbox, Projects, Drives). */
-  items: NavItem[];
-  /** Secondary items pinned to the bottom — typically Settings. */
+  items?: NavItem[];
+  sections?: NavSection[];
   footerItems?: NavItem[];
-  /** Brand label shown as the wordmark. */
   brandLabel?: string;
 }
 
 /**
- * Minimal sidebar. DESIGN.md §4: 256px, surface background, hairline
- * right edge, wordmark only (no monogram, no sub-label, no boxed brand
- * tile). Active row is ink → action via `.side-item.active`. Search
- * lives in the top bar so the sidebar stays quiet and focused on
- * navigation.
+ * Full-height sidebar. Two-column shell pattern (Things 3 / macOS).
+ * Own 52px header carries the drag region and "Catalog" wordmark —
+ * traffic lights from Tauri macOSPrivateApi land in that region.
+ * Glass material via backdrop-filter; no hard opaque background.
  */
 export function SidebarNav({
-  items,
+  items = [],
+  sections,
   footerItems = [],
-  brandLabel = "Project Catalog"
+  brandLabel = "Catalog"
 }: SidebarNavProps) {
   return (
     <aside
-      data-tauri-drag-region
-      className="sticky top-0 hidden h-screen shrink-0 flex-col overflow-y-auto border-r px-3 pb-4 pt-3 lg:flex"
+      className="sidebar-aside"
       style={{
         width: "var(--sidebar-width, 220px)",
-        background: "transparent",
-        borderColor: "var(--hairline)"
+        background: "var(--glass-sidebar)",
+        backdropFilter: "var(--glass-sidebar-filter)",
+        WebkitBackdropFilter: "var(--glass-sidebar-filter)"
       }}
     >
-      {/* Drag handle spacer aligned to the top-nav height so the window
-          can be dragged from the whole top edge. */}
-      <div data-tauri-drag-region className="h-[52px]" aria-hidden="true" />
-
-      <div
+      {/* App header — Tauri traffic lights overlay top-left; 76px left pad clears them */}
+      <header
         data-tauri-drag-region
-        className="px-3 pb-5 pt-2"
+        style={{
+          height: 52,
+          display: "flex",
+          alignItems: "center",
+          paddingLeft: 76,
+          paddingRight: 16,
+          flexShrink: 0,
+          borderBottom: "1px solid var(--hairline)"
+        }}
       >
         <span
-          data-tauri-drag-region
-          className="block truncate text-[15px] font-semibold"
-          style={{ color: "var(--ink)", letterSpacing: "-0.01em" }}
+          style={{
+            fontSize: 15,
+            fontWeight: 600,
+            color: "var(--ink)",
+            letterSpacing: "-0.01em",
+            userSelect: "none"
+          }}
         >
           {brandLabel}
         </span>
+      </header>
+
+      <div style={{ padding: "8px 8px 12px", flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+        {sections ? (
+          /* Grouped sections — LIBRARY, DRIVES, etc. */
+          sections.map((section) => (
+            <div key={section.eyebrow} style={{ marginBottom: 4 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.065em",
+                  color: "var(--ink-4)",
+                  padding: "8px 8px 3px",
+                  marginTop: 4
+                }}
+              >
+                {section.eyebrow}
+              </div>
+              <nav className="flex flex-col" style={{ gap: 2 }} aria-label={section.eyebrow}>
+                {section.items.map((item) => (
+                  <SideItem key={item.label} item={item} />
+                ))}
+              </nav>
+            </div>
+          ))
+        ) : (
+          /* Flat list fallback */
+          <nav className="flex flex-col" style={{ gap: 2 }} aria-label="Primary">
+            {items.map((item) => (
+              <SideItem key={item.label} item={item} />
+            ))}
+          </nav>
+        )}
+
+        <div className="flex-1" />
+
+        {footerItems.length > 0 ? (
+          <nav
+            className="flex flex-col"
+            style={{ gap: 2, borderTop: "1px solid var(--hairline)", paddingTop: 8 }}
+            aria-label="Secondary"
+          >
+            {footerItems.map((item) => (
+              <SideItem key={item.label} item={item} />
+            ))}
+          </nav>
+        ) : null}
       </div>
-
-      <nav className="flex flex-col gap-[2px]" aria-label="Primary">
-        {items.map((item) => (
-          <SideItem key={item.label} item={item} />
-        ))}
-      </nav>
-
-      <div className="flex-1" />
-
-      {footerItems.length > 0 ? (
-        <nav
-          className="flex flex-col gap-[2px] border-t pt-3"
-          style={{ borderColor: "var(--hairline)" }}
-          aria-label="Secondary"
-        >
-          {footerItems.map((item) => (
-            <SideItem key={item.label} item={item} />
-          ))}
-        </nav>
-      ) : null}
     </aside>
   );
 }
 
 function SideItem({ item }: { item: NavItem }) {
-  const iconNode = (active: boolean) =>
-    item.scanActive ? (
-      <span className="relative flex h-[17px] w-[17px] shrink-0 items-center justify-center">
+  const iconNode = (active: boolean) => {
+    if (item.scanActive) {
+      return (
+        <span className="relative flex shrink-0 items-center justify-center" style={{ height: 17, width: 17 }}>
+          <span
+            className="pulse-ring absolute inline-flex rounded-full"
+            style={{ height: 8, width: 8, background: "var(--action)", opacity: 0.6 }}
+          />
+          <span
+            className="relative inline-flex rounded-full"
+            style={{ height: 8, width: 8, background: "var(--action)" }}
+          />
+        </span>
+      );
+    }
+    if (item.accentColor) {
+      return (
         <span
-          className="absolute inline-flex h-2 w-2 animate-ping rounded-full opacity-60"
-          style={{ background: "var(--action)" }}
+          className="shrink-0 inline-flex rounded-full"
+          style={{ width: 8, height: 8, background: item.accentColor, marginLeft: 4 }}
         />
-        <span
-          className="relative inline-flex h-2 w-2 rounded-full"
-          style={{ background: "var(--action)" }}
-        />
-      </span>
-    ) : (
+      );
+    }
+    return (
       <Icon
         name={item.icon}
-        size={17}
+        size={16}
         color={active ? "var(--action)" : "var(--ink-3)"}
         className="side-icon"
       />
     );
+  };
 
   const inner = (active: boolean) => (
     <>

@@ -1,18 +1,19 @@
 #!/bin/bash
 # sandcastle.sh — Parallel AFK agent runner using git worktrees
 #
-# For issues with no blocking relationships (blocked_by: []), runs multiple
+# Finds open issues whose blockers are all done (or empty), runs multiple
 # Ralph agents simultaneously in isolated git worktrees, then merges.
 #
 # Usage:
-#   ./sandcastle.sh             # Auto-detect parallelizable issues, run them
+#   ./sandcastle.sh             # Auto-detect runnable issues, run them
 #   ./sandcastle.sh --dry-run   # Show what would run without executing
 
 set -e
 cd "$(dirname "$0")" || exit 1
 
 ISSUES_DIR=".planning/issues"
-WORKTREES_DIR=".planning/worktrees"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WORKTREES_DIR="$SCRIPT_DIR/.planning/worktrees"
 DRY_RUN=false
 BASE_BRANCH=$(git branch --show-current)
 
@@ -29,13 +30,40 @@ echo "Base branch: $BASE_BRANCH"
 echo "Dry run: $DRY_RUN"
 echo ""
 
-# Find all open issues with no blockers (blocked_by: [])
+# Strip YAML frontmatter from ralph.md so the prompt doesn't start with ---
+RALPH_COMMAND=$(awk 'BEGIN{in_fm=0; done=0} done{print; next} /^---$/{if(in_fm){done=1}else{in_fm=1}; next} !in_fm{print}' .claude/commands/ralph.md)
+
+# Helper: check if an issue ID is marked done
+is_done() {
+  local id="$1"
+  local file
+  file=$(find "$ISSUES_DIR" -name "${id}-*.md" -not -name "TEMPLATE.md" 2>/dev/null | head -1)
+  [ -z "$file" ] && file=$(find "$ISSUES_DIR" -name "0${id}-*.md" 2>/dev/null | head -1)
+  if [ -z "$file" ]; then return 1; fi
+  grep -q "status: done" "$file" 2>/dev/null
+}
+
+# Helper: check if all blockers for a file are done
+blockers_resolved() {
+  local file="$1"
+  local blocked_by
+  blocked_by=$(grep "^blocked_by:" "$file" | sed 's/blocked_by: //' | tr -d '[]' | tr ',' ' ')
+  # Empty or only whitespace → no blockers → resolved
+  if [ -z "$(echo "$blocked_by" | tr -d ' ')" ]; then return 0; fi
+  for id in $blocked_by; do
+    id=$(echo "$id" | tr -d ' ')
+    [ -z "$id" ] && continue
+    if ! is_done "$id"; then return 1; fi
+  done
+  return 0
+}
+
+# Find all open issues with all blockers resolved
 PARALLEL_ISSUES=()
 if [ -d "$ISSUES_DIR" ]; then
   while IFS= read -r -d '' file; do
     if grep -q "status: open" "$file" 2>/dev/null; then
-      # Check if blocked_by is empty: blocked_by: []
-      if grep -q "blocked_by: \[\]" "$file" 2>/dev/null; then
+      if blockers_resolved "$file"; then
         ISSUE_ID=$(grep "^id:" "$file" | awk '{print $2}' | tr -d '"')
         PARALLEL_ISSUES+=("$ISSUE_ID:$file")
       fi
@@ -44,12 +72,12 @@ if [ -d "$ISSUES_DIR" ]; then
 fi
 
 if [ ${#PARALLEL_ISSUES[@]} -eq 0 ]; then
-  echo "No parallelizable issues found (all have blockers)."
+  echo "No runnable issues found (all have unresolved blockers or none open)."
   echo "Run ./ralph.sh to work through sequential issues first."
   exit 0
 fi
 
-echo "Parallelizable issues: ${#PARALLEL_ISSUES[@]}"
+echo "Runnable issues: ${#PARALLEL_ISSUES[@]}"
 for entry in "${PARALLEL_ISSUES[@]}"; do
   ISSUE_ID="${entry%%:*}"
   FILE="${entry##*:}"
@@ -75,6 +103,8 @@ for entry in "${PARALLEL_ISSUES[@]}"; do
   FILE="${entry##*:}"
   BRANCH="impl/issue-${ISSUE_ID}"
   WORKTREE_PATH="$WORKTREES_DIR/issue-${ISSUE_ID}"
+  ISSUE_CONTENT=$(cat "$FILE")
+  RECENT_COMMITS=$(git log --oneline -5 2>/dev/null || echo "")
 
   echo "--- Starting agent for issue $ISSUE_ID on branch $BRANCH ---"
 
@@ -83,21 +113,20 @@ for entry in "${PARALLEL_ISSUES[@]}"; do
     echo "  Worktree exists, removing..."
     git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || true
   fi
-  git worktree add "$WORKTREE_PATH" -b "$BRANCH" 2>/dev/null || \
-    git worktree add "$WORKTREE_PATH" "$BRANCH" 2>/dev/null
+  # Delete branch if it already exists
+  git branch -D "$BRANCH" 2>/dev/null || true
+  git worktree add "$WORKTREE_PATH" -b "$BRANCH"
 
   BRANCHES+=("$BRANCH:$WORKTREE_PATH")
 
-  # Build ralph prompt for this specific issue
-  RALPH_COMMAND=$(cat .claude/commands/ralph.md)
-  ISSUE_CONTENT=$(cat "$FILE")
-  RECENT_COMMITS=$(git log --oneline -5 2>/dev/null || echo "")
+  # Build ralph prompt — starts with # header (not ---) so CLI doesn't choke
+  PROMPT="# Ralph — AFK Implementer (issue $ISSUE_ID)
 
-  PROMPT="$RALPH_COMMAND
+$RALPH_COMMAND
 
 ## Target issue: $ISSUE_ID (work on this one only)
 
---- $(basename "$FILE") ---
+=== $(basename "$FILE") ===
 $ISSUE_CONTENT
 
 ## Recent commits (context)
@@ -136,7 +165,6 @@ for entry in "${BRANCHES[@]}"; do
   echo "Merging $BRANCH..."
   if git merge "$BRANCH" --no-ff -m "feat: merge issue $ISSUE_ID (parallel implementation)"; then
     echo "  Merged OK"
-    # Clean up worktree
     git worktree remove "$WORKTREE_PATH" --force 2>/dev/null || true
     git branch -d "$BRANCH" 2>/dev/null || true
   else
@@ -158,4 +186,4 @@ else
 fi
 
 echo ""
-echo "Next: run /review-impl to review all merged commits"
+echo "Next: run ./ralph.sh for sequential issues, then ./review.sh"

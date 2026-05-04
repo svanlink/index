@@ -2,7 +2,7 @@
 id: 04
 title: Recent projects in default palette state (openedAt tracking)
 type: AFK
-status: open
+status: done
 blocked_by: [01]
 blocks: []
 estimate: M

@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalog — Design Story 2026</title>
+<style>
+
+/*
+  Design contract:
+  • Feels like Finder / Things 3 / Raycast — NOT a web dashboard
+  • Glass layer: sidebar + toolbar only. Content layer = plain --canvas / --surface.
+  • Concentric geometry: inner_radius = parent_radius − padding
+  • Title Case column headers (HIG). Eyebrow UPPERCASE 11px only for sidebar/inspector sections.
+  • chip-ok / chip-warn: transparent bg per Catalog convention
+  • One btn-primary per screen. Cancel left, primary right.
+  • Hard scroll edge on sticky table header (macOS convention).
+  • 28px sidebar item height, 44px table rows.
+*/
+
+/* ─── Light tokens ───────────────────────────────────────────────────── */
+:root {
+  --canvas:      #f2f2f7;   /* window background — never pure white */
+  --surface:     #ffffff;
+  --surface-low: #f3f3f3;   /* hover rows, table header, action bar */
+  --surface-mid: #eeeeee;   /* capacity bar bg, dividers */
+  --ink:         #1d1d1f;
+  --ink-2:       #424245;
+  --ink-3:       #6e6e73;
+  --ink-4:       #86868b;
+  --hairline:    rgba(0,0,0,.09);
+  --hairline-s:  rgba(0,0,0,.13);
+  --action:      #007AFF;
+  --action-hov:  #0062cc;
+  --accent-soft: #e8f3ff;
+  --ok:          #1d7a4a;
+  --ok-soft:     #e6f4ec;
+  --warn:        #8a5a00;
+  --warn-soft:   #fbf3e3;
+  --danger:      #ba1a1a;
+  --danger-soft: #ffdad6;
+  /* Glass — navigation layer only */
+  --glass-bg:     rgba(246,246,246,.9);
+  --glass-filter: blur(20px) saturate(1.6);
+  --glass-tb-bg:  rgba(255,255,255,.88);
+  --glass-tb-f:   blur(16px) saturate(1.5);
+  --glass-pal-bg: rgba(252,252,254,.94);
+  --glass-pal-f:  blur(48px) saturate(1.9);
+  /* Hard scroll edge (table headers, sticky toolbar borders) */
+  --scroll-edge-f: blur(12px) saturate(1.4);
+  /* Drive identity */
+  --drv-a: #5b6b80; --drv-b: #6b7380; --drv-c: #5f7a72;
+  --drv-d: #7a6b68; --drv-e: #6a6880; --drv-f: #4f7282;
+  /* Shadows */
+  --sh-pop: 0 24px 52px rgba(0,0,0,.12), 0 6px 16px rgba(0,0,0,.08);
+  /* Radius (concentric: window=12, sheet=12, card=12, button=8, input=4) */
+  --r:    4px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+  /* Motion */
+  --dur:  150ms;
+  --ease: cubic-bezier(.4,0,.2,1);
+  /* Density */
+  --row-h: 44px;
+}
+
+/* ─── Dark tokens ────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --canvas:      #1c1c1e;
+  --surface:     #2a2a2c;
+  --surface-low: #272729;
+  --surface-mid: #333336;
+  --ink:         #f5f5f7;
+  --ink-2:       #d2d2d7;
+  --ink-3:       #a1a1a6;
+  --ink-4:       #6e6e73;
+  --hairline:    rgba(255,255,255,.09);
+  --hairline-s:  rgba(255,255,255,.13);
+  --action:      #0A84FF;   /* dark-mode blue is slightly brighter */
+  --action-hov:  #3395ff;
+  --accent-soft: rgba(10,132,255,.14);
+  --ok:          #32D74B;   --ok-soft:     rgba(50,215,75,.14);
+  --warn:        #FF9F0A;   --warn-soft:   rgba(255,159,10,.14);
+  --danger:      #FF453A;   --danger-soft: rgba(255,69,58,.14);
+  --glass-bg:     rgba(30,30,32,.82);
+  --glass-filter: blur(20px) saturate(1.5) brightness(.97);
+  --glass-tb-bg:  rgba(42,42,44,.88);
+  --glass-tb-f:   blur(16px) saturate(1.4);
+  --glass-pal-bg: rgba(36,36,38,.96);
+  --glass-pal-f:  blur(40px) saturate(1.8);
+  --drv-a: #8ea0b5; --drv-b: #a4aab5; --drv-c: #8aa69d;
+  --drv-d: #b09a93; --drv-e: #9992ad; --drv-f: #7a9cae;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%; overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  font-size: 13px; line-height: 1.4;
+  background: #060609; color: var(--ink);
+}
+
+/* ─── Slide shell ─────────────────────────────────────────────────────── */
+.slide {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 300ms var(--ease);
+}
+.slide.active { opacity: 1; pointer-events: all; }
+
+/* ─── Wallpaper ───────────────────────────────────────────────────────── */
+.wp {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  padding: 40px 40px 68px;
+  background:
+    radial-gradient(ellipse 55% 65% at 18% 28%, rgba(50,30,100,.5) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 55% at 82% 72%, rgba(0,45,120,.38) 0%, transparent 65%),
+    #07070c;
+}
+[data-theme="light"] .wp {
+  background: linear-gradient(145deg, #dcdaf0 0%, #d8e8f4 38%, #d8ecdf 70%, #dfe6f2 100%);
+}
+
+/* ─── macOS Window ────────────────────────────────────────────────────── */
+.window {
+  /* Critical: two-column layout — no cross-column titlebar */
+  display: flex; flex-direction: row;
+  width:  min(1140px, calc(100vw - 80px));
+  height: min(700px,  calc(100vh - 108px));
+  border-radius: 12px; overflow: hidden;
+  background: var(--canvas); position: relative; flex-shrink: 0;
+}
+[data-theme="dark"] .window {
+  box-shadow:
+    0 0 0 .5px rgba(255,255,255,.07),
+    0 2px 6px rgba(0,0,0,.45),
+    0 16px 48px rgba(0,0,0,.8),
+    0 44px 88px rgba(0,0,0,.52);
+}
+[data-theme="light"] .window {
+  box-shadow:
+    0 0 0 .5px rgba(0,0,0,.2),
+    0 2px 6px rgba(0,0,0,.08),
+    0 16px 48px rgba(0,0,0,.18),
+    0 44px 88px rgba(0,0,0,.12);
+}
+
+/* ─── Sidebar — glass layer ───────────────────────────────────────────── */
+.sidebar {
+  width: 220px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border-right: 1px solid var(--hairline);
+  overflow: hidden;
+}
+
+/* Traffic lights + app name — lives in sidebar, no cross-column bar */
+.sb-chrome {
+  height: 52px; flex-shrink: 0;
+  display: flex; align-items: center;
+  padding: 0 14px 0 16px; gap: 10px;
+  border-bottom: 1px solid var(--hairline);
+  /* Full drag region for Tauri: -webkit-app-region: drag */
+}
+.tls { display: flex; gap: 8px; flex-shrink: 0; }
+.tl { width: 12px; height: 12px; border-radius: 50%; }
+.tl-c { background: #EC6A5E; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.2); }
+.tl-m { background: #F5BE4F; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.15); }
+.tl-x { background: #60C354; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.15); }
+.sb-name {
+  font-size: 15px; font-weight: 600; letter-spacing: -.018em;
+  color: var(--ink); margin-left: 6px;
+}
+
+.sb-body { flex: 1; overflow-y: auto; padding: 8px 0 12px; }
+
+/* Eyebrow — UPPERCASE 11px/600 for SECTION labels only (sidebar, inspector) */
+.sb-sec {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .065em; color: var(--ink-4);
+  padding: 8px 16px 3px; margin-top: 4px;
+}
+.sb-sec:first-child { margin-top: 0; }
+
+/* Source-list navigation item: 28px height per HIG */
+.sb-item {
+  height: 28px; display: flex; align-items: center; gap: 7px;
+  padding: 0 8px; margin: 1px 8px; border-radius: var(--r-lg);
+  font-size: 13px; color: var(--ink-2); cursor: default;
+  transition: background var(--dur) var(--ease);
+}
+.sb-item:hover { background: rgba(128,128,128,.08); }
+/* Active: action text + very light tint — never full blue fill */
+.sb-item.act { color: var(--action); background: rgba(0,122,255,.08); font-weight: 500; }
+[data-theme="dark"] .sb-item.act { background: rgba(10,132,255,.14); }
+.sb-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sb-cnt  { margin-left: auto; font-size: 11px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.sb-item.act .sb-cnt { color: var(--action); }
+.sb-div  { height: 1px; background: var(--hairline); margin: 5px 16px; }
+
+/* ─── Main content area — plain surface, no glass ─────────────────────── */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Content toolbar — glass layer, sits at top of main (NOT spanning sidebar) */
+.toolbar {
+  height: 40px; flex-shrink: 0;
+  display: flex; align-items: center; padding: 0 14px; gap: 8px;
+  background: var(--glass-tb-bg);
+  backdrop-filter: var(--glass-tb-f);
+  -webkit-backdrop-filter: var(--glass-tb-f);
+  border-bottom: 1px solid var(--hairline);
+}
+.sp { flex: 1; }
+.tb-sep { width: 1px; height: 14px; background: var(--hairline); flex-shrink: 0; }
+
+/* ─── Buttons (28px height per HIG, 8px radius = concentric inside 12px window) ── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  height: 28px; padding: 0 12px; border-radius: var(--r-lg); border: none;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  cursor: default; white-space: nowrap; flex-shrink: 0; letter-spacing: -.01em;
+  transition: background var(--dur) var(--ease);
+}
+/* One primary per screen */
+.btn-primary   { background: var(--action); color: #fff; }
+.btn-primary:hover { background: var(--action-hov); }
+/* Secondary: white surface + border */
+.btn-secondary { background: var(--surface); color: var(--ink); border: 1px solid rgba(128,128,128,.28); }
+.btn-secondary:hover { background: var(--surface-low); }
+.btn-ghost { background: transparent; color: var(--action); border: none; }
+.btn-ghost:hover { background: var(--accent-soft); }
+.btn-danger { background: var(--danger); color: #fff; }
+/* Large = capsule for prominent CTAs (macOS Large/XL convention) */
+.btn-lg  { height: 34px; border-radius: 999px; padding: 0 20px; font-size: 14px; }
+.btn-sm  { height: 24px; font-size: 12px; padding: 0 9px; border-radius: 7px; }
+.btn-icon { width: 28px; padding: 0; background: transparent; border: none; color: var(--ink-3); font-size: 15px; cursor: default; }
+[data-theme="dark"] .btn-secondary { background: rgba(255,255,255,.08); color: var(--ink-2); border-color: rgba(255,255,255,.14); }
+[data-theme="dark"] .btn-secondary:hover { background: rgba(255,255,255,.14); }
+
+/* ─── Status chips ────────────────────────────────────────────────────── */
+/* Catalog convention: ok/warn = transparent bg, text color only */
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 20px; padding: 0 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 500; flex-shrink: 0; white-space: nowrap;
+}
+/* ok/warn: transparent bg per Catalog convention */
+.chip-ok     { color: var(--ok);     background: transparent; }
+.chip-warn   { color: var(--warn);   background: transparent; }
+.chip-danger { color: var(--danger); background: var(--danger-soft); }
+.chip-ghost  { color: var(--ink-3);  background: var(--surface-mid); border: 1px solid var(--hairline); }
+.chip-blue   { color: var(--action); background: var(--accent-soft); }
+.chip-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+/* ─── Search field ────────────────────────────────────────────────────── */
+.search {
+  display: flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 9px; border-radius: var(--r-lg);
+  background: rgba(128,128,128,.1); border: 1px solid var(--hairline);
+  font-size: 13px; color: var(--ink-3);
+}
+.search-q { color: var(--ink-2); font-weight: 500; }
+
+/* ─── Table ───────────────────────────────────────────────────────────── */
+.tw { flex: 1; overflow-y: auto; overflow-x: hidden; }
+
+/* Sticky header with Hard scroll edge (macOS convention) */
+.th-row {
+  height: 32px; display: grid; align-items: center;
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface-low);
+  backdrop-filter: var(--scroll-edge-f);
+  -webkit-backdrop-filter: var(--scroll-edge-f);
+  border-bottom: 1px solid var(--hairline);
+  padding: 0 16px;
+}
+/* Column headers: Title Case (HIG). NOT uppercase — that's a web/Material anti-pattern. */
+.th {
+  font-size: 11px; font-weight: 500; color: var(--ink-4);
+  /* No text-transform: uppercase — macOS Finder uses Title Case */
+  letter-spacing: 0;
+}
+.th.sort { color: var(--ink-2); font-weight: 600; }
+
+/* Data rows: 44px height, hairline bottom separator */
+.trow {
+  display: grid; align-items: center; height: var(--row-h);
+  padding: 0 16px; border-bottom: 1px solid rgba(128,128,128,.07);
+  position: relative; cursor: default;
+  transition: background var(--dur) var(--ease);
+}
+/* Subtle alternating rows */
+.trow:nth-child(even) { background: rgba(128,128,128,.025); }
+/* Hover: fill only — no border change, no shadow, no translate */
+.trow:hover:not(.sel) { background: var(--surface-low); }
+/* Selected: accent-soft fill + 2px action left bar */
+.trow.sel { background: var(--accent-soft); }
+.trow.sel::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 2px; background: var(--action);
+}
+
+.tc { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-drv { display: flex; align-items: center; gap: 6px; }
+/* File size: right-aligned, monospace — the only truly quantitative column */
+.tc-sz { text-align: right; font-family: ui-monospace,"SF Mono",monospace; color: var(--ink-3); }
+
+/* Avatar (category color) */
+.av {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600;
+}
+
+/* ─── Drive cards ─────────────────────────────────────────────────────── */
+.cards { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; padding: 16px; align-content: start; overflow-y: auto; }
+.card {
+  background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: var(--r-xl); overflow: hidden; display: flex; flex-direction: column;
+  position: relative;
+  transition: box-shadow var(--dur) var(--ease);
+}
+/* 3px left accent border = drive identity (Surface A spec) */
+.card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--drv-color, var(--ink-4));
+}
+.card.offline { opacity: .5; }
+.card-inner { padding: 13px 14px 13px 18px; display: flex; flex-direction: column; gap: 9px; }
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.card-name { font-size: 13.5px; font-weight: 600; letter-spacing: -.015em; color: var(--ink); line-height: 1.2; }
+.card-sub  { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+.cap-bar { height: 5px; border-radius: 999px; background: var(--surface-mid); overflow: hidden; }
+.cap-fill { height: 100%; border-radius: 999px; background: var(--drv-color, var(--ink-4)); }
+.cap-leg { display: flex; gap: 10px; font-size: 11px; color: var(--ink-4); }
+.cl { display: flex; align-items: center; gap: 4px; }
+.cl-dot { width: 6px; height: 6px; border-radius: 50%; }
+.card-stats { display: flex; gap: 14px; font-size: 12px; color: var(--ink-3); }
+.sv { color: var(--ink-2); font-weight: 530; }
+
+/* ─── Breathe rings (SF Symbols 7 "Breathe" equivalent) ──────────────── */
+.pulse-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; flex-shrink: 0; }
+.pr { position: absolute; width: 13px; height: 13px; border-radius: 50%; background: var(--action); opacity: .28; animation: breathe 2.4s ease-in-out infinite; }
+.pr2 { animation-delay: .8s; }
+.pulse-dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--action); z-index: 1; }
+@keyframes breathe { 0%,100%{ transform: scale(1); opacity: .28; } 50%{ transform: scale(1.9); opacity: 0; } }
+
+/* ─── Drive detail header (two-column, Surface B) ─────────────────────── */
+.drv-hdr {
+  display: grid; grid-template-columns: 1fr 296px; gap: 18px;
+  padding: 16px 18px 14px; border-bottom: 1px solid var(--hairline); flex-shrink: 0;
+  background: var(--surface);
+}
+.drv-id { display: flex; flex-direction: column; gap: 6px; }
+.drv-id-top { display: flex; align-items: center; gap: 10px; }
+.drv-icon {
+  width: 36px; height: 36px; border-radius: 9px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-low); font-size: 16px;
+  border-left: 3px solid var(--drv-color, var(--ink-4));
+}
+.drv-h1   { font-size: 20px; font-weight: 700; letter-spacing: -.025em; color: var(--ink); }
+.drv-meta { font-size: 12px; color: var(--ink-3); display: flex; gap: 8px; font-family: ui-monospace,"SF Mono",monospace; margin-top: 2px; }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.stat dt { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-4); }
+.stat dd { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.action-bar {
+  height: 36px; flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 14px; gap: 6px; background: var(--surface-low);
+  border-bottom: 1px solid var(--hairline);
+}
+.conn-banner {
+  height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  padding: 0 14px; border-bottom: 1px solid rgba(0,122,255,.15);
+  background: rgba(0,122,255,.05);
+  font-size: 12px; color: var(--ink-3);
+}
+[data-theme="dark"] .conn-banner {
+  background: rgba(10,132,255,.08);
+  border-color: rgba(10,132,255,.18);
+}
+.conn-path { font-family: ui-monospace,"SF Mono",monospace; font-size: 11px; color: var(--ink-2); }
+
+/* ─── Project detail (Surface C) ──────────────────────────────────────── */
+.pd-wrap { flex: 1; display: grid; grid-template-columns: 1fr 272px; overflow: hidden; }
+.pd-form { padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; border-right: 1px solid var(--hairline); }
+.pd-panel { overflow-y: auto; background: var(--surface-low); display: flex; flex-direction: column; }
+.pd-sec { padding: 12px 14px; border-bottom: 1px solid var(--hairline); }
+.pd-eye { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .065em; color: var(--ink-4); margin-bottom: 8px; }
+.pd-row { display: flex; align-items: center; justify-content: space-between; height: 26px; font-size: 12px; }
+.pd-lbl { color: var(--ink-3); }
+.pd-val { color: var(--ink-2); font-weight: 500; }
+.pd-mono { font-family: ui-monospace,"SF Mono",monospace; font-size: 11px; color: var(--ink-3); line-height: 1.45; margin-top: 5px; word-break: break-all; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field label { display: block; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .065em; color: var(--ink-4); margin-bottom: 4px; }
+.field input {
+  width: 100%; height: 30px; padding: 0 9px; border-radius: var(--r);
+  background: var(--surface); border: 1px solid var(--hairline-s);
+  font-family: inherit; font-size: 13px; color: var(--ink); outline: none;
+}
+.field input.focused { border-color: var(--action); box-shadow: 0 0 0 2px rgba(0,122,255,.16); }
+.unsaved { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px; border-radius: 999px; font-size: 11px; color: var(--warn); background: var(--warn-soft); font-weight: 500; }
+
+/* ─── Scan timeline ────────────────────────────────────────────────────── */
+.tl { display: flex; flex-direction: column; }
+.tl-item { display: flex; gap: 10px; padding: 7px 20px 7px 20px; }
+.tl-ts { width: 100px; flex-shrink: 0; text-align: right; font-family: ui-monospace,"SF Mono",monospace; font-size: 10.5px; color: var(--ink-4); padding-top: 2px; }
+.tl-spine { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+.tl-node { width: 7px; height: 7px; border-radius: 50%; background: var(--action); margin-top: 3px; }
+.tl-node.dim { background: var(--ink-4); }
+.tl-line { width: 1px; flex: 1; background: var(--hairline); min-height: 10px; }
+.tl-desc { font-size: 12.5px; color: var(--ink-2); line-height: 1.4; }
+
+/* ─── Sheet overlay ────────────────────────────────────────────────────── */
+.overlay {
+  position: absolute; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.35); backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px); border-radius: 12px;
+}
+@keyframes spring { from { transform: scale(.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.sheet {
+  background: var(--surface); border-radius: var(--r-xl);
+  box-shadow: var(--sh-pop);
+  width: 520px; max-height: 82%;
+  display: flex; flex-direction: column;
+  animation: spring 200ms cubic-bezier(.34,1.56,.64,1);
+}
+.sheet-hdr {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 18px 20px 12px; border-bottom: 1px solid var(--hairline); flex-shrink: 0;
+}
+.sheet-title { font-size: 17px; font-weight: 600; color: var(--ink); }
+.sheet-path  { font-size: 11px; color: var(--ink-4); font-family: ui-monospace,monospace; margin-top: 3px; }
+.sheet-esc   { font-size: 12px; color: var(--action); margin-top: 4px; cursor: default; }
+.sheet-body  { padding: 14px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+/* Footer: Cancel LEFT, primary RIGHT (HIG convention) */
+.sheet-ftr   {
+  display: flex; align-items: center; padding: 12px 20px; gap: 8px;
+  border-top: 1px solid var(--hairline); flex-shrink: 0;
+  background: rgba(128,128,128,.03);
+}
+.sum { display: flex; gap: 22px; }
+.sum-item dt { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-4); }
+.sum-item dd { font-size: 22px; font-weight: 700; color: var(--ink); }
+.sum-item dd.dim { color: var(--ink-3); }
+.fl { border: 1px solid var(--hairline); border-radius: var(--r-lg); overflow: hidden; }
+.fl-hd {
+  padding: 4px 12px; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .065em; color: var(--ink-4);
+  background: rgba(128,128,128,.05); border-bottom: 1px solid var(--hairline);
+}
+.fl-row {
+  display: flex; align-items: center; gap: 10px; height: 36px;
+  padding: 0 12px; border-bottom: 1px solid rgba(128,128,128,.07);
+  font-size: 13px;
+}
+.fl-row:last-child { border: none; }
+.fl-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.fl-size { font-size: 11px; color: var(--ink-4); flex-shrink: 0; font-family: ui-monospace,"SF Mono",monospace; }
+
+/* ─── NSAlert (macOS native anatomy) ─────────────────────────────────── */
+/*
+  Native NSAlert: icon top-left, title + message to the right.
+  Title: 13px/600. Message: 12px. Width: 300px.
+  Buttons: Cancel LEFT, destructive/primary RIGHT.
+  Background: dark graphite (Catalog convention for destructive confirms).
+*/
+.alert {
+  background: #1d1d1f; border-radius: var(--r-xl);
+  border: 1px solid rgba(255,255,255,.1);
+  box-shadow: 0 24px 56px rgba(0,0,0,.7), 0 4px 12px rgba(0,0,0,.4);
+  width: 310px; padding: 20px;
+  animation: spring 200ms cubic-bezier(.34,1.56,.64,1);
+}
+.alert-body-row { display: flex; gap: 12px; margin-bottom: 20px; }
+.alert-icon { font-size: 28px; flex-shrink: 0; align-self: flex-start; line-height: 1; }
+.alert-text { flex: 1; min-width: 0; }
+/* Title: 13px per HIG NSAlert convention, NOT 28px hero-style */
+.alert-title { font-size: 13px; font-weight: 600; color: #f5f5f7; margin-bottom: 5px; }
+.alert-msg  { font-size: 12px; color: rgba(245,245,247,.65); line-height: 1.5; }
+.alert-cons { font-size: 11.5px; color: rgba(245,245,247,.4); line-height: 1.45; margin-top: 5px; }
+/* Buttons: Cancel left, destructive right */
+.alert-btns { display: flex; justify-content: space-between; gap: 8px; }
+.alert-cancel  { background: rgba(255,255,255,.1); color: rgba(245,245,247,.8); height: 28px; padding: 0 14px; border-radius: var(--r-lg); border: none; font-family: inherit; font-size: 13px; font-weight: 500; cursor: default; }
+.alert-confirm { background: #FF453A; color: #fff; height: 28px; padding: 0 14px; border-radius: var(--r-lg); border: none; font-family: inherit; font-size: 13px; font-weight: 500; cursor: default; }
+
+/* ─── Command palette (deep glass, Spotlight feel) ────────────────────── */
+.pal-over {
+  position: absolute; inset: 0; z-index: 80;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 14%; background: rgba(0,0,0,.4);
+  backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+  border-radius: 12px;
+}
+.palette {
+  width: 554px; border-radius: 14px; overflow: hidden;
+  background: var(--glass-pal-bg);
+  backdrop-filter: var(--glass-pal-f);
+  -webkit-backdrop-filter: var(--glass-pal-f);
+  border: 1px solid var(--hairline-s);
+  box-shadow: 0 24px 64px rgba(0,0,0,.36), 0 6px 20px rgba(0,0,0,.2);
+  animation: spring 200ms cubic-bezier(.34,1.56,.64,1);
+}
+[data-theme="dark"] .palette { box-shadow: 0 24px 64px rgba(0,0,0,.72), 0 6px 20px rgba(0,0,0,.48); }
+.pal-in {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px; height: 52px; border-bottom: 1px solid var(--hairline);
+  font-size: 15px; color: var(--ink);
+}
+.pal-cursor::after { content: '|'; color: var(--action); animation: blink 1s step-end infinite; }
+@keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0; } }
+.pal-sec-hd { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-4); padding: 6px 14px 2px; }
+.pal-row {
+  display: flex; align-items: center; gap: 10px; height: 36px;
+  padding: 0 12px; margin: 1px 5px; border-radius: var(--r-lg); cursor: default;
+}
+.pal-row.hi { background: var(--action); }
+.pal-row.hi .pal-pri, .pal-row.hi .pal-sec { color: rgba(255,255,255,.95) !important; }
+.pal-ico { width: 18px; text-align: center; flex-shrink: 0; font-size: 13px; }
+.pal-pri { font-size: 13px; color: var(--ink); font-weight: 500; }
+.pal-sec { font-size: 12px; color: var(--ink-3); margin-left: auto; flex-shrink: 0; }
+.pal-ftr {
+  display: flex; align-items: center; gap: 14px; padding: 7px 14px;
+  border-top: 1px solid var(--hairline); font-size: 11px; color: var(--ink-4);
+}
+kbd { background: var(--surface-mid); border-radius: 3px; padding: 1px 5px; font-family: inherit; font-size: 10px; color: var(--ink-3); }
+
+/* ─── Cover ────────────────────────────────────────────────────────────── */
+.cover { display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
+.cover-eye  { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.28); }
+.cover-logo { font-size: 80px; font-weight: 700; letter-spacing: -.04em; line-height: .9; color: rgba(255,255,255,.9); }
+.cover-tag  { font-size: 22px; font-weight: 300; color: rgba(255,255,255,.38); letter-spacing: -.02em; max-width: 460px; line-height: 1.3; }
+.cover-pill {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 8px;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px; padding: 6px 16px; font-size: 12px; color: rgba(255,255,255,.4);
+}
+
+/* ─── Nav pill ─────────────────────────────────────────────────────────── */
+.nav {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 1px;
+  background: rgba(8,8,14,.84);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid rgba(255,255,255,.1); border-radius: 999px; padding: 5px 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55); z-index: 9999;
+}
+.nav button {
+  background: transparent; border: none; color: rgba(255,255,255,.44);
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  padding: 5px 13px; border-radius: 999px; cursor: pointer;
+  transition: all 130ms; white-space: nowrap; letter-spacing: -.01em;
+}
+.nav button:hover { color: rgba(255,255,255,.82); background: rgba(255,255,255,.08); }
+.nav button.cur  { background: rgba(255,255,255,.14); color: #fff; }
+.nsep { width: 1px; height: 14px; background: rgba(255,255,255,.1); margin: 0 1px; flex-shrink: 0; }
+.caption { position: absolute; left: 44px; bottom: 28px; font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.2); }
+
+/* ─── Utils ─────────────────────────────────────────────────────────────── */
+.mono { font-family: ui-monospace,"SF Mono",monospace; }
+.flex { display: flex; align-items: center; }
+.tr   { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+     01 — COVER
+     ════════════════════════════════════ -->
+<div class="slide active" id="s1">
+  <div class="wp">
+    <div class="cover">
+      <div class="cover-eye">Drive Project Catalog · 2026</div>
+      <div class="cover-logo">Catalog</div>
+      <div class="cover-tag">Your footage. Every drive.<br>Always findable.</div>
+      <div class="cover-pill">macOS · Tauri v2 · React 19 · Rust · SQLite</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     02 — DRIVES OVERVIEW  (Surface A)
+     — accent border, connection badge,
+       capacity legend, breathe rings
+     ════════════════════════════════════ -->
+<div class="slide" id="s2">
+  <div class="wp" style="flex-direction:column;gap:0;">
+    <div class="window">
+      <!-- Sidebar: full height, app name in chrome header -->
+      <div class="sidebar">
+        <div class="sb-chrome">
+          <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+          <span class="sb-name">Catalog</span>
+        </div>
+        <div class="sb-body">
+          <div class="sb-sec">Library</div>
+          <div class="sb-item">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 3.5h10M1.5 6.5h10M1.5 9.5h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            All projects<span class="sb-cnt">247</span>
+          </div>
+          <div class="sb-item">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.2"/><path d="M6.5 4v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="6.5" cy="9" r=".7" fill="currentColor"/></svg>
+            Unmatched<span class="sb-cnt">3</span>
+          </div>
+          <div class="sb-div"></div>
+          <div class="sb-sec">Drives</div>
+          <div class="sb-item act"><span class="sb-dot" style="background:var(--drv-a);"></span>BMPCC_01<span class="sb-cnt">84</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-c);"></span>BMPCC_02<span class="sb-cnt">63</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-d);"></span>BMPCC_03<span class="sb-cnt">28</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-e);"></span>ARCHIVE_2024<span class="sb-cnt">71</span></div>
+          <div class="sb-item" style="opacity:.38;"><span class="sb-dot" style="background:var(--ink-4);"></span>ARCHIVE_2023</div>
+        </div>
+      </div>
+      <!-- Content area — no glass on this layer -->
+      <div class="main">
+        <div class="toolbar">
+          <span style="font-size:15px;font-weight:700;letter-spacing:-.02em;">Drives</span>
+          <div class="sp"></div>
+          <button class="btn btn-secondary btn-sm">Scan connected</button>
+          <button class="btn btn-primary btn-sm">Add manually</button>
+        </div>
+        <div class="cards">
+
+          <!-- BMPCC_01 — scanning (breathe rings) -->
+          <div class="card" style="--drv-color:var(--drv-a);">
+            <div class="card-inner">
+              <div class="card-top">
+                <div>
+                  <div class="card-name">BMPCC_01</div>
+                  <div class="card-sub" style="color:var(--action);">Scanning… 84 of 91 folders</div>
+                </div>
+                <div class="flex" style="gap:6px;">
+                  <div class="pulse-wrap"><div class="pr"></div><div class="pr pr2"></div><div class="pulse-dot"></div></div>
+                  <span class="chip chip-blue" style="font-size:10px;"><span class="chip-dot"></span>Scanning</span>
+                </div>
+              </div>
+              <div class="cap-bar"><div class="cap-fill" style="width:72%;"></div></div>
+              <div class="cap-leg">
+                <span class="cl"><span class="cl-dot" style="background:var(--drv-a);"></span>5.4 TB used</span>
+                <span class="cl"><span class="cl-dot" style="background:var(--ink-4);opacity:.4;"></span>2.2 TB free</span>
+              </div>
+              <div class="card-stats">
+                <span><span class="sv">7.6 TB</span> total</span>
+                <span><span class="sv">84</span> projects</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- BMPCC_02 — online -->
+          <div class="card" style="--drv-color:var(--drv-c);">
+            <div class="card-inner">
+              <div class="card-top">
+                <div>
+                  <div class="card-name">BMPCC_02</div>
+                  <div class="card-sub">Scanned 2 h ago</div>
+                </div>
+                <span class="chip chip-ok" style="font-size:10px;"><span class="chip-dot"></span>Online</span>
+              </div>
+              <div class="cap-bar"><div class="cap-fill" style="width:58%;"></div></div>
+              <div class="cap-leg">
+                <span class="cl"><span class="cl-dot" style="background:var(--drv-c);"></span>3.5 TB used</span>
+                <span class="cl"><span class="cl-dot" style="background:var(--warn);opacity:.5;"></span>480 GB reserved</span>
+                <span class="cl"><span class="cl-dot" style="background:var(--ink-4);opacity:.4;"></span>2.1 TB free</span>
+              </div>
+              <div class="card-stats">
+                <span><span class="sv">6 TB</span> total</span>
+                <span><span class="sv">63</span> projects</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ARCHIVE_2023 — offline -->
+          <div class="card offline" style="--drv-color:var(--drv-b);">
+            <div class="card-inner">
+              <div class="card-top">
+                <div>
+                  <div class="card-name">ARCHIVE_2023</div>
+                  <div class="card-sub">Offline · Last seen 14 days ago</div>
+                </div>
+                <span class="chip chip-ghost" style="font-size:10px;"><span class="chip-dot" style="background:var(--ink-4);"></span>Offline</span>
+              </div>
+              <div class="cap-bar"><div class="cap-fill" style="width:87%;"></div></div>
+              <div class="cap-leg">
+                <span class="cl"><span class="cl-dot" style="background:var(--drv-b);"></span>8.7 TB used</span>
+                <span class="cl"><span class="cl-dot" style="background:var(--ink-4);opacity:.4;"></span>1.3 TB free</span>
+              </div>
+              <div class="card-stats">
+                <span><span class="sv">10 TB</span> total</span>
+                <span><span class="sv">112</span> projects</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <div class="caption">01 — Drives</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     03 — DRIVE DETAIL  (Surface B)
+     — two-column header, action toolbar,
+       connection banner
+     ════════════════════════════════════ -->
+<div class="slide" id="s3">
+  <div class="wp" style="flex-direction:column;gap:0;">
+    <div class="window">
+      <div class="sidebar">
+        <div class="sb-chrome">
+          <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+          <span class="sb-name">Catalog</span>
+        </div>
+        <div class="sb-body">
+          <div class="sb-sec">Library</div>
+          <div class="sb-item">All projects<span class="sb-cnt">247</span></div>
+          <div class="sb-div"></div>
+          <div class="sb-sec">Drives</div>
+          <div class="sb-item act"><span class="sb-dot" style="background:var(--drv-c);"></span>BMPCC_02<span class="sb-cnt">63</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-a);"></span>BMPCC_01<span class="sb-cnt">84</span></div>
+          <div class="sb-item" style="opacity:.38;"><span class="sb-dot" style="background:var(--ink-4);"></span>ARCHIVE_2023</div>
+        </div>
+      </div>
+      <div class="main">
+        <!-- Two-column drive header -->
+        <div class="drv-hdr">
+          <div class="drv-id">
+            <div class="drv-id-top">
+              <div class="drv-icon" style="--drv-color:var(--drv-c);">💾</div>
+              <div>
+                <div class="drv-h1">BMPCC_02</div>
+                <div class="drv-meta">
+                  <span>/Volumes/BMPCC_02</span><span>·</span><span>exFAT</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex" style="gap:8px;margin-top:2px;">
+              <span class="chip chip-ok" style="font-size:10.5px;"><span class="chip-dot"></span>Online</span>
+              <span class="chip chip-ghost" style="font-size:10.5px;">63 projects</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="cap-bar" style="height:6px;background:var(--surface-mid);"><div class="cap-fill" style="width:58%;background:var(--drv-c);"></div></div>
+            <div class="cap-leg">
+              <span class="cl"><span class="cl-dot" style="background:var(--drv-c);"></span>3.5 TB used</span>
+              <span class="cl"><span class="cl-dot" style="background:var(--warn);opacity:.5;"></span>480 GB reserved</span>
+              <span class="cl"><span class="cl-dot" style="background:var(--ink-4);opacity:.4;"></span>2.1 TB free</span>
+            </div>
+            <div class="stat-grid">
+              <dl class="stat"><dt>Used</dt><dd>3.5 TB</dd></dl>
+              <dl class="stat"><dt>Free</dt><dd>2.1 TB</dd></dl>
+              <dl class="stat"><dt>Reserved</dt><dd>480 GB</dd></dl>
+              <dl class="stat"><dt>Projects</dt><dd>63</dd></dl>
+            </div>
+            <div style="font-size:11px;color:var(--ink-4);">Last scan: 2 hours ago</div>
+          </div>
+        </div>
+        <!-- Action toolbar -->
+        <div class="action-bar">
+          <button class="btn btn-secondary btn-sm">▶ Scan drive</button>
+          <button class="btn btn-secondary btn-sm">Import folders</button>
+          <div class="sp"></div>
+          <button class="btn btn-ghost btn-sm" style="color:var(--danger);font-size:11.5px;">Remove drive</button>
+        </div>
+        <!-- Connection banner (dismissible) -->
+        <div class="conn-banner">
+          <span class="chip chip-ok" style="font-size:10px;height:16px;padding:0 5px;"><span class="chip-dot"></span></span>
+          <span class="conn-path">/Volumes/BMPCC_02</span>
+          <span style="color:var(--ink-4);">· 6 TB · exFAT</span>
+          <div class="sp"></div>
+          <button class="btn btn-ghost btn-sm" style="font-size:11px;">Reveal in Finder</button>
+          <button class="btn-icon" style="font-size:13px;opacity:.6;">✕</button>
+        </div>
+        <!-- Project list — Title Case column headers (HIG) -->
+        <div class="th-row" style="grid-template-columns:minmax(0,1fr) minmax(160px,190px) 76px minmax(130px,160px) 14px;">
+          <div class="th sort">Project ↑</div>
+          <div class="th">Drive</div>
+          <div class="th" style="text-align:right;">Size</div>
+          <div class="th">Status</div>
+          <div class="th"></div>
+        </div>
+        <div class="tw">
+          <div class="trow" style="grid-template-columns:minmax(0,1fr) minmax(160px,190px) 76px minmax(130px,160px) 14px;">
+            <div class="tc flex" style="gap:9px;"><div class="av" style="background:rgba(0,122,255,.1);color:var(--action);">D</div><div><div class="tr" style="font-weight:500;color:var(--ink);">Decathlon Switzerland — Ski 2024</div><div style="font-size:11.5px;color:var(--ink-4);margin-top:1px;">2024-02</div></div></div>
+            <div class="tc tc-drv"><span class="sb-dot" style="background:var(--drv-c);width:7px;height:7px;"></span><span class="tr" style="color:var(--ink-3);font-size:12px;">BMPCC_02</span></div>
+            <div class="tc tc-sz">184 GB</div>
+            <div class="tc flex" style="justify-content:flex-end;gap:4px;"></div>
+            <div style="color:var(--ink-4);font-size:11px;text-align:center;">›</div>
+          </div>
+          <div class="trow" style="grid-template-columns:minmax(0,1fr) minmax(160px,190px) 76px minmax(130px,160px) 14px;">
+            <div class="tc flex" style="gap:9px;"><div class="av" style="background:rgba(95,122,114,.12);color:var(--drv-c);">I</div><div><div class="tr" style="font-weight:500;color:var(--ink);">IWC Schaffhausen — Pilot's Watch</div><div style="font-size:11.5px;color:var(--ink-4);margin-top:1px;">2024-03 · BMPCC_240312_IWC</div></div></div>
+            <div class="tc tc-drv"><span class="sb-dot" style="background:var(--drv-c);width:7px;height:7px;"></span><span class="tr" style="color:var(--ink-3);font-size:12px;">BMPCC_02</span></div>
+            <div class="tc tc-sz">76 GB</div>
+            <div class="tc flex" style="justify-content:flex-end;gap:4px;"><span class="chip chip-blue" style="font-size:10px;">Duplicate</span></div>
+            <div style="color:var(--ink-4);font-size:11px;text-align:center;">›</div>
+          </div>
+          <div class="trow" style="grid-template-columns:minmax(0,1fr) minmax(160px,190px) 76px minmax(130px,160px) 14px;">
+            <div class="tc flex" style="gap:9px;"><div class="av" style="background:rgba(122,107,104,.12);color:var(--drv-d);">V</div><div><div class="tr" style="font-weight:500;color:var(--ink);">Vacheron Constantin — Heritage</div><div style="font-size:11.5px;color:var(--ink-4);margin-top:1px;">2024-01</div></div></div>
+            <div class="tc tc-drv"><span class="sb-dot" style="background:var(--drv-c);width:7px;height:7px;"></span><span class="tr" style="color:var(--ink-3);font-size:12px;">BMPCC_02</span></div>
+            <div class="tc tc-sz">240 GB</div>
+            <div class="tc flex" style="justify-content:flex-end;gap:4px;"></div>
+            <div style="color:var(--ink-4);font-size:11px;text-align:center;">›</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">02 — Drive Detail</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     04 — PROJECTS LIST
+     — Title Case headers, accent-soft
+       selection, monospace size column
+     ════════════════════════════════════ -->
+<div class="slide" id="s4">
+  <div class="wp" style="flex-direction:column;gap:0;">
+    <div class="window">
+      <div class="sidebar">
+        <div class="sb-chrome">
+          <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+          <span class="sb-name">Catalog</span>
+        </div>
+        <div class="sb-body">
+          <div class="sb-sec">Library</div>
+          <div class="sb-item act">All projects<span class="sb-cnt">247</span></div>
+          <div class="sb-item">Unmatched<span class="sb-cnt">3</span></div>
+          <div class="sb-div"></div>
+          <div class="sb-sec">Drives</div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-a);"></span>BMPCC_01<span class="sb-cnt">84</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-c);"></span>BMPCC_02<span class="sb-cnt">63</span></div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-d);"></span>BMPCC_03<span class="sb-cnt">28</span></div>
+          <div class="sb-item" style="opacity:.38;"><span class="sb-dot" style="background:var(--ink-4);"></span>ARCHIVE_2023</div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="toolbar">
+          <div class="search" style="width:210px;">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.2"/><path d="M8 8l2.5 2.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span class="search-q">IWC</span>
+          </div>
+          <div class="sp"></div>
+          <span class="chip chip-blue">BMPCC_02 ×</span>
+          <button class="btn btn-ghost btn-sm" style="color:var(--ink-3);font-size:11.5px;">Clear</button>
+          <div class="tb-sep"></div>
+          <button class="btn btn-secondary btn-sm">Date ↓</button>
+        </div>
+        <!-- Title Case column headers per Apple HIG -->
+        <div class="th-row" style="grid-template-columns:minmax(0,1fr) minmax(160px,190px) 76px minmax(130px,160px) 14px;">
+          <div class="th sort">Project ↑</div>
+          <div class="th">Drive</div>
+          <div class="th" style="text-align:right;">Size</div>
+          <div class="th">Status</div>
+          <div class="th"></div>
+        </div>
+        <div class="tw">
+          <!-- Selected row: accent-soft fill + 2px action left bar -->
+          <div class="trow sel" style="grid-template-columns:minmax(0,1fr) minmax(160px,190px) 76px minmax(130px,160px) 14px;">
+            <div class="tc flex" style="gap:9px;"><div class="av" style="background:rgba(0,122,255,.1);color:var(--action);">I</div><div><div class="tr" style="font-weight:600;color:var(--ink);">IWC Schaffhausen</div><div style="font-size:11.5px;color:var(--ink-4);margin-top:1px;">2024-03 · Pilot's Watch Campaign</div></div></div>
+            <div class="tc tc-drv"><span class="sb-dot" style="background:var(--drv-c);width:7px;height:7px;"></span><span class="tr" style="color:var(--ink-3);font-size:12px;">BMPCC_02</span></div>
+            <div class="tc tc-sz">76 GB</div>
+            <div class="tc flex" style="justify-content:flex-end;gap:4px;"><span class="chip chip-blue" style="font-size:10px;">Duplicate</span></div>
+            <div style="color:var(--action);font-size:11px;text-align:center;">›</div>
+          </div>
+          <div class="trow" style="grid-template-columns:minmax(0,1fr) minmax(160px,190px) 76px minmax(130px,160px) 14px;">
+            <div class="tc flex" style="gap:9px;"><div class="av" style="background:rgba(0,122,255,.1);color:var(--action);">I</div><div><div class="tr" style="font-weight:500;color:var(--ink);">IWC Schaffhausen</div><div style="font-size:11.5px;color:var(--ink-4);margin-top:1px;">2023-11 · Portugieser Chronograph</div></div></div>
+            <div class="tc tc-drv"><span class="sb-dot" style="background:var(--drv-a);width:7px;height:7px;"></span><span class="tr" style="color:var(--ink-3);font-size:12px;">BMPCC_01</span></div>
+            <div class="tc tc-sz">92 GB</div>
+            <div class="tc flex" style="justify-content:flex-end;gap:4px;"></div>
+            <div style="color:var(--ink-4);font-size:11px;text-align:center;">›</div>
+          </div>
+          <div class="trow" style="grid-template-columns:minmax(0,1fr) minmax(160px,190px) 76px minmax(130px,160px) 14px;">
+            <div class="tc flex" style="gap:9px;"><div class="av" style="background:rgba(0,122,255,.1);color:var(--action);">I</div><div><div class="tr" style="font-weight:500;color:var(--ink);">IWC Schaffhausen</div><div style="font-size:11.5px;color:var(--ink-4);margin-top:1px;">2024-01 · Ingenieur Recap</div></div></div>
+            <div class="tc tc-drv"><span class="sb-dot" style="background:var(--drv-d);width:7px;height:7px;"></span><span class="tr" style="color:var(--ink-3);font-size:12px;">BMPCC_03</span></div>
+            <div class="tc tc-sz">55 GB</div>
+            <div class="tc flex" style="justify-content:flex-end;gap:4px;"><span class="chip chip-warn" style="font-size:10px;">Missing</span></div>
+            <div style="color:var(--ink-4);font-size:11px;text-align:center;">›</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">03 — Projects</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     05 — PROJECT DETAIL  (Surface C)
+     — 60/40 split, unsaved chip, timeline,
+       "Also on" duplicate panel
+     ════════════════════════════════════ -->
+<div class="slide" id="s5">
+  <div class="wp" style="flex-direction:column;gap:0;">
+    <div class="window">
+      <div class="sidebar">
+        <div class="sb-chrome">
+          <div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div>
+          <span class="sb-name">Catalog</span>
+        </div>
+        <div class="sb-body">
+          <div class="sb-sec">Library</div>
+          <div class="sb-item act">All projects<span class="sb-cnt">247</span></div>
+          <div class="sb-div"></div>
+          <div class="sb-sec">Drives</div>
+          <div class="sb-item"><span class="sb-dot" style="background:var(--drv-c);"></span>BMPCC_02<span class="sb-cnt">63</span></div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="toolbar">
+          <span style="font-size:12.5px;color:var(--ink-3);">IWC Schaffhausen</span>
+          <span style="color:var(--ink-4);font-size:11px;margin:0 2px;">›</span>
+          <span style="font-size:13px;font-weight:500;color:var(--ink);">Pilot's Watch Campaign</span>
+          <span class="unsaved" style="margin-left:8px;">● Unsaved</span>
+          <div class="sp"></div>
+          <button class="btn btn-primary btn-sm">Save</button>
+        </div>
+        <div class="pd-wrap">
+          <!-- Left: editable form -->
+          <div class="pd-form">
+            <div class="form-row">
+              <div class="field"><label>Client</label><input value="IWC Schaffhausen" readonly></div>
+              <div class="field"><label>Project</label><input value="Pilot's Watch Campaign" class="focused" readonly></div>
+            </div>
+            <div class="form-row">
+              <div class="field"><label>Date</label><input value="2024-03" readonly></div>
+              <div class="field"><label>Category</label><input value="video" readonly></div>
+            </div>
+            <div style="font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.065em;color:var(--ink-4);margin-top:2px;">Scan History</div>
+            <div class="tl" style="margin:-2px -20px 0;border-top:1px solid var(--hairline);">
+              <div class="tl-item">
+                <div class="tl-ts">Today 14:32</div>
+                <div class="tl-spine"><div class="tl-node"></div><div class="tl-line"></div></div>
+                <div class="tl-desc">Scan completed — 3 files added (76 GB total)</div>
+              </div>
+              <div class="tl-item">
+                <div class="tl-ts">Mar 12 09:18</div>
+                <div class="tl-spine"><div class="tl-node dim"></div><div class="tl-line"></div></div>
+                <div class="tl-desc">Folder imported from BMPCC_02</div>
+              </div>
+              <div class="tl-item">
+                <div class="tl-ts">Mar 11 21:44</div>
+                <div class="tl-spine"><div class="tl-node dim"></div></div>
+                <div class="tl-desc">Project created</div>
+              </div>
+            </div>
+          </div>
+          <!-- Right: context panel — read-only, inspector style -->
+          <div class="pd-panel">
+            <div class="pd-sec">
+              <div class="pd-eye">Quick Actions</div>
+              <div class="flex" style="gap:6px;">
+                <button class="btn btn-secondary btn-sm" style="font-size:11.5px;">Open in Finder</button>
+                <button class="btn btn-secondary btn-sm" style="font-size:11.5px;">Copy path</button>
+              </div>
+            </div>
+            <div class="pd-sec">
+              <div class="pd-eye">Location</div>
+              <div class="pd-row"><span class="pd-lbl">Drive</span><span class="pd-val flex" style="gap:5px;"><span class="sb-dot" style="background:var(--drv-c);width:7px;height:7px;"></span>BMPCC_02</span></div>
+              <div class="pd-row"><span class="pd-lbl">Size</span><span class="pd-val mono">76 GB</span></div>
+              <div class="pd-mono">/Volumes/BMPCC_02/Projects/<br>BMPCC_240312_IWC</div>
+            </div>
+            <div class="pd-sec">
+              <div class="pd-eye" style="color:var(--warn);">Also On</div>
+              <div class="pd-row">
+                <span class="pd-lbl flex" style="gap:5px;"><span class="sb-dot" style="background:var(--drv-a);width:7px;height:7px;"></span>BMPCC_01</span>
+                <span class="chip chip-blue" style="font-size:10px;">Copy</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">04 — Project Detail</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     06 — IMPORT SHEET  (Surface D)
+     — split sections, "Pick different
+       folder" in header, Cancel left
+     ════════════════════════════════════ -->
+<div class="slide" id="s6">
+  <div class="wp" style="flex-direction:column;gap:0;">
+    <div class="window" style="position:relative;">
+      <div style="display:flex;flex:1;filter:blur(2px);opacity:.22;pointer-events:none;">
+        <div class="sidebar" style="flex-shrink:0;">
+          <div class="sb-chrome"><div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div><span class="sb-name">Catalog</span></div>
+        </div>
+        <div class="main"></div>
+      </div>
+      <!-- Sheet: spring from source, Cancel left / primary right -->
+      <div class="overlay">
+        <div class="sheet">
+          <div class="sheet-hdr">
+            <div style="flex:1;min-width:0;">
+              <div class="sheet-title">Review folders to import</div>
+              <div class="sheet-path">/Volumes/BMPCC_02/Projects</div>
+              <div class="sheet-esc">↩ Pick different folder</div>
+            </div>
+            <button class="btn-icon" style="flex-shrink:0;opacity:.6;font-size:15px;">✕</button>
+          </div>
+          <div class="sheet-body">
+            <dl class="sum">
+              <div class="sum-item"><dt>To import</dt><dd>12</dd></div>
+              <div class="sum-item"><dt>Already in catalog</dt><dd class="dim">3</dd></div>
+            </dl>
+            <div class="fl">
+              <div class="fl-hd">New — 12 folders</div>
+              <div class="fl-row"><span>📁</span><span class="fl-name">Decathlon_240401_SKI_VERBIER</span><span class="fl-size">184 GB</span></div>
+              <div class="fl-row"><span>📁</span><span class="fl-name">IWC_240312_PILOTS_GENEVE</span><span class="fl-size">76 GB</span></div>
+              <div class="fl-row"><span>📁</span><span class="fl-name">Vacheron_240318_HERITAGE</span><span class="fl-size">240 GB</span></div>
+              <div class="fl-row"><span>📁</span><span class="fl-name">Piaget_240325_ALTIPLANO_GSTAAD</span><span class="fl-size">112 GB</span></div>
+              <div class="fl-row"><span>📁</span><span class="fl-name">Insomnia_240330_BRAND_GVA</span><span class="fl-size">58 GB</span></div>
+              <!-- Collapsed duplicate section -->
+              <div class="fl-hd" style="display:flex;align-items:center;gap:5px;cursor:default;">
+                <span style="font-size:9px;opacity:.6;">▶</span>Already in catalog — 3
+              </div>
+            </div>
+          </div>
+          <!-- Footer: Cancel LEFT, primary RIGHT (HIG: Cancel left) -->
+          <div class="sheet-ftr">
+            <button class="btn btn-secondary btn-sm">Cancel</button>
+            <div class="sp"></div>
+            <button class="btn btn-primary btn-lg">Import 12 folders</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">05 — Import</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     07 — NSAlert CONFIRM  (Surface F)
+     — macOS native anatomy: icon + text,
+       13px title, Cancel left
+     ════════════════════════════════════ -->
+<div class="slide" id="s7">
+  <div class="wp" style="flex-direction:column;gap:0;">
+    <div class="window" style="position:relative;">
+      <div style="display:flex;flex:1;filter:blur(2px);opacity:.24;pointer-events:none;">
+        <div class="sidebar" style="flex-shrink:0;">
+          <div class="sb-chrome"><div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div><span class="sb-name">Catalog</span></div>
+        </div>
+        <div class="main"></div>
+      </div>
+      <div class="overlay">
+        <div class="alert">
+          <!-- NSAlert anatomy: icon top-left, title + message to the right -->
+          <div class="alert-body-row">
+            <div class="alert-icon">🗑️</div>
+            <div class="alert-text">
+              <div class="alert-title">Remove BMPCC_02?</div>
+              <div class="alert-msg">BMPCC_02 and its 63 indexed projects will be removed from Catalog.</div>
+              <div class="alert-cons">The actual files on the drive are not affected.</div>
+            </div>
+          </div>
+          <!-- Buttons: Cancel LEFT, destructive RIGHT (HIG) -->
+          <div class="alert-btns">
+            <button class="alert-cancel">Cancel</button>
+            <button class="alert-confirm">Remove drive</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">06 — Confirm (NSAlert)</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     08 — COMMAND PALETTE
+     — deep glass, Spotlight feel
+     ════════════════════════════════════ -->
+<div class="slide" id="s8">
+  <div class="wp" style="flex-direction:column;gap:0;">
+    <div class="window" style="position:relative;">
+      <div style="display:flex;flex:1;filter:blur(3px);opacity:.18;pointer-events:none;">
+        <div class="sidebar" style="flex-shrink:0;">
+          <div class="sb-chrome"><div class="tls"><div class="tl tl-c"></div><div class="tl tl-m"></div><div class="tl tl-x"></div></div><span class="sb-name">Catalog</span></div>
+        </div>
+        <div class="main"></div>
+      </div>
+      <div class="pal-over">
+        <div class="palette">
+          <div class="pal-in">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="color:var(--ink-4);flex-shrink:0;"><path d="M2 2l10 0M2 7l6 0M2 12l8 0" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            <span style="font-weight:500;flex:1;">Piaget<span class="pal-cursor"></span></span>
+          </div>
+          <div style="padding:4px 0 2px;">
+            <div class="pal-sec-hd">Projects</div>
+            <div class="pal-row hi">
+              <span class="pal-ico">📁</span>
+              <span class="pal-pri">Piaget — Altiplano Origin</span>
+              <span class="pal-sec">BMPCC_02 · 112 GB</span>
+            </div>
+            <div class="pal-row">
+              <span class="pal-ico">📁</span>
+              <span class="pal-pri">Piaget — Limelight Gala 2023</span>
+              <span class="pal-sec" style="color:var(--ink-3);">BMPCC_01 · 88 GB</span>
+            </div>
+            <div class="pal-sec-hd" style="margin-top:2px;">Actions</div>
+            <div class="pal-row">
+              <span class="pal-ico" style="font-size:12px;">▶</span>
+              <span class="pal-pri">Scan BMPCC_02</span>
+              <span class="pal-sec" style="color:var(--ink-3);">Drive</span>
+            </div>
+          </div>
+          <div class="pal-ftr">
+            <span><kbd>↑↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> dismiss</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">07 — ⌘K Palette</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     NAV + THEME TOGGLE
+     ════════════════════════════════════ -->
+<nav class="nav" id="nav">
+  <button class="cur" onclick="go(1)">Cover</button>
+  <button onclick="go(2)">Drives</button>
+  <button onclick="go(3)">Drive Detail</button>
+  <button onclick="go(4)">Projects</button>
+  <button onclick="go(5)">Project Detail</button>
+  <button onclick="go(6)">Import</button>
+  <button onclick="go(7)">Confirm</button>
+  <button onclick="go(8)">Palette</button>
+  <div class="nsep"></div>
+  <button onclick="toggleTheme()" id="tb">☀ Light</button>
+</nav>
+
+<script>
+let cur = 1;
+function go(n) {
+  document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+  document.getElementById('s' + n)?.classList.add('active');
+  document.querySelectorAll('#nav button:not(#tb)').forEach((b, i) => b.classList.toggle('cur', i + 1 === n));
+  cur = n;
+}
+function toggleTheme() {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+  document.getElementById('tb').textContent = dark ? '☾ Dark' : '☀ Light';
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') go(Math.min(cur + 1, 8));
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   go(Math.max(cur - 1, 1));
+});
+</script>
+</body>
+</html>

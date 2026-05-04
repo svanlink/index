@@ -1,13 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
-import { Icon } from "@drive-project-catalog/ui";
+import { useFocusTrap } from "../app/useFocusTrap";
 
 // ---------------------------------------------------------------------------
 // SectionCard — DESIGN.md §6
-// ---------------------------------------------------------------------------
-// Flat `.card` surface with a hairline under the title row when a description
-// or action is present. No tinted header, no color-mix wash. Title uses
-// card-title weight in a conservative 16px on the list pages so it doesn't
-// overwhelm the content inside.
 // ---------------------------------------------------------------------------
 
 interface SectionCardProps {
@@ -20,24 +15,36 @@ interface SectionCardProps {
 export function SectionCard({ title, description, children, action }: SectionCardProps) {
   const hasHeaderDivider = Boolean(description || action);
   return (
-    <section className="card overflow-hidden">
+    <section className="card" style={{ overflow: "hidden" }}>
       <div
-        className="flex items-start justify-between gap-4 px-5 py-4"
+        className="flex items-start justify-between"
         style={{
+          gap: 16,
+          padding: "16px 20px",
           borderBottom: hasHeaderDivider ? "1px solid var(--hairline)" : "none"
         }}
       >
         <div className="min-w-0">
           <h4
-            className="text-[16px] font-semibold"
-            style={{ color: "var(--ink)", margin: 0, letterSpacing: "-0.01em" }}
+            style={{
+              color: "var(--ink)",
+              margin: 0,
+              fontSize: 16,
+              fontWeight: 600,
+              letterSpacing: "-0.01em"
+            }}
           >
             {title}
           </h4>
           {description ? (
             <p
-              className="mt-1 max-w-[62ch] text-[14px] leading-[1.5]"
-              style={{ color: "var(--ink-3)", margin: "4px 0 0" }}
+              style={{
+                color: "var(--ink-3)",
+                margin: "4px 0 0",
+                fontSize: 14,
+                lineHeight: 1.5,
+                maxWidth: "62ch"
+              }}
             >
               {description}
             </p>
@@ -45,182 +52,23 @@ export function SectionCard({ title, description, children, action }: SectionCar
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
-      <div className="px-5 py-4">{children}</div>
+      <div style={{ padding: "16px 20px" }}>{children}</div>
     </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// StatusBadge — uses shared .chip classes from globals.css (DESIGN.md §6).
-// ---------------------------------------------------------------------------
-
-type BadgeTone = "danger" | "warn" | "accent" | "ok" | "info" | "neutral" | "muted";
-
-const TONE_CLASS: Record<BadgeTone, string> = {
-  danger: "chip chip-danger",
-  warn: "chip chip-warn",
-  accent: "chip chip-accent",
-  ok: "chip chip-ok",
-  info: "chip chip-info",
-  neutral: "chip",
-  muted: "chip chip-ghost"
-};
-
-const LABEL_TONE: Record<string, BadgeTone> = {
-  Missing: "danger",
-  Failed: "danger",
-  Interrupted: "danger",
-  Overcommitted: "danger",
-  Duplicate: "warn",
-  "Move pending": "warn",
-  Cancelled: "warn",
-  "Near capacity": "warn",
-  Running: "accent",
-  "Pending size": "accent",
-  "Unknown size impact": "accent",
-  "Personal project": "accent",
-  Completed: "neutral",
-  "Size ready": "neutral",
-  Healthy: "ok",
-  Client: "ok",
-  "Unknown impact": "info",
-  Unassigned: "info",
-  "Personal folder": "muted"
-};
-
-const LABEL_SHOWS_DOT: Record<string, boolean> = {
-  Missing: true,
-  Duplicate: true,
-  "Move pending": true,
-  Unassigned: true,
-  Overcommitted: true,
-  "Near capacity": true,
-  Running: true,
-  Healthy: true
-};
-
-export function StatusBadge({ label }: { label: string }) {
-  const tone = LABEL_TONE[label] ?? "neutral";
-  const showDot = LABEL_SHOWS_DOT[label] ?? false;
-  return (
-    <span className={TONE_CLASS[tone]}>
-      {showDot ? <span className="chip-dot" /> : null}
-      {label}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// EmptyState — flat surface, hairline border. DESIGN.md §7 "hairlines not
-// shadows". No gradient, no decorative tint.
-// ---------------------------------------------------------------------------
-
-export function EmptyState({
-  title,
-  description,
-  action
-}: {
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div
-      className="rounded-[12px] border px-5 py-6"
-      style={{
-        background: "var(--surface)",
-        borderColor: "var(--hairline)"
-      }}
-    >
-      <p className="text-[14px] font-semibold" style={{ color: "var(--ink)", margin: 0 }}>
-        {title}
-      </p>
-      <p
-        className="text-[14px] leading-[1.5]"
-        style={{ color: "var(--ink-3)", margin: "4px 0 0" }}
-      >
-        {description}
-      </p>
-      {action ? <div className="mt-3">{action}</div> : null}
-    </div>
-  );
-}
-
-export function LoadingState({ label }: { label: string }) {
-  return (
-    <div className="py-6 text-center">
-      <p className="text-[14px]" style={{ color: "var(--ink-3)", margin: 0 }}>
-        {label}
-      </p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Skeleton loaders — hairline bounded, no decorative tint.
-// ---------------------------------------------------------------------------
-
-export function DriveCardSkeleton() {
-  return (
-    <div
-      className="card flex flex-col overflow-hidden"
-      style={{ padding: 0 }}
-      aria-hidden="true"
-    >
-      <div className="px-4 pt-4 pb-3">
-        <div className="skeleton h-3.5 w-2/3 rounded" />
-        <div className="skeleton mt-2 h-2.5 w-1/3 rounded" />
-        <div className="skeleton mt-2 h-2.5 w-1/2 rounded" />
-      </div>
-      <div className="px-4 pb-3">
-        <div className="skeleton h-1.5 w-full rounded-full" />
-        <div className="mt-2 flex gap-4">
-          <div className="skeleton h-2 w-16 rounded" />
-          <div className="skeleton h-2 w-16 rounded" />
-          <div className="skeleton h-2 w-12 rounded" />
-        </div>
-      </div>
-      <div
-        className="flex gap-3 border-t px-4 py-2.5"
-        style={{ borderColor: "var(--hairline)" }}
-      >
-        <div className="skeleton h-3 w-8 rounded" />
-        <div className="skeleton h-3 w-12 rounded" />
-      </div>
-    </div>
-  );
-}
-
-export function ProjectRowSkeleton() {
-  return (
-    <div
-      className="flex items-center gap-3 border-b px-3 py-2.5"
-      style={{ borderColor: "var(--hairline)" }}
-      aria-hidden="true"
-    >
-      <div className="skeleton h-3.5 w-3.5 shrink-0 rounded" />
-      <div className="skeleton h-2.5 w-16 shrink-0 rounded" />
-      <div className="skeleton h-2.5 w-24 shrink-0 rounded" />
-      <div className="skeleton h-2.5 flex-1 rounded" />
-      <div className="skeleton h-2.5 w-20 shrink-0 rounded" />
-      <div className="skeleton h-2.5 w-16 shrink-0 rounded" />
-      <div className="skeleton h-2.5 w-14 shrink-0 rounded" />
-    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 // ConfirmModal — DESIGN.md §6
 // ---------------------------------------------------------------------------
-// The only dark surface in the app. Graphite (#1d1d1f), white text, hero
-// display title (56/600) — the single place hero-display lives. Destructive
-// variants use .btn-danger; non-destructive fall back to .btn-primary but
-// keep the graphite shell because that's how the modal is visually coded.
-// ---------------------------------------------------------------------------
 
 interface ConfirmModalProps {
   title: string;
   description: string;
+  /**
+   * Short irreversibility note shown below the description — e.g. "This
+   * cannot be undone." Keeps descriptions focused on what will change.
+   */
+  consequence?: string;
   confirmLabel?: string;
   onConfirm(): void;
   onCancel(): void;
@@ -231,6 +79,7 @@ interface ConfirmModalProps {
 export function ConfirmModal({
   title,
   description,
+  consequence,
   confirmLabel = "Confirm",
   onConfirm,
   onCancel,
@@ -238,70 +87,90 @@ export function ConfirmModal({
   isLoading = false
 }: ConfirmModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  useFocusTrap(dialogRef);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-      if (e.key === "Enter" && !isLoading) {
+      if (e.key === "Escape") {
         e.preventDefault();
-        onConfirm();
+        onCancel();
       }
     }
     const dialog = dialogRef.current;
     dialog?.addEventListener("keydown", handleKeyDown);
     return () => dialog?.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel, onConfirm, isLoading]);
-
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
+  }, [onCancel]);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(29, 29, 31, 0.48)" }}
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(29, 29, 31, 0.48)", padding: 16 }}
       onClick={onCancel}
     >
       <div
         ref={dialogRef}
-        className="w-full max-w-[480px] rounded-[12px]"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-modal-title"
-        tabIndex={-1}
         style={{
+          width: "100%",
+          maxWidth: 380,
+          borderRadius: 12,
           background: "var(--graphite)",
           color: "#ffffff",
-          padding: 40,
+          padding: "28px 32px",
           boxShadow: "0 24px 56px rgba(0, 0, 0, 0.32)"
         }}
+        onClick={(e) => e.stopPropagation()}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        aria-describedby={
+          consequence
+            ? "confirm-modal-desc confirm-modal-consequence"
+            : "confirm-modal-desc"
+        }
+        tabIndex={-1}
       >
         <h3
           id="confirm-modal-title"
           style={{
             margin: 0,
-            fontSize: 40,
+            fontSize: 16,
             fontWeight: 600,
-            lineHeight: 1.1,
-            letterSpacing: "-0.015em",
+            lineHeight: 1.3,
+            letterSpacing: "-0.01em",
             color: "#ffffff"
           }}
         >
           {title}
         </h3>
         <p
+          id="confirm-modal-desc"
           style={{
-            margin: "16px 0 0",
-            fontSize: 17,
-            lineHeight: 1.47,
-            color: "rgba(255, 255, 255, 0.78)"
+            margin: "8px 0 0",
+            fontSize: 13,
+            lineHeight: 1.5,
+            color: "rgba(255, 255, 255, 0.72)"
           }}
         >
           {description}
         </p>
-        <div className="mt-8 flex justify-end gap-2">
+        {consequence ? (
+          <p
+            id="confirm-modal-consequence"
+            style={{
+              margin: "10px 0 0",
+              fontSize: 13,
+              lineHeight: 1.4,
+              color: isDestructive ? "rgba(255, 120, 80, 0.9)" : "rgba(255, 255, 255, 0.5)"
+            }}
+          >
+            {consequence}
+          </p>
+        ) : null}
+        <div className="flex justify-end" style={{ gap: 8, marginTop: 32 }}>
           <button
+            ref={cancelButtonRef}
             type="button"
             className="btn"
             onClick={onCancel}
@@ -329,199 +198,36 @@ export function ConfirmModal({
 }
 
 // ---------------------------------------------------------------------------
-// CapacityBar — DESIGN.md §6
-// ---------------------------------------------------------------------------
-// 6px track, fills with ink / warn (80-95%) / danger (>95%). Never blue.
-// Uses the canonical `.cap-bar` / `.cap-used[data-level]` classes from
-// globals.css so the level→color mapping stays in one place.
+// MetaField — label / value pair used in drive and project identity cards
 // ---------------------------------------------------------------------------
 
-interface CapacityBarProps {
-  usedBytes: number | null;
-  totalBytes: number | null;
-  reservedBytes?: number;
-  overcommitted?: boolean;
-  /**
-   * Visual weight. Defaults to "md" (the canonical 6px). "lg" is 8px and
-   * accepted for back-compat on drive detail views. DESIGN.md §6 canonical
-   * is 6px — "lg" is a calibrated deviation for hero capacity visuals only.
-   */
-  height?: "sm" | "md" | "lg";
-}
-
-export function CapacityBar({
-  usedBytes,
-  totalBytes,
-  reservedBytes = 0,
-  overcommitted = false,
-  height = "md"
-}: CapacityBarProps) {
-  const pct =
-    totalBytes && usedBytes !== null && totalBytes > 0
-      ? (usedBytes / totalBytes) * 100
-      : null;
-  const isUnknown = pct === null;
-  const usedPctStr = !isUnknown ? `${Math.max(1, pct!)}%` : "0%";
-  const reservedPctStr =
-    totalBytes && reservedBytes > 0 ? `${(reservedBytes / totalBytes) * 100}%` : undefined;
-
-  const level: "normal" | "warn" | "danger" =
-    pct !== null && pct > 95 ? "danger" : pct !== null && pct >= 80 ? "warn" : "normal";
-  const dataLevel = level === "normal" ? undefined : level;
-
-  const heightClass = height === "lg" ? "cap-bar lg" : "cap-bar";
-
-  return (
-    <div
-      className={heightClass}
-      role="progressbar"
-      aria-valuenow={pct !== null ? Math.round(pct) : undefined}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-label={pct !== null ? `Storage ${Math.round(pct)}% used` : "Storage usage unknown"}
-    >
-      {!isUnknown && (
-        <div
-          className="cap-used capacity-bar-fill"
-          data-level={dataLevel}
-          style={{ width: usedPctStr }}
-        >
-          {reservedPctStr ? (
-            <div
-              className="cap-reserved"
-              style={{
-                right: 0,
-                width: reservedPctStr,
-                background: overcommitted ? "var(--danger)" : undefined
-              }}
-            />
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// CapacityLegend — quiet key for the capacity bar. Used dot is ink, not blue.
-// ---------------------------------------------------------------------------
-
-export function CapacityLegend({
-  usedLabel,
-  reservedLabel,
-  freeLabel
-}: {
-  usedLabel: string;
-  reservedLabel?: string;
-  freeLabel: string;
-}) {
-  return (
-    <div
-      className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px]"
-      style={{ color: "var(--ink-3)" }}
-    >
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2 w-2 rounded-full" style={{ background: "var(--ink)" }} />
-        {usedLabel}
-      </span>
-      {reservedLabel ? (
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{ background: "var(--ink-3)" }}
-          />
-          {reservedLabel}
-        </span>
-      ) : null}
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2 w-2 rounded-full" style={{ background: "var(--ink-4)" }} />
-        {freeLabel}
-      </span>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// FeedbackNotice — DESIGN.md §6
-// ---------------------------------------------------------------------------
-// Flat surface. Error = danger-container fill with danger ink + icon. Other
-// tones use a neutral surface-container fill with semantic icon color so the
-// notice carries meaning via icon + text, not via gradient.
-// ---------------------------------------------------------------------------
-
-export function FeedbackNotice({
+export function MetaField({
+  label,
+  value,
   tone,
-  title,
-  messages
+  mono = false
 }: {
-  tone: "success" | "warning" | "error" | "info";
-  title: string;
-  messages: string[];
+  label: string;
+  value: string;
+  tone?: "accent" | "warn";
+  mono?: boolean;
 }) {
-  if (messages.length === 0) {
-    return null;
-  }
-
-  const iconColor =
-    tone === "error"
-      ? "var(--danger)"
-      : tone === "warning"
-        ? "var(--warn)"
-        : tone === "success"
-          ? "var(--success, #1d7a4a)"
-          : "var(--action)";
-
-  const background = tone === "error" ? "var(--danger-container)" : "var(--surface-container)";
-
+  const valueColor =
+    tone === "accent" ? "var(--accent-ink)" : tone === "warn" ? "var(--warn)" : "var(--ink)";
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="rounded-[8px] border px-4 py-3"
-      style={{
-        background,
-        borderColor: "var(--hairline)",
-        color: "var(--ink)"
-      }}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className="flex h-5 w-5 shrink-0 items-center justify-center"
-          style={{ color: iconColor }}
-          aria-hidden="true"
-        >
-          <FeedbackIcon tone={tone} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-semibold" style={{ color: "var(--ink)" }}>
-            {title}
-          </p>
-          <div className="mt-1 space-y-1">
-            {messages.map((message) => (
-              <p
-                key={message}
-                className="text-[14px] leading-[1.5]"
-                style={{ color: "var(--ink-2)" }}
-              >
-                {message}
-              </p>
-            ))}
-          </div>
-        </div>
-      </div>
+    <div className="flex flex-col min-w-0" style={{ gap: 2 }}>
+      <dt
+        className="text-eyebrow"
+        style={{ color: "var(--ink-4)" }}
+      >
+        {label}
+      </dt>
+      <dd
+        className={`tnum truncate${mono ? " mono" : ""}`}
+        style={{ color: valueColor, margin: 0, fontSize: 13, fontWeight: 500 }}
+      >
+        {value}
+      </dd>
     </div>
   );
-}
-
-function FeedbackIcon({ tone }: { tone: "success" | "warning" | "error" | "info" }) {
-  if (tone === "success") {
-    return <Icon name="check" size={15} color="currentColor" />;
-  }
-  if (tone === "warning") {
-    return <Icon name="warning" size={15} color="currentColor" />;
-  }
-  if (tone === "error") {
-    return <Icon name="close" size={15} color="currentColor" />;
-  }
-  return <Icon name="info" size={15} color="currentColor" />;
 }

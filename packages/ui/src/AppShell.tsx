@@ -1,9 +1,11 @@
 import { type ReactNode } from "react";
-import { SidebarNav, type NavItem } from "./SidebarNav";
+import { SidebarNav, type NavItem, type NavSection } from "./SidebarNav";
 import { TopUtilityBar } from "./TopUtilityBar";
 
 export interface AppShellProps {
   navItems: NavItem[];
+  /** Grouped sidebar sections (LIBRARY, DRIVES). When set, takes precedence over navItems. */
+  navSections?: NavSection[];
   footerNavItems?: NavItem[];
   section: string;
   sectionDetail?: string;
@@ -24,6 +26,7 @@ export interface AppShellProps {
  */
 export function AppShell({
   navItems,
+  navSections,
   footerNavItems = [],
   section,
   sectionDetail,
@@ -39,6 +42,7 @@ export function AppShell({
     <div className="flex h-screen overflow-hidden">
       <SidebarNav
         items={navItems}
+        sections={navSections}
         footerItems={footerNavItems}
         brandLabel={brandLabel}
       />
@@ -52,7 +56,7 @@ export function AppShell({
           onSearchChange={onSearchChange}
           onSearchSubmit={onSearchSubmit}
         />
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <main className="min-w-0 flex-1 overflow-y-auto" style={{ padding: "0 24px 32px" }}>
           {children}
         </main>
       </div>
