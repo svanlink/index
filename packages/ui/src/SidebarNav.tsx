@@ -17,10 +17,19 @@ export interface NavItem {
   scanActive?: boolean;
   /** Optional key shortcut shown on hover (e.g. "⌘1"). */
   shortcut?: string;
+  /** Drive identity color (CSS value e.g. "var(--drive-a)"). Renders a colored dot instead of icon. */
+  accentColor?: string;
+}
+
+export interface NavSection {
+  /** Eyebrow label — rendered UPPERCASE 11px/600 above the group. */
+  eyebrow: string;
+  items: NavItem[];
 }
 
 interface SidebarNavProps {
-  items: NavItem[];
+  items?: NavItem[];
+  sections?: NavSection[];
   footerItems?: NavItem[];
   brandLabel?: string;
 }
@@ -32,7 +41,8 @@ interface SidebarNavProps {
  * Glass material via backdrop-filter; no hard opaque background.
  */
 export function SidebarNav({
-  items,
+  items = [],
+  sections,
   footerItems = [],
   brandLabel = "Catalog"
 }: SidebarNavProps) {
@@ -46,14 +56,15 @@ export function SidebarNav({
         WebkitBackdropFilter: "var(--glass-sidebar-filter)"
       }}
     >
-      {/* App header — traffic lights from Tauri land top-left of this region */}
+      {/* App header — Tauri traffic lights overlay top-left; 76px left pad clears them */}
       <header
         data-tauri-drag-region
         style={{
           height: 52,
           display: "flex",
           alignItems: "center",
-          padding: "0 16px",
+          paddingLeft: 76,
+          paddingRight: 16,
           flexShrink: 0,
           borderBottom: "1px solid var(--hairline)"
         }}
@@ -71,12 +82,39 @@ export function SidebarNav({
         </span>
       </header>
 
-      <div style={{ padding: "8px 8px 12px", flex: 1, display: "flex", flexDirection: "column" }}>
-        <nav className="flex flex-col" style={{ gap: 2 }} aria-label="Primary">
-          {items.map((item) => (
-            <SideItem key={item.label} item={item} />
-          ))}
-        </nav>
+      <div style={{ padding: "8px 8px 12px", flex: 1, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+        {sections ? (
+          /* Grouped sections — LIBRARY, DRIVES, etc. */
+          sections.map((section) => (
+            <div key={section.eyebrow} style={{ marginBottom: 4 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.065em",
+                  color: "var(--ink-4)",
+                  padding: "8px 8px 3px",
+                  marginTop: 4
+                }}
+              >
+                {section.eyebrow}
+              </div>
+              <nav className="flex flex-col" style={{ gap: 2 }} aria-label={section.eyebrow}>
+                {section.items.map((item) => (
+                  <SideItem key={item.label} item={item} />
+                ))}
+              </nav>
+            </div>
+          ))
+        ) : (
+          /* Flat list fallback */
+          <nav className="flex flex-col" style={{ gap: 2 }} aria-label="Primary">
+            {items.map((item) => (
+              <SideItem key={item.label} item={item} />
+            ))}
+          </nav>
+        )}
 
         <div className="flex-1" />
 
@@ -97,19 +135,30 @@ export function SidebarNav({
 }
 
 function SideItem({ item }: { item: NavItem }) {
-  const iconNode = (active: boolean) =>
-    item.scanActive ? (
-      <span className="relative flex shrink-0 items-center justify-center" style={{ height: 17, width: 17 }}>
+  const iconNode = (active: boolean) => {
+    if (item.scanActive) {
+      return (
+        <span className="relative flex shrink-0 items-center justify-center" style={{ height: 17, width: 17 }}>
+          <span
+            className="pulse-ring absolute inline-flex rounded-full"
+            style={{ height: 8, width: 8, background: "var(--action)", opacity: 0.6 }}
+          />
+          <span
+            className="relative inline-flex rounded-full"
+            style={{ height: 8, width: 8, background: "var(--action)" }}
+          />
+        </span>
+      );
+    }
+    if (item.accentColor) {
+      return (
         <span
-          className="pulse-ring absolute inline-flex rounded-full"
-          style={{ height: 8, width: 8, background: "var(--action)", opacity: 0.6 }}
+          className="shrink-0 inline-flex rounded-full"
+          style={{ width: 8, height: 8, background: item.accentColor, marginLeft: 4 }}
         />
-        <span
-          className="relative inline-flex rounded-full"
-          style={{ height: 8, width: 8, background: "var(--action)" }}
-        />
-      </span>
-    ) : (
+      );
+    }
+    return (
       <Icon
         name={item.icon}
         size={16}
@@ -117,6 +166,7 @@ function SideItem({ item }: { item: NavItem }) {
         className="side-icon"
       />
     );
+  };
 
   const inner = (active: boolean) => (
     <>

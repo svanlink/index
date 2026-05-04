@@ -113,11 +113,11 @@ export function ConfirmModal({
         ref={dialogRef}
         style={{
           width: "100%",
-          maxWidth: 480,
+          maxWidth: 380,
           borderRadius: 12,
           background: "var(--graphite)",
           color: "#ffffff",
-          padding: 40,
+          padding: "28px 32px",
           boxShadow: "0 24px 56px rgba(0, 0, 0, 0.32)"
         }}
         onClick={(e) => e.stopPropagation()}
@@ -135,10 +135,10 @@ export function ConfirmModal({
           id="confirm-modal-title"
           style={{
             margin: 0,
-            fontSize: 28,
+            fontSize: 16,
             fontWeight: 600,
-            lineHeight: 1.15,
-            letterSpacing: "-0.015em",
+            lineHeight: 1.3,
+            letterSpacing: "-0.01em",
             color: "#ffffff"
           }}
         >
@@ -147,10 +147,10 @@ export function ConfirmModal({
         <p
           id="confirm-modal-desc"
           style={{
-            margin: "14px 0 0",
-            fontSize: 15,
+            margin: "8px 0 0",
+            fontSize: 13,
             lineHeight: 1.5,
-            color: "rgba(255, 255, 255, 0.78)"
+            color: "rgba(255, 255, 255, 0.72)"
           }}
         >
           {description}

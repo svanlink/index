@@ -73,11 +73,8 @@ export function DriveCard({
       style={{
         ...cardStyle,
         overflow: "hidden",
-        // A1: 3px left accent border replaces the old 7px dot overlay
-        borderLeft: "3px solid var(--drive-color)",
-        backdropFilter: "blur(12px) saturate(160%)",
-        WebkitBackdropFilter: "blur(12px) saturate(160%)",
-        background: "color-mix(in srgb, var(--surface) 82%, transparent)"
+        // 3px left accent border — drive identity (HIG: content surface uses plain --surface, no glass)
+        borderLeft: "3px solid var(--drive-color)"
       }}
     >
       {/* Clickable header — navigates to drive detail */}

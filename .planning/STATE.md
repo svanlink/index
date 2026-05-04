@@ -1,6 +1,7 @@
-# State: Catalog v1
+# State: Catalog v2
 
-**Initialized:** 2026-05-02
+**Initialized:** 2026-05-03 (v2 milestone)
+**v1 complete:** 2026-05-03
 
 ## Project Reference
 
@@ -12,64 +13,63 @@
 
 ## Current Position
 
-- **Milestone:** v1 polish
-- **Phase:** Phase 3 — macOS-Native Catalog UX (complete)
-- **Plan:** 03-01 complete
-- **Status:** All 3 phases complete — v1 milestone done
+- **Milestone:** v2 — footage inventory layer
+- **Phase:** Phase 1 — Data & Rust Layer (pending)
+- **Plan:** TBD
+- **Status:** Roadmap complete, Phase 1 not yet planned
 
-**Progress:** [██████████] 3/3 phases complete
+**Progress:** [░░░░░░░░░░] 0/3 phases complete
 
 ## Phase Summary
 
 | # | Phase | Status | Requirements |
 |---|-------|--------|--------------|
-| 1 | Strip Dead Weight | Complete | 5 |
-| 2 | Trustworthy Mutations | Complete | 7 |
-| 3 | macOS-Native Catalog UX | Complete | 5 |
+| 1 | Data & Rust Layer | Pending | 4 |
+| 2 | Tags UI | Pending | 4 |
+| 3 | Manifest Export + Polish | Pending | 5 |
 
 ## Performance Metrics
 
 - **Phases planned:** 3
-- **Phases complete:** 3
-- **Plans complete:** 8
-- **Requirements mapped:** 17/17 (100%)
-- **Requirements validated:** 17/17
-
-| Phase | Plan | Duration | Tasks | Files |
-|-------|------|----------|-------|-------|
-| 01 | 01 | ~35 min | 5/5 | 8 |
-| 02 | 01-06 | ~55 min | 14/14 | 15 |
-| 03 | 01 | ~15 min | 3/3 | 8 |
+- **Phases complete:** 0
+- **Plans complete:** 0
+- **Requirements mapped:** 13/13 (100%)
+- **Requirements validated:** 0/13
 
 ## Accumulated Context
 
-### Key Decisions
+### Key Decisions (v2)
 
-- Coarse granularity: 3 phases instead of research-suggested 5 (consolidated A→1, B+E→2, C+D→3)
-- Phase order is hard-dependency-driven: MUI strip first, then mutations, then macOS polish
-- No TanStack Query — strengthen existing CatalogStoreContext with optimistic mutation pipeline
-- Search loop limited to substring filter for v1; fuzzy/⌘K palette deferred to v2
-- Drive management remains secondary; project catalog is the daily-driver flow
-- Stale Cargo build artifacts (old project path in cache) cleaned as part of Phase 1 execution — pre-existing env issue, not a code problem
-- React 19 useOptimistic chosen over useOptimisticMutation.ts hook (built-in, zero deps)
-- deleteScanSession uses withTransaction, child before parent (no FK constraints in schema)
-- DriveCard + ProjectCollection extracted beyond plan spec to achieve line-count targets (pure presentational, zero behavior change)
-- Used macos-private-api Tauri feature (required when macOSPrivateApi:true set in tauri.conf.json — cargo build enforces feature parity)
-- Instant search uses replace:true navigate on every keystroke so back-button is not polluted with search history entries
+- `project_metadata` table stores format + status only — `correctedClient` in `projects` is the client source of truth (DRY)
+- Filter UX: three chip dropdowns (Client ▾ / Format ▾ / Status ▾) — all three as chips, consistent interaction model
+- Manifest file format: `.md` — editor/Obsidian-readable, zero deps
+- Manifest export: native save panel via `tauri-plugin-dialog` — explicit, not clever
+- Manifest filename: includes HHMMSS to avoid silent overwrite
+- Manifest write: Rust `std::fs::write` — no `tauri-plugin-fs` capability needed
+- pagePrimitives split (CODE-V2-01): already done in ea0e19b — removed from v2 scope
+- Tauri commands added: `upsert_project_format_status` + `export_drive_manifest`
+- Tag filtering: client-side `useMemo` — same pattern as existing search, no round-trip
+
+### Key Decisions (v1 — preserved for context)
+
+- Coarse granularity: 3 phases (A→1, B+E→2, C+D→3)
+- React 19 useOptimistic chosen over useOptimisticMutation.ts
+- Instant search: replace:true navigate to avoid polluting back-button history
 
 ### Constraints in Force
 
 - macOS only (Tauri WKWebView)
 - SQLite singleton, max_connections=1, WAL mode — `BEGIN IMMEDIATE` required for writes
-- Migrations are append-only (brownfield user DBs in field)
+- Migrations are append-only (brownfield user DBs in field) — Migration 14 must be `IF NOT EXISTS`
 - Dev build workflow only (`corepack pnpm --filter @drive-project-catalog/desktop dev`)
+- `PRAGMA foreign_keys=ON` must be set per connection for `ON DELETE CASCADE` to fire — confirm in Phase 1
+- Manifest write via Rust `std::fs::write` — no `tauri-plugin-fs` in capabilities
 
-### Open Todos
+### Confirmed Pre-Phase Findings
 
-- Decide Tauri 2.9 upgrade — bundle with Phase 2 or defer
-- Define `scan:projects-ingested` event payload shape before Phase 2 implementation
-- Decide whether to front-load `openedAt` migration (currently deferred to v2 with FEAT-V2-03)
-- Code-split 574KB JS bundle — deferred to Phase 3 design polish
+- `PRAGMA foreign_keys = ON` ✅ already set in `#ensureReady()` (sqliteLocalPersistence.ts:1088) — Migration 14 CASCADE will fire automatically, no changes needed
+- CODE-V2-02 ✅ confirmed complete — `AppScanState::prune_stale_sessions(5min TTL)` in `scan_engine.rs:212–219`, called on every new scan registration
+- `dialog:allow-save` ⚠️ MISSING from `capabilities/default.json` — Phase 3 must add `"dialog:allow-save"` alongside existing `"dialog:allow-open"`
 
 ### Blockers
 
@@ -77,23 +77,22 @@ None.
 
 ## Session Continuity
 
-**Last session:** 2026-05-03 — Liquid Glass redesign + Tailwind removal complete
+**Last session:** 2026-05-03 — v2 roadmap planned (office-hours + autoplan + gsd-new-project)
 
-**Next action:** All planned work complete. Ready to ship or plan v2 features.
+**Next action:** Run `/gsd-plan-phase 1` to plan Phase 1 (Data & Rust Layer).
 
-**Resume context:**
+**v2 context:**
+- Design doc at `~/.gstack/projects/svanlink-index/sebastian-main-design-20260503.md`
+- Test plan at `~/.gstack/projects/svanlink-index/sebastian-main-test-plan-20260503-2044.md`
+- Requirements: `.planning/REQUIREMENTS-v2.md`
+- Roadmap: `.planning/ROADMAP-v2.md`
+- Phase 1 critical question: confirm `PRAGMA foreign_keys=ON` in `sqliteLocalPersistence.ts` and `dialog:allow-save` capability
+- pagePrimitives split (CODE-V2-01) already done in ea0e19b — skip
+
+**v1 baseline (complete):**
 - Full Liquid Glass redesign shipped (fcd6b36): Tailwind removed, vanilla CSS design system.
-  - `--glass-*` token variables for sidebar, toolbar, sheet, palette (light + dark).
-  - Button heights 30/26/34px, radius system corrected, Apple blue active nav state.
-  - SidebarNav: 52px glass header with drag region (Things 3 pattern).
-  - TopUtilityBar: 48px, glass tokens.
-  - AppShell: 24px horizontal content padding.
-  - CommandPalette: `--glass-palette` material.
-  - Empty state icons: 44×44px, 20px.
-  - ImportFoldersDialog: "Change folder" inline link in header.
-- Missing utility classes fixed (a176773): `sticky`, `z-20`, `rounded-full`, `rotate-180`, `text-left`.
 - CSS-001 DoD complete: zero Tailwind, build passes, 70/70 tests.
 - All 4 command palette issues done: fuzzy search, drive results, pinned actions, recent projects.
 
 ---
-*State updated: 2026-05-03 — Liquid Glass redesign + CSS-001 complete*
+*State updated: 2026-05-03 — v2 roadmap complete, ready for Phase 1 planning*
